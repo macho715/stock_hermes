@@ -32,3 +32,16 @@ When updating docs, keep these facts synchronized:
 - Safety boundary: reports only, no broker orders.
 - Current validation split: `run.ps1` PASS, default Python dependency path AMBER.
 - Legacy source evidence stays in `review_needed/` until manually reviewed.
+
+## Continue Quality Gate Rule
+
+Continue checks live at `.continue/checks/*.md`.
+
+Use Continue as an advisory PR quality gate only. Do not treat Continue as:
+
+- a stock recommendation engine
+- a broker order executor
+- an account-writing automation layer
+- a source of approval to bypass manual review
+
+When code changes touch `src/stock_rtx4060/`, verify the relevant check files still match the current architecture and run the smallest relevant local commands before reporting completion.

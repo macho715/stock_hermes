@@ -11,6 +11,8 @@ stock_rtx4060_unified/
 ├── pyproject.toml
 ├── requirements.txt
 ├── requirements-gpu-wsl.txt
+├── .continue/
+│   └── checks/
 ├── src/stock_rtx4060/
 ├── tests/
 ├── docs/
@@ -27,6 +29,7 @@ stock_rtx4060_unified/
 | Path | Purpose |
 |---|---|
 | `src/stock_rtx4060/` | Active Python package. |
+| `.continue/checks/` | Flat Continue check files for PR-quality review. |
 | `tests/` | Regression tests for the unified package. |
 | `docs/` | Current user-facing and agent-facing documentation. |
 | `reports/` | Consolidation evidence, validation logs, cross-review logs, and runtime output. |
@@ -48,6 +51,21 @@ stock_rtx4060_unified/
 ## Active Code
 
 Add Python source under `src/stock_rtx4060`.
+
+## Continue Checks
+
+Add or update Continue checks only under `.continue/checks/`.
+
+Do not create nested check folders. The current check set is:
+
+- `01-financial-safety-boundary.md`
+- `02-backtest-integrity.md`
+- `03-recommendation-contract.md`
+- `04-secret-and-pii-safety.md`
+- `05-gpu-claim-validation.md`
+- `06-report-contract.md`
+- `07-architecture-boundary.md`
+- `08-test-and-verification.md`
 
 ## Tests
 

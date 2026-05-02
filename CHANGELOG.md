@@ -12,6 +12,8 @@ All notable changes for `stock_rtx4060_unified` are documented here.
 - Added consolidated tests and docs.
 - Added inventory, conflict, exclusion, validation, and cross-review reports under `reports/`.
 - Added synchronized documentation status for the validated operator path, default Python caveat, review-needed evidence, and report-only safety boundary.
+- Added Continue PR-quality gate checks under `.continue/checks/`.
+- Added `docs/CONTINUE_MERGED_USAGE_GUIDE.md` for the current unified structure.
 
 ### Changed
 
@@ -19,6 +21,7 @@ All notable changes for `stock_rtx4060_unified` are documented here.
 - Excluded runtime outputs, cache files, bundle duplicates, and older superseded patch sources from the executable path.
 - Updated active documentation to point at `stock_rtx4060_unified` and the verified `.\run.ps1 self-test` workflow.
 - Deleted the four superseded source roots after approval A and copied pre-delete audit evidence into `reports/delete_audit_20260502_211154`.
+- Adapted Continue guide references from the old `workspaces/stock_rtx4060` layout to the active `src/stock_rtx4060` package layout.
 
 ### Security
 

@@ -9,6 +9,7 @@ It keeps one active execution path:
 - `src/stock_rtx4060/` package
 - `tests/` regression tests
 - `docs/` consolidated documentation
+- `.continue/checks/` PR-quality gate checks
 
 The program does not submit broker orders. It does not provide personalized investment advice. Recommendation output is `screening_output_only`.
 
@@ -25,6 +26,23 @@ The program does not submit broker orders. It does not provide personalized inve
 | Operator self-test | `.\run.ps1 self-test` passed in the current Codex session |
 | Default `python` environment | AMBER: Python 3.14 can compile and show help, but lacks pandas and pytest |
 | Recommended runtime path | Use `run.ps1`, which selected Python 3.12 during validation |
+
+## Continue Quality Gates
+
+Continue is integrated as a PR-level quality gate, not as a stock recommendation engine.
+
+Check files live directly under `.continue/checks/`:
+
+- financial safety boundary
+- backtest integrity
+- recommendation contract
+- secret and PII safety
+- GPU claim validation
+- report contract
+- architecture boundary
+- test and verification
+
+See `docs/CONTINUE_MERGED_USAGE_GUIDE.md` for the current operating guide.
 
 ## Commands
 
@@ -61,6 +79,7 @@ stock_rtx4060_unified/
 ├── pyproject.toml
 ├── requirements.txt
 ├── requirements-gpu-wsl.txt
+├── .continue/checks/
 ├── src/stock_rtx4060/
 ├── tests/
 ├── docs/

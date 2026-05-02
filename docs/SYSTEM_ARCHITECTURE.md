@@ -18,6 +18,7 @@ flowchart TD
     CLI --> Risk[risk_rules.py]
     CLI --> Recommend[recommendation_engine.py]
     CLI --> Reports[reports.py]
+    CLI -. quality rules .-> Continue[.continue/checks/*.md]
     Feature --> Model
     Model --> Backtest
     Model --> Recommend
@@ -54,10 +55,13 @@ flowchart LR
 | Risk rules | `src/stock_rtx4060/risk_rules.py` | Applies risk-plan checks. |
 | Reports | `src/stock_rtx4060/reports.py` | Writes Markdown and JSON output. |
 | Tests | `tests/test_core.py` | Verifies core CLI/package behavior. |
+| Continue checks | `.continue/checks/*.md` | Advisory PR-quality gates for financial safety, model integrity, reports, architecture, secrets, GPU claims, and verification evidence. |
 
 ## Boundary
 
 The system is report-only. It has no broker API and no web server.
+
+Continue does not change runtime behavior. It is a review-time quality gate for changes to this local CLI package.
 
 ## Validation State
 
