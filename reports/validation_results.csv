@@ -1,0 +1,11 @@
+﻿Command,Result,Notes
+python --version,PASS,Python 3.14.4
+python -m compileall .,PASS,"Root wrapper, src package, and tests compiled."
+python main.py --help,PASS,Help text printed without importing heavy dependencies.
+python main.py self-test,AMBER,Default Python 3.14 lacks pandas; wrapper points to Python 3.12.
+python -m pytest -q,AMBER,Default Python 3.14 lacks pytest.
+powershell -ExecutionPolicy Bypass -File .\run.ps1,PASS,Wrapper selected Python 3.12 and self-test passed.
+C:\Users\jichu\AppData\Local\Programs\Python\Python312\python.exe -m pytest -q,PASS,5 tests passed; pytest-asyncio deprecation warning only.
+".\run.ps1 recommend --synthetic --universe ""SYNTH-A,SYNTH-B"" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports\recommendation_smoke",PASS,Generated recommendations_algo_v2 Markdown/JSON.
+Python 3.12 direct recommendation smoke,PASS,Generated reports/recommendation_smoke_py312 recommendations_algo_v2 Markdown/JSON.
+".\run.ps1 self-test",PASS,"Current Codex session rerun passed; backend xgb-cpu; final capital 102190.84."
