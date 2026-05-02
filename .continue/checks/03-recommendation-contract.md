@@ -14,11 +14,13 @@ Fail this check if any change does one or more of the following:
 - Changes `AMBER_REVIEW_ONLY`, `AMBER_WATCHLIST`, `RED_*`, or `ZERO_*` semantics without documentation and tests.
 - Allows missing or insufficient OHLCV data to return Green.
 - Changes ranking order without documenting verdict priority, score, expected value, ticker, and track behavior.
+- Lets `ops-v1` skip recommendation validation, manual approval fields, `screening_output_only`, or ZERO rule evidence.
 
 Pass only if:
 
 - Track-S remains tactical short-term screening.
 - Track-L remains long-term accumulation screening.
 - Green requires multi-factor evidence and manual review.
+- Ops v1 keeps all candidates in manual review until a human records a decision.
 
 When failing, list the broken contract and the required test to add or update.

@@ -13,15 +13,16 @@ if str(SRC) not in sys.path:
 
 def _root_help() -> str:
     return (
-        "usage: main.py [-h] {env,benchmark,report,predict,recommend,demo,journal,self-test} ...\n\n"
+        "usage: main.py [-h] {env,benchmark,report,predict,recommend,ops-v1,demo,journal,self-test} ...\n\n"
         "stock_rtx4060 unified investment OS\n\n"
         "positional arguments:\n"
-        "  {env,benchmark,report,predict,recommend,demo,journal,self-test}\n"
+        "  {env,benchmark,report,predict,recommend,ops-v1,demo,journal,self-test}\n"
         "    env                 validate runtime/GPU environment\n"
         "    benchmark           run synthetic CPU/GPU benchmark\n"
         "    report              generate Daily Brief/Risk reports\n"
         "    predict             train/predict from CSV or yfinance\n"
         "    recommend           rank report-only Track-S/Track-L candidates\n"
+        "    ops-v1              run report-only Ops v1 workflow with manual approval artifacts\n"
         "    demo                create sample data and reports\n"
         "    journal             append decision journal row\n"
         "    self-test           run internal smoke tests\n\n"
@@ -37,7 +38,7 @@ def _dependency_help(exc: ModuleNotFoundError) -> str:
         "Run with a prepared Python environment, for example:\n"
         "  .\\run.ps1 self-test\n\n"
         "Or install dependencies manually:\n"
-        "  py -3.11 -m venv .venv\n"
+        "  py -3.12 -m venv .venv\n"
         "  .\\.venv\\Scripts\\Activate.ps1\n"
         "  python -m pip install --upgrade pip\n"
         "  pip install -r requirements.txt\n"

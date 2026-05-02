@@ -1,8 +1,11 @@
 from pathlib import Path
 
+import pandas as pd
+
 from stock_rtx4060.backtester import Backtester
 from stock_rtx4060.ensemble_model import EnsemblePredictor, ModelConfig
 from stock_rtx4060.feature_engine import TechnicalIndicators, make_synthetic_ohlcv
+from stock_rtx4060 import recommendation_engine as recommendation_module
 from stock_rtx4060.recommendation_engine import RecommendationConfig, RecommendationEngine
 from stock_rtx4060.risk_rules import evaluate_track_s_candidate, position_size_by_risk
 
@@ -71,3 +74,61 @@ def test_recommendation_engine_synthetic_run(tmp_path):
     assert all(result.screening_output_only for result in results)
     assert Path(paths["markdown"]).exists()
     assert Path(paths["json"]).exists()
+    assert Path(paths["audit"]).exists()
+
+
+def test_recommendation_engine_reuses_ohlcv_for_same_ticker(monkeypatch, tmp_path):
+    calls = []
+    frame = make_synthetic_ohlcv(760)
+
+    def fake_load_ohlcv(*args, **kwargs):
+        calls.append((args, kwargs))
+        return frame, "synthetic_demo_data"
+
+    monkeypatch.setattr(recommendation_module, "load_ohlcv", fake_load_ohlcv)
+    config = RecommendationConfig(
+        universe=["CACHE-A"],
+        track="BOTH",
+        top_n=2,
+        synthetic=True,
+        output_dir=str(tmp_path),
+        model_kind="logistic",
+    )
+    engine = RecommendationEngine(config)
+
+    results = engine.run()
+
+    assert len(results) == 2
+    assert len(calls) == 1
+
+
+def test_ops_v1_workflow_generates_manual_approval_artifacts(tmp_path):
+    from stock_rtx4060.ops_workflow import run_ops_v1_workflow
+
+    config = RecommendationConfig(
+        universe=["SYNTH-A", "SYNTH-B"],
+        track="BOTH",
+        top_n=2,
+        synthetic=True,
+        output_dir=str(tmp_path / "recommendations"),
+    )
+    result = run_ops_v1_workflow(config, output_dir=tmp_path)
+
+    assert Path(result["recommendation_markdown"]).exists()
+    assert Path(result["recommendation_json"]).exists()
+    assert Path(result["audit_log"]).exists()
+    assert Path(result["daily_brief"]).exists()
+    assert Path(result["approval_journal_template"]).exists()
+    assert Path(result["zero_log"]).exists()
+    assert Path(result["summary_json"]).exists()
+
+    journal = pd.read_csv(result["approval_journal_template"])
+    assert {"ticker", "track", "verdict", "manual_action", "manual_approval_required", "broker_order_execution", "screening_output_only"}.issubset(journal.columns)
+    assert set(journal["manual_action"]) == {"REVIEW_PENDING"}
+    assert journal["manual_approval_required"].all()
+    assert not journal["broker_order_execution"].any()
+    assert journal["screening_output_only"].all()
+
+    zero_log = Path(result["zero_log"]).read_text(encoding="utf-8")
+    assert "AUTO_BUY" in zero_log
+    assert "BROKER_ORDER" in zero_log

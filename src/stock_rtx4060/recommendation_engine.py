@@ -19,7 +19,9 @@ import pandas as pd
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import TimeSeriesSplit
 
+from .audit_log import AuditLogger
 from .backtester import BacktestConfig, Backtester
+from .data_providers import load_ohlcv_with_provider
 from .ensemble_model import DirectionModel, ModelConfig, _safe_auc
 from .feature_engine import TechnicalIndicators, feature_columns
 
@@ -97,6 +99,9 @@ class RecommendationConfig:
     prefer_gpu: bool = False
     lite: bool = True
     output_dir: str = "recommendation_reports"
+    data_provider: Literal["auto", "synthetic", "yfinance", "openbb"] = "auto"
+    provider_config: str | None = None
+    audit_command: str = "recommend"
 
     def __post_init__(self) -> None:
         if self.prefer_gpu:
@@ -135,12 +140,15 @@ class RecommendationRun:
     errors: list[dict]
     markdown_path: str
     json_path: str
+    audit_path: str
 
     def __getitem__(self, key: str) -> str:
         if key == "markdown":
             return self.markdown_path
         if key == "json":
             return self.json_path
+        if key == "audit":
+            return self.audit_path
         raise KeyError(key)
 
 
@@ -220,25 +228,25 @@ def make_synthetic_ohlcv(n: int = 760, seed: int = 42, drift: float = 0.00035) -
     return pd.DataFrame({"Open": open_, "High": high, "Low": low, "Close": close, "Volume": volume}, index=idx)
 
 
-def load_ohlcv(ticker: str, period: str, synthetic: bool = False) -> tuple[pd.DataFrame, str]:
-    if synthetic:
-        return make_synthetic_ohlcv(seed=_stable_seed(ticker)), "synthetic_demo_data"
-
-    try:
-        import yfinance as yf  # type: ignore
-    except ImportError as exc:
-        raise RuntimeError("yfinance가 설치되지 않았습니다. pip install yfinance 또는 --synthetic 사용") from exc
-
-    df = yf.download(ticker, period=period, auto_adjust=True, progress=False, threads=False)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.droplevel(-1)
-    rename = {c: str(c).capitalize() for c in df.columns if str(c).lower() in {"open", "high", "low", "close", "volume"}}
-    df = df.rename(columns=rename)
-    required = ["Open", "High", "Low", "Close", "Volume"]
-    missing = [c for c in required if c not in df.columns]
-    if df.empty or missing:
-        raise RuntimeError(f"{ticker}: OHLCV 데이터 비어있음 또는 필수 컬럼 누락 {missing}")
-    return df.loc[:, required].dropna(), "yfinance"
+def load_ohlcv(
+    ticker: str,
+    period: str,
+    synthetic: bool = False,
+    data_provider: Literal["auto", "synthetic", "yfinance", "openbb"] = "auto",
+    provider_config: str | None = None,
+    audit_logger: AuditLogger | None = None,
+    command: str = "recommend",
+) -> tuple[pd.DataFrame, str]:
+    provider_result = load_ohlcv_with_provider(
+        ticker,
+        period,
+        synthetic=synthetic,
+        data_provider=data_provider,
+        provider_config_path=provider_config,
+        audit_logger=audit_logger,
+        command=command,
+    )
+    return provider_result.frame, provider_result.source
 
 
 def parse_universe(value: str | None) -> list[str]:
@@ -626,11 +634,42 @@ def _verdict(track: Track, score: float, checks: list[ValidationCheck], cfg: Rec
 class RecommendationEngine:
     def __init__(self, config: RecommendationConfig | None = None):
         self.config = config or RecommendationConfig()
+        self.audit_logger = AuditLogger.for_output_dir(self.config.output_dir)
+        self._ohlcv_cache: dict[tuple[str, str, bool, str, str | None], tuple[pd.DataFrame, str]] = {}
+        self._ohlcv_error_cache: dict[tuple[str, str, bool, str, str | None], str] = {}
+
+    def _ohlcv_cache_key(self, ticker: str) -> tuple[str, str, bool, str, str | None]:
+        cfg = self.config
+        return (ticker.strip().upper(), cfg.period, cfg.synthetic, cfg.data_provider, cfg.provider_config)
+
+    def _load_ohlcv_cached(self, ticker: str) -> tuple[pd.DataFrame, str]:
+        cfg = self.config
+        key = self._ohlcv_cache_key(ticker)
+        if key in self._ohlcv_cache:
+            frame, source = self._ohlcv_cache[key]
+            return frame.copy(deep=False), source
+        if key in self._ohlcv_error_cache:
+            raise RuntimeError(self._ohlcv_error_cache[key])
+        try:
+            frame, source = load_ohlcv(
+                ticker,
+                cfg.period,
+                synthetic=cfg.synthetic,
+                data_provider=cfg.data_provider,
+                provider_config=cfg.provider_config,
+                audit_logger=self.audit_logger,
+                command=cfg.audit_command,
+            )
+        except Exception as exc:
+            self._ohlcv_error_cache[key] = str(exc)
+            raise
+        self._ohlcv_cache[key] = (frame, source)
+        return frame.copy(deep=False), source
 
     def evaluate_ticker(self, ticker: str, track: Track) -> RecommendationResult:
         cfg = self.config
         horizon = cfg.horizon_s if track == "S" else cfg.horizon_l
-        df, data_source = load_ohlcv(ticker, cfg.period, synthetic=cfg.synthetic)
+        df, data_source = self._load_ohlcv_cached(ticker)
         min_required = max(cfg.min_rows, horizon + 220)
         if len(df) < min_required:
             raise RuntimeError(f"{ticker}: 데이터 부족 rows={len(df)}, required={min_required}")
@@ -745,12 +784,13 @@ class RecommendationEngine:
             "config": asdict(self.config),
             "disclaimer": "screening_output_only; manual approval required; no broker order execution; not financial advice",
             "algorithm_patch": "v2 leak-safe CV + ATR risk plan + fixed-risk sizing + OOF backtest",
+            "audit_log_path": str(self.audit_logger.path),
             "errors": errors,
             "results": [r.to_dict() for r in results],
         }
         json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         md_path.write_text(render_markdown(results, self.config), encoding="utf-8")
-        return RecommendationRun(results=results, errors=errors, markdown_path=str(md_path), json_path=str(json_path))
+        return RecommendationRun(results=results, errors=errors, markdown_path=str(md_path), json_path=str(json_path), audit_path=str(self.audit_logger.path))
 
 
 def _error_result(ticker: str, track: Track, message: str) -> RecommendationResult:
@@ -811,6 +851,8 @@ def render_markdown(results: list[RecommendationResult], cfg: RecommendationConf
         "",
         f"Universe: {', '.join(cfg.universe)}",
         f"Track: {cfg.track} | Period: {cfg.period} | Top-N: {cfg.top_n}",
+        f"Data provider: {cfg.data_provider} | Synthetic flag: {cfg.synthetic}",
+        f"Audit log: {Path(cfg.output_dir) / 'audit_log.jsonl'}",
         "",
         "| Rank | Ticker | Track | Verdict | Score | Prob | EV% | Entry | Stop | TP2 | R/R | Risk% | MaxPos% | Qty | Confirms | Evidence |",
         "|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
@@ -847,6 +889,8 @@ def run_recommendation_cli(args) -> int:
         model_kind=args.model_kind,
         xgb_device=args.xgb_device,
         cv_gap=args.cv_gap,
+        data_provider=getattr(args, "data_provider", "auto"),
+        provider_config=getattr(args, "provider_config", None),
     )
     engine = RecommendationEngine(cfg)
     results = engine.run()
@@ -854,4 +898,5 @@ def run_recommendation_cli(args) -> int:
     print(render_markdown(results, cfg))
     print(f"\nReport saved: {paths['markdown']}")
     print(f"JSON saved:   {paths['json']}")
+    print(f"Audit saved:  {paths['audit']}")
     return 0

@@ -5,10 +5,10 @@ This unified folder is report-only. Do not add broker execution, credentials, or
 Run the smallest relevant checks first:
 
 ```powershell
-python -m compileall .
+.\.venv\Scripts\python.exe -m compileall main.py src tests
 python main.py --help
-python main.py self-test
-python -m pytest -q
+.\run.ps1 self-test
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
 ## Current Runtime Note
@@ -19,9 +19,9 @@ The recommended operator command is:
 .\run.ps1 self-test
 ```
 
-Current observed result: PASS. The wrapper selected Python 3.12 and completed the self-test.
+Current observed result: PASS. The wrapper selected the project `.venv` Python 3.12 and completed the self-test.
 
-Default `python` was Python 3.14.4 during validation. It compiled and displayed help, but lacked pandas and pytest. Treat that interpreter path as AMBER unless dependencies are installed.
+Default `python` was Python 3.14.4 during earlier validation. Treat that global interpreter path as AMBER. Use the project `.venv` for runtime and tests.
 
 ## Documentation Rule
 
@@ -30,7 +30,8 @@ When updating docs, keep these facts synchronized:
 - Active package path: `src/stock_rtx4060`.
 - Output path: `reports/`.
 - Safety boundary: reports only, no broker orders.
-- Current validation split: `run.ps1` PASS, default Python dependency path AMBER.
+- Current validation split: `.venv` and `run.ps1` PASS, global Python dependency path AMBER.
+- Ops v1 workflow: `ops-v1` creates recommendation reports, a daily brief, an approval journal template, ZERO logs, and a summary JSON.
 - Legacy source evidence stays in `review_needed/` until manually reviewed.
 
 ## Continue Quality Gate Rule
@@ -43,5 +44,7 @@ Use Continue as an advisory PR quality gate only. Do not treat Continue as:
 - a broker order executor
 - an account-writing automation layer
 - a source of approval to bypass manual review
+
+`ops-v1` is allowed only as a report-only manual approval workflow. It must not emit broker orders.
 
 When code changes touch `src/stock_rtx4060/`, verify the relevant check files still match the current architecture and run the smallest relevant local commands before reporting completion.

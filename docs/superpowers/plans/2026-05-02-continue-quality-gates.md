@@ -48,11 +48,21 @@
 rg -n "workspaces/stock_rtx4060|workspaces\\stock_rtx4060" .continue docs README.md CHANGELOG.md
 python -B main.py --help
 .\run.ps1 self-test
-C:\Users\jichu\AppData\Local\Programs\Python\Python312\python.exe -B -m pytest -q -p no:cacheprovider
+.\.venv\Scripts\python.exe -B -m pytest -q -p no:cacheprovider
 ```
 
 Expected:
 - No active Continue/doc references to the old `workspaces/stock_rtx4060` source path.
 - CLI help exits 0.
 - Self-test exits 0.
-- Pytest reports 5 passing tests.
+- Pytest reports at least 6 passing tests after Ops v1 workflow integration.
+
+## Current Addendum
+
+After this plan was completed, `ops-v1` was added as a report-only manual approval workflow. Continue checks and active docs now also cover:
+
+- `src/stock_rtx4060/ops_workflow.py`
+- `.\run.ps1 ops-v1 ...`
+- `approval_journal_template.csv`
+- `zero_log.md` and `zero_log.csv`
+- project `.venv` validation instead of a global Python 3.12 path
