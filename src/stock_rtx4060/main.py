@@ -71,7 +71,7 @@ def build_parser() -> argparse.ArgumentParser:
     recommend.add_argument("--capital", type=float, default=100_000.0)
     recommend.add_argument("--prefer-gpu", action="store_true")
     recommend.add_argument("--full", action="store_true", help="use non-lite model settings")
-    recommend.add_argument("--model-kind", choices=["auto", "xgb", "logistic"], default="logistic")
+    recommend.add_argument("--model-kind", choices=["auto", "xgb", "logistic", "rf"], default="logistic")
     recommend.add_argument("--xgb-device", choices=["cpu", "cuda"], default="cpu")
     recommend.add_argument("--cv-gap", type=int, help="gap between train/test folds for leak-safe walk-forward CV")
     recommend.add_argument("--output-dir", default="reports/recommendations")
@@ -88,7 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
     ops.add_argument("--capital", type=float, default=100_000.0)
     ops.add_argument("--prefer-gpu", action="store_true")
     ops.add_argument("--full", action="store_true", help="use non-lite model settings")
-    ops.add_argument("--model-kind", choices=["auto", "xgb", "logistic"], default="logistic")
+    ops.add_argument("--model-kind", choices=["auto", "xgb", "logistic", "rf"], default="logistic")
     ops.add_argument("--xgb-device", choices=["cpu", "cuda"], default="cpu")
     ops.add_argument("--cv-gap", type=int, help="gap between train/test folds for leak-safe walk-forward CV")
     ops.add_argument("--output-dir", default="reports/ops_v1")
@@ -180,7 +180,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     latest_row = feature_df.iloc[-1]
     entry = float(normalize_ohlcv(df)["Close"].iloc[-1])
     risk_cfg = RiskConfig(total_capital=args.capital)
-    s_candidate = evaluate_track_s_candidate(args.ticker, latest_row, entry, risk_cfg, prediction_prob=latest_pred["direction_prob"])
+    s_candidate = evaluate_track_s_candidate(args.ticker, latest_row, entry, risk_cfg, prediction_prob=latest_pred["direction_prob"], atr_pct=float(latest_row.get("atr_pct_14", 0.0)))
     l_candidate = evaluate_track_l_candidate(args.ticker, latest_row, entry, risk_cfg, prediction_prob=latest_pred["direction_prob"])
     candidates = [s_candidate, l_candidate]
 

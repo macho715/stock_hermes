@@ -94,6 +94,8 @@ def score_track_s(row: pd.Series, prediction_prob: float | None = None) -> tuple
     return_5d = float(row.get("return_5d", 0.0))
     sma_20 = float(row.get("sma_ratio_20", 0.0))
     bb_pct = _clamp(float(row.get("bb_pct", 0.5)), 0, 1)
+    cmf = _clamp(float(row.get("cmf_20", 0.0)), -1, 1)
+    vi_diff = float(row.get("vi_diff_14", 0.0))
     score = 50.0
     score += 10.0 if 45 <= rsi <= 68 else (-8.0 if rsi > 80 or rsi < 25 else 0.0)
     score += min(12.0, adx / 5.0)
@@ -102,10 +104,14 @@ def score_track_s(row: pd.Series, prediction_prob: float | None = None) -> tuple
     score += 8.0 if return_5d > 0 else -5.0
     score += 7.0 if sma_20 > 0 else -4.0
     score += 4.0 if 0.35 <= bb_pct <= 0.85 else -3.0
+    # CMF: positive money flow adds conviction; negative subtracts.
+    score += _clamp(cmf * 8.0, -6.0, 8.0)
+    # Vortex: VI+ > VI- confirms bullish momentum.
+    score += 4.0 if vi_diff > 0.05 else (-3.0 if vi_diff < -0.05 else 0.0)
     if prediction_prob is not None:
         score += (float(prediction_prob) - 0.5) * 30.0
         reasons.append(f"model_prob={prediction_prob:.3f}")
-    reasons.extend([f"rsi_14={rsi:.1f}", f"adx_14={adx:.1f}", f"volume_ratio_20={volume_ratio:.2f}", f"macd_hist={macd_hist:.4f}"])
+    reasons.extend([f"rsi_14={rsi:.1f}", f"adx_14={adx:.1f}", f"volume_ratio_20={volume_ratio:.2f}", f"macd_hist={macd_hist:.4f}", f"cmf_20={cmf:.3f}", f"vi_diff_14={vi_diff:.3f}"])
     return _clamp(score, 0.0, 100.0), reasons
 
 
@@ -140,9 +146,15 @@ def evaluate_track_s_candidate(
     monthly_pnl_pct: float = 0.0,
     allow_margin: bool = False,
     allow_options: bool = False,
+    atr_pct: float | None = None,
 ) -> CandidateVerdict:
     cfg = config or RiskConfig()
-    stop = entry * (1 - cfg.track_s_stop_pct)
+    # ATR-based dynamic stop: use max(fixed_stop, 2×ATR) for volatility-adaptive risk management.
+    if atr_pct is not None and np.isfinite(atr_pct) and atr_pct > 0:
+        effective_stop_pct = max(cfg.track_s_stop_pct, 2.0 * float(atr_pct))
+    else:
+        effective_stop_pct = cfg.track_s_stop_pct
+    stop = entry * (1 - effective_stop_pct)
     tp1 = entry * (1 + cfg.track_s_tp1_pct)
     tp2 = entry * (1 + cfg.track_s_tp2_pct)
     score, reasons = score_track_s(row, prediction_prob=prediction_prob)
