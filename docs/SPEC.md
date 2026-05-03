@@ -239,5 +239,6 @@ Current implementation status:
 | MCP adapter contract | Implemented in `src/stock_rtx4060/mcp_adapter.py`; no server is started. |
 | CLI provider flags | Implemented for `recommend` and `ops-v1`. |
 | Optional OpenBB dependency | Documented in `requirements-openbb.txt`; base install remains OpenBB-free. |
-| Verification | `.venv` pytest passed with 15 tests; synthetic recommendation, Ops v1 smoke, and OpenBB cache smoke generated audit logs. |
+| Verification | `.venv` pytest passed with 19 tests; synthetic recommendation, Ops v1 smoke, OpenBB cache smoke, and dashboard bridge smoke generated audit logs or snapshot evidence. |
 | OHLCV cache | Implemented in `RecommendationEngine`; one ticker/provider load is reused across Track-S and Track-L during a single run. |
+| Dashboard report bridge | Implemented in `src/stock_rtx4060/dashboard_bridge.py` with `dashboard-export`; see `docs/SPEC_DASHBOARD_BRIDGE_2026-05-03.md`. |

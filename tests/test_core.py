@@ -7,6 +7,8 @@ from stock_rtx4060.ensemble_model import EnsemblePredictor, ModelConfig
 from stock_rtx4060.feature_engine import TechnicalIndicators, make_synthetic_ohlcv
 from stock_rtx4060 import recommendation_engine as recommendation_module
 from stock_rtx4060.recommendation_engine import RecommendationConfig, RecommendationEngine
+from stock_rtx4060.dashboard_bridge import build_dashboard_snapshot
+from stock_rtx4060.kevpe_adapter import KevpeAdapterResult
 from stock_rtx4060.risk_rules import evaluate_track_s_candidate, position_size_by_risk
 
 
@@ -100,6 +102,77 @@ def test_recommendation_engine_reuses_ohlcv_for_same_ticker(monkeypatch, tmp_pat
 
     assert len(results) == 2
     assert len(calls) == 1
+
+
+def test_recommendation_engine_loads_kevpe_events_and_exports_dashboard_fields(monkeypatch, tmp_path):
+    frame = make_synthetic_ohlcv(760)
+
+    def fake_load_ohlcv(*args, **kwargs):
+        return frame, "synthetic_demo_data"
+
+    class FakeKevpeAdapter:
+        def get_signal_for_ticker(self, ohlcv, events, as_of=None):
+            assert len(events) == 1
+            assert events[0]["headline"] == "FOMC rate decision surprises semiconductor market"
+            return KevpeAdapterResult(
+                regime="RED",
+                score=0.82,
+                expected_return_pct=-3.5,
+                ci_low_pct=-6.0,
+                ci_high_pct=-1.0,
+                reason="event risk overlay",
+                confidence="medium",
+                is_available=True,
+            )
+
+    events_path = tmp_path / "kevpe_events.json"
+    events_path.write_text(
+        """
+        [
+          {
+            "ticker": "CACHE-A",
+            "date": "2026-05-01",
+            "headline": "FOMC rate decision surprises semiconductor market",
+            "tone": -6,
+            "volume": 120,
+            "source_diversity": 10,
+            "topics": ["central_bank", "semiconductor_ai"]
+          },
+          {
+            "ticker": "OTHER",
+            "date": "2026-05-01",
+            "headline": "unrelated ticker event"
+          }
+        ]
+        """,
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(recommendation_module, "load_ohlcv", fake_load_ohlcv)
+    monkeypatch.setattr(recommendation_module, "get_kevpe_adapter", lambda: FakeKevpeAdapter())
+
+    config = RecommendationConfig(
+        universe=["CACHE-A"],
+        track="S",
+        top_n=1,
+        synthetic=True,
+        output_dir=str(tmp_path / "reports"),
+        model_kind="logistic",
+        kevpe_events=str(events_path),
+    )
+    engine = RecommendationEngine(config)
+
+    results = engine.run()
+    paths = engine.write_reports(results)
+
+    assert results[0].kevpe_available is True
+    assert results[0].kevpe_regime == "RED"
+    assert results[0].kevpe_score == 0.82
+
+    payload = __import__("json").loads(Path(paths["json"]).read_text(encoding="utf-8"))
+    snapshot = build_dashboard_snapshot(payload, source_json_path=paths["json"])
+    assert snapshot["results"][0]["kevpe_available"] is True
+    assert snapshot["results"][0]["kevpe_regime"] == "RED"
 
 
 def test_ops_v1_workflow_generates_manual_approval_artifacts(tmp_path):

@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dashboard Bridge Smoke</title>
+    <style>
+      body {
+        margin: 0;
+        background: #071014;
+        color: #e5f8ff;
+        font-family: Consolas, "Courier New", monospace;
+      }
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .panel {
+        border: 1px solid #245260;
+        background: #0b171d;
+        padding: 16px;
+        margin-bottom: 14px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .metric {
+        border: 1px solid #17343f;
+        background: #071014;
+        padding: 10px;
+      }
+      .label {
+        color: #7f99a5;
+        font-size: 11px;
+        letter-spacing: 1px;
+      }
+      .value {
+        color: #5eead4;
+        font-weight: 700;
+        margin-top: 4px;
+        overflow-wrap: anywhere;
+      }
+      button,
+      input::file-selector-button {
+        border: 1px solid #5eead4;
+        background: transparent;
+        color: #5eead4;
+        padding: 8px 10px;
+        font: inherit;
+        cursor: pointer;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12px;
+      }
+      th,
+      td {
+        border-bottom: 1px solid #17343f;
+        padding: 7px 6px;
+        text-align: left;
+      }
+      .ok {
+        color: #22c55e;
+      }
+      .warn {
+        color: #f59e0b;
+      }
+      .bad {
+        color: #ef4444;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>BACKEND REPORT SNAPSHOT</h1>
+      <p class="label">File-based dashboard bridge smoke harness. No broker execution. No server API.</p>
+      <div class="panel">
+        <input id="snapshot-input" type="file" accept="application/json,.json" />
+        <span id="status" class="label">NO SNAPSHOT LOADED</span>
+      </div>
+      <section id="summary" class="panel" hidden>
+        <div class="grid">
+          <div class="metric">
+            <div class="label">SCHEMA</div>
+            <div id="schema" class="value"></div>
+          </div>
+          <div class="metric">
+            <div class="label">MODE</div>
+            <div id="mode" class="value"></div>
+          </div>
+          <div class="metric">
+            <div class="label">RESULTS</div>
+            <div id="result-count" class="value"></div>
+          </div>
+          <div class="metric">
+            <div class="label">FIRST TICKER</div>
+            <div id="first-ticker" class="value"></div>
+          </div>
+        </div>
+      </section>
+      <section id="audit" class="panel" hidden>
+        <div class="label">AUDIT LOG PATH</div>
+        <div id="audit-path" class="value"></div>
+      </section>
+      <section id="results" class="panel" hidden>
+        <table>
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Ticker</th>
+              <th>Track</th>
+              <th>Verdict</th>
+              <th>Score</th>
+              <th>Report Only</th>
+            </tr>
+          </thead>
+          <tbody id="result-body"></tbody>
+        </table>
+      </section>
+    </main>
+    <script src="../reports/dashboard_browser_verification/snapshot_fixture.js"></script>
+    <script>
+      const input = document.getElementById("snapshot-input");
+      const statusEl = document.getElementById("status");
+      const resultBody = document.getElementById("result-body");
+
+      function setText(id, value) {
+        document.getElementById(id).textContent = value ?? "";
+      }
+
+      function show(id) {
+        document.getElementById(id).hidden = false;
+      }
+
+      function renderSnapshot(payload) {
+        if (payload.schema_version !== "dashboard_snapshot.v1") {
+          throw new Error("dashboard_snapshot.v1 required");
+        }
+        if (!Array.isArray(payload.results)) {
+          throw new Error("results must be an array");
+        }
+        statusEl.textContent = "SNAPSHOT LOADED";
+        statusEl.className = "ok";
+        document.body.dataset.status = "loaded";
+        setText("schema", payload.schema_version);
+        setText("mode", payload.mode);
+        setText("result-count", String(payload.result_count ?? payload.results.length));
+        setText("first-ticker", payload.results[0]?.ticker || "");
+        setText("audit-path", payload.audit_log_path || "");
+        resultBody.innerHTML = "";
+        for (const row of payload.results.slice(0, 10)) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${row.rank ?? ""}</td>
+            <td>${row.ticker ?? ""}</td>
+            <td>${row.track ?? ""}</td>
+            <td>${row.verdict ?? ""}</td>
+            <td>${Number(row.score ?? 0).toFixed(2)}</td>
+            <td class="${row.screening_output_only === true ? "ok" : "bad"}">${row.screening_output_only === true}</td>
+          `;
+          resultBody.appendChild(tr);
+        }
+        show("summary");
+        show("audit");
+        show("results");
+      }
+
+      input.addEventListener("change", async () => {
+        const file = input.files[0];
+        if (!file) return;
+        try {
+          renderSnapshot(JSON.parse(await file.text()));
+        } catch (error) {
+          statusEl.textContent = error.message;
+          statusEl.className = "bad";
+        }
+      });
+
+      if (window.DASHBOARD_SNAPSHOT) {
+        renderSnapshot(window.DASHBOARD_SNAPSHOT);
+      }
+    </script>
+  </body>
+</html>

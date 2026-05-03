@@ -13,6 +13,7 @@ import pandas as pd
 
 from .backtester import Backtester
 from .benchmark import run_benchmark, write_benchmark_report
+from .dashboard_bridge import write_dashboard_snapshot
 from .ensemble_model import EnsemblePredictor, ModelConfig
 from .feature_engine import TechnicalIndicators, make_synthetic_ohlcv, normalize_ohlcv
 from .hw_profile import print_hw_summary, runtime_status, save_runtime_status
@@ -64,8 +65,9 @@ def build_parser() -> argparse.ArgumentParser:
     recommend.add_argument("--period", default="3y")
     recommend.add_argument("--top", type=int, default=5)
     recommend.add_argument("--synthetic", action="store_true", help="use deterministic synthetic OHLCV for offline validation")
-    recommend.add_argument("--data-provider", choices=["auto", "synthetic", "yfinance", "openbb"], default="auto", help="OHLCV provider; CLI value overrides provider config")
+    recommend.add_argument("--data-provider", choices=["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"], default="auto", help="OHLCV provider; CLI value overrides provider config")
     recommend.add_argument("--provider-config", help="optional JSON provider config; see config/data_providers.example.json")
+    recommend.add_argument("--kevpe-events", help="optional KEVPE event JSON/CSV file with date/headline/ticker fields")
     recommend.add_argument("--capital", type=float, default=100_000.0)
     recommend.add_argument("--prefer-gpu", action="store_true")
     recommend.add_argument("--full", action="store_true", help="use non-lite model settings")
@@ -80,8 +82,9 @@ def build_parser() -> argparse.ArgumentParser:
     ops.add_argument("--period", default="3y")
     ops.add_argument("--top", type=int, default=5)
     ops.add_argument("--synthetic", action="store_true", help="use deterministic synthetic OHLCV for offline validation")
-    ops.add_argument("--data-provider", choices=["auto", "synthetic", "yfinance", "openbb"], default="auto", help="OHLCV provider; CLI value overrides provider config")
+    ops.add_argument("--data-provider", choices=["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"], default="auto", help="OHLCV provider; CLI value overrides provider config")
     ops.add_argument("--provider-config", help="optional JSON provider config; see config/data_providers.example.json")
+    ops.add_argument("--kevpe-events", help="optional KEVPE event JSON/CSV file with date/headline/ticker fields")
     ops.add_argument("--capital", type=float, default=100_000.0)
     ops.add_argument("--prefer-gpu", action="store_true")
     ops.add_argument("--full", action="store_true", help="use non-lite model settings")
@@ -89,6 +92,12 @@ def build_parser() -> argparse.ArgumentParser:
     ops.add_argument("--xgb-device", choices=["cpu", "cuda"], default="cpu")
     ops.add_argument("--cv-gap", type=int, help="gap between train/test folds for leak-safe walk-forward CV")
     ops.add_argument("--output-dir", default="reports/ops_v1")
+
+    dashboard = sub.add_parser("dashboard-export", help="convert recommendation JSON into a dashboard snapshot")
+    dashboard.add_argument("--recommendation-json", required=True, help="path to recommendations_algo_v2_*.json")
+    dashboard.add_argument("--output", help="snapshot output path; defaults to dashboard_snapshot.json beside the recommendation JSON")
+    dashboard.add_argument("--public-dir", help="optional Vite public directory to receive dashboard_snapshot.json, audit_log.jsonl, and approval_journal_template.csv")
+    dashboard.add_argument("--approval-journal", help="optional approval_journal_template.csv path to copy with --public-dir")
 
     demo = sub.add_parser("demo", help="create sample data and reports")
     demo.add_argument("--workspace", default="workspaces/demo_workspace")
@@ -127,6 +136,8 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_recommend(args)
             case "ops-v1":
                 return cmd_ops_v1(args)
+            case "dashboard-export":
+                return cmd_dashboard_export(args)
             case "demo":
                 return cmd_demo(args)
             case "journal":
@@ -221,6 +232,7 @@ def cmd_recommend(args: argparse.Namespace) -> int:
         output_dir=args.output_dir,
         data_provider=args.data_provider,
         provider_config=args.provider_config,
+        kevpe_events=args.kevpe_events,
     )
     engine = RecommendationEngine(config)
     results = engine.run()
@@ -252,11 +264,31 @@ def cmd_ops_v1(args: argparse.Namespace) -> int:
         cv_gap=args.cv_gap,
         data_provider=args.data_provider,
         provider_config=args.provider_config,
+        kevpe_events=args.kevpe_events,
     )
     paths = run_ops_v1_workflow(config, output_dir=args.output_dir)
     print(json.dumps(paths, ensure_ascii=False, indent=2))
     for path in paths.values():
         print(f"saved: {path}")
+    return 0
+
+
+def cmd_dashboard_export(args: argparse.Namespace) -> int:
+    from .dashboard_bridge import export_dashboard_public_assets
+
+    path = write_dashboard_snapshot(args.recommendation_json, args.output)
+    result = {"dashboard_snapshot": str(path)}
+    if args.public_dir:
+        result["public_assets"] = export_dashboard_public_assets(
+            args.recommendation_json,
+            path,
+            args.public_dir,
+            approval_journal=args.approval_journal,
+        )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(f"saved: {path}")
+    if args.public_dir:
+        print(f"exported public assets: {args.public_dir}")
     return 0
 
 

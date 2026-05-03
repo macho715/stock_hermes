@@ -7,6 +7,7 @@ __pycache__/
 htmlcov/
 
 .venv/
+.venv-*/
 venv/
 env/
 
@@ -21,3 +22,16 @@ build/
 logs/
 tmp/
 cache/
+
+# Generated runtime report outputs. Tracked audit reports remain tracked.
+reports/dashboard_bridge_smoke/
+reports/ops_v1_*_smoke*/
+reports/recommendations_*_smoke*/
+reports/recommendations_live_*/
+reports/recommendations_full_gpu_*/
+reports/pytest_tmp*/
+reports/runtime_status.json
+reports/dashboard_browser_verification/*.png
+reports/dashboard_browser_verification/snapshot_fixture.js
+reports/generated_reports_inventory_*.csv
+test-results/

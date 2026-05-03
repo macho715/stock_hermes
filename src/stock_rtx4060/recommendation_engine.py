@@ -22,6 +22,7 @@ from sklearn.model_selection import TimeSeriesSplit
 from .audit_log import AuditLogger
 from .backtester import BacktestConfig, Backtester
 from .data_providers import load_ohlcv_with_provider
+from .kevpe_adapter import get_kevpe_adapter, kevpe_signal_to_supplement
 from .ensemble_model import DirectionModel, ModelConfig, _safe_auc
 from .feature_engine import TechnicalIndicators, feature_columns
 
@@ -99,8 +100,9 @@ class RecommendationConfig:
     prefer_gpu: bool = False
     lite: bool = True
     output_dir: str = "recommendation_reports"
-    data_provider: Literal["auto", "synthetic", "yfinance", "openbb"] = "auto"
+    data_provider: Literal["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"] = "auto"
     provider_config: str | None = None
+    kevpe_events: str | None = None
     audit_command: str = "recommend"
 
     def __post_init__(self) -> None:
@@ -193,6 +195,14 @@ class RecommendationResult:
     validations: list[ValidationCheck]
     reasons: list[str]
     generated_at_utc: str
+    # KEVPE risk overlay (optional — populated when KEVPE adapter is available)
+    kevpe_available: bool = False
+    kevpe_regime: str | None = None
+    kevpe_score: float | None = None
+    kevpe_expected_return_pct: float | None = None
+    kevpe_ci: list[float] | None = None
+    kevpe_confidence: str | None = None
+    kevpe_reason: str | None = None
 
     def to_dict(self) -> dict:
         data = asdict(self)
@@ -232,7 +242,7 @@ def load_ohlcv(
     ticker: str,
     period: str,
     synthetic: bool = False,
-    data_provider: Literal["auto", "synthetic", "yfinance", "openbb"] = "auto",
+    data_provider: Literal["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"] = "auto",
     provider_config: str | None = None,
     audit_logger: AuditLogger | None = None,
     command: str = "recommend",
@@ -637,6 +647,7 @@ class RecommendationEngine:
         self.audit_logger = AuditLogger.for_output_dir(self.config.output_dir)
         self._ohlcv_cache: dict[tuple[str, str, bool, str, str | None], tuple[pd.DataFrame, str]] = {}
         self._ohlcv_error_cache: dict[tuple[str, str, bool, str, str | None], str] = {}
+        self._kevpe_events = load_kevpe_events(self.config.kevpe_events)
 
     def _ohlcv_cache_key(self, ticker: str) -> tuple[str, str, bool, str, str | None]:
         cfg = self.config
@@ -705,6 +716,10 @@ class RecommendationEngine:
         ev = _expected_value_pct(model_stats["latest_prob"], plan)
         reasons = [f"data_source={data_source}", f"cv_gap={model_stats['gap']}"] + reasons + [label]
 
+        # ── KEVPE risk overlay (supplementary only — never overrides Risk Gate) ──
+        kevpe_result = get_kevpe_adapter().get_signal_for_ticker(df, self._events_for_ticker(ticker), as_of=pd.Timestamp.now().normalize())
+        kevpe_supp = kevpe_signal_to_supplement(kevpe_result)
+
         return RecommendationResult(
             ticker=ticker,
             track=track,
@@ -745,7 +760,25 @@ class RecommendationEngine:
             validations=checks,
             reasons=reasons,
             generated_at_utc=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            # KEVPE overlay fields (populated from supplementary signal)
+            kevpe_available=kevpe_supp.get("kevpe_available", False),
+            kevpe_regime=kevpe_supp.get("kevpe_regime"),
+            kevpe_score=kevpe_supp.get("kevpe_score"),
+            kevpe_expected_return_pct=kevpe_supp.get("kevpe_expected_return_pct"),
+            kevpe_ci=kevpe_supp.get("kevpe_ci"),
+            kevpe_confidence=kevpe_supp.get("kevpe_confidence"),
+            kevpe_reason=kevpe_supp.get("kevpe_reason"),
         )
+
+    def _events_for_ticker(self, ticker: str) -> list[dict]:
+        clean = ticker.strip().upper()
+        events: list[dict] = []
+        for event in self._kevpe_events:
+            event_ticker = str(event.get("ticker", "") or "").strip().upper()
+            if event_ticker and event_ticker != clean:
+                continue
+            events.append(event)
+        return events
 
     def run(self) -> list[RecommendationResult]:
         tracks: list[Track] = ["S", "L"] if self.config.track == "BOTH" else [self.config.track]  # type: ignore[list-item]
@@ -837,6 +870,38 @@ def _error_result(ticker: str, track: Track, message: str) -> RecommendationResu
         reasons=[message],
         generated_at_utc=now,
     )
+
+
+def load_kevpe_events(path: str | None) -> list[dict]:
+    if not path:
+        return []
+    event_path = Path(path)
+    if not event_path.exists():
+        raise FileNotFoundError(f"KEVPE event file not found: {event_path}")
+    suffix = event_path.suffix.lower()
+    if suffix == ".json":
+        payload = json.loads(event_path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            payload = payload.get("events", [])
+        if not isinstance(payload, list):
+            raise ValueError("KEVPE JSON event file must contain a list or an object with events")
+        return [_normalize_kevpe_event(item) for item in payload if isinstance(item, dict)]
+    if suffix == ".csv":
+        frame = pd.read_csv(event_path)
+        return [_normalize_kevpe_event(row) for row in frame.to_dict(orient="records")]
+    raise ValueError(f"unsupported KEVPE event file extension: {event_path.suffix}")
+
+
+def _normalize_kevpe_event(event: dict) -> dict:
+    normalized = dict(event)
+    topics = normalized.get("topics", ())
+    if isinstance(topics, str):
+        normalized["topics"] = tuple(item.strip() for item in topics.replace(";", ",").split(",") if item.strip())
+    elif isinstance(topics, list):
+        normalized["topics"] = tuple(str(item).strip() for item in topics if str(item).strip())
+    elif not isinstance(topics, tuple):
+        normalized["topics"] = ()
+    return normalized
 
 
 def render_markdown(results: list[RecommendationResult], cfg: RecommendationConfig) -> str:

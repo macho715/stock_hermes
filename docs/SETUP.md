@@ -30,7 +30,7 @@ Run tests through the project `.venv`:
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Observed result after OHLCV cache coverage: 15 tests passed.
+Observed result after dashboard bridge coverage: 19 tests passed.
 
 ## Optional OpenBB Provider
 
@@ -71,6 +71,38 @@ python main.py --help
 .\run.ps1 ops-v1 --period 3y --top 5 --full --prefer-gpu --model-kind xgb --cv-gap 5 --output-dir reports/ops_v1
 ```
 
+## Dashboard Report Bridge
+
+Generate a recommendation report first:
+
+```powershell
+.\run.ps1 recommend --synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports/dashboard_bridge_smoke
+```
+
+Then convert the generated recommendation JSON into a dashboard snapshot:
+
+```powershell
+.\run.ps1 dashboard-export --recommendation-json reports/dashboard_bridge_smoke/recommendations_algo_v2_YYYYMMDD_HHMMSS.json --output reports/dashboard_bridge_smoke/dashboard_snapshot.json
+```
+
+Open `C:\Users\jichu\Downloads\주식\stock_pred_v5.jsx` in the dashboard host, click `BACKEND`, and choose `dashboard_snapshot.json`.
+
+The bridge is file-based. It does not start a local API server, MCP server, broker connection, or background service.
+
+The repo-owned dashboard copy is:
+
+```text
+dashboard/stock_pred_v5.jsx
+```
+
+Run browser smoke verification:
+
+```powershell
+node dashboard\verify_bridge_smoke.mjs
+```
+
+Observed result: PASS. The report is written to `reports/dashboard_browser_verification/dashboard_browser_verification.md`.
+
 ## Ops v1 Output
 
 `ops-v1` creates:
@@ -87,5 +119,18 @@ The workflow remains `screening_output_only` and stops before broker/account act
 ## GPU Note
 
 Use `requirements-gpu-wsl.txt` only inside WSL2/Linux when TensorFlow GPU validation is needed.
+
+TensorFlow has two separate validation lanes:
+
+```powershell
+.\run.ps1 tensorflow-check
+.\run.ps1 tensorflow-gpu-wsl-check
+```
+
+- `tensorflow-check` validates the native Windows `.venv-tf312` TensorFlow CPU/LSTM smoke.
+- `tensorflow-gpu-wsl-check` validates the WSL Ubuntu TensorFlow GPU smoke through `/root/.venvs/stock-rtx4060-tf-gpu`.
+- aliases: `.\run.ps1 tf-gpu-wsl`, `.\run.ps1 tf-gpu-smoke`.
+- the WSL wrapper sets `LD_LIBRARY_PATH` from the installed NVIDIA pip libraries before TensorFlow starts.
+- current verified WSL GPU result: TensorFlow `2.21.0`, RTX 4060 GPU detected as `/physical_device:GPU:0`, GPU matmul PASS, LSTM smoke PASS.
 
 No GPU benchmark is required to run the unified folder's self-test.

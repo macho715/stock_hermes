@@ -116,13 +116,16 @@ Implementation evidence:
 - `tests/test_audit_log.py`
 - `tests/test_data_providers.py`
 - `tests/test_mcp_adapter.py`
+- `src/stock_rtx4060/dashboard_bridge.py`
+- `tests/test_dashboard_bridge.py`
 - `requirements-openbb.txt`
 - `config/data_providers.example.json`
 
 Post-implementation verification:
 
-- `.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider` passed with 15 tests after OHLCV cache coverage.
+- `.venv\Scripts\python.exe -m pytest -q` passed with 19 tests after dashboard bridge coverage.
 - `reports/recommendations_openbb_cache_smoke/audit_log.jsonl` contains 1 successful OpenBB provider event for AAPL.
+- `reports/dashboard_bridge_smoke/dashboard_snapshot.json` contains `dashboard_snapshot.v1`, `report_only`, 2 results, and `screening_output_only=True`.
 
 ### 2.3 Dependency And Execution Order
 
