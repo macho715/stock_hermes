@@ -1,0 +1,3 @@
+ticker,track,verdict,score,entry,stop,tp1,tp2,risk_reward,suggested_quantity,suggested_position_value,manual_action,manual_approval_required,broker_order_execution,screening_output_only,reviewer,reviewed_at,final_decision,journal_reason
+SYNTH-B,S,ELIGIBLE_RECOMMENDATION,85.91,111.9515,107.4734,117.5491,123.1467,2.5,167.4832,18750.0,REVIEW_PENDING,True,False,True,,,,
+SYNTH-A,L,ACCUMULATE_RECOMMENDATION,84.32,79.3744,69.8495,87.3119,95.2493,1.67,52.4938,4166.67,REVIEW_PENDING,True,False,True,,,,
