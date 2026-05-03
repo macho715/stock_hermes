@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.pipeline import Pipeline
@@ -25,7 +26,7 @@ from sklearn.preprocessing import StandardScaler
 
 from .feature_engine import TARGET_COLUMNS, feature_columns
 
-ModelKind = Literal["auto", "xgb", "logistic"]
+ModelKind = Literal["auto", "xgb", "logistic", "rf"]
 DeviceKind = Literal["cpu", "cuda"]
 
 
@@ -127,6 +128,25 @@ class DirectionModel:
             ]
         )
 
+    def _make_rf(self) -> Pipeline:
+        return Pipeline(
+            steps=[
+                ("imputer", SimpleImputer(strategy="median")),
+                (
+                    "model",
+                    RandomForestClassifier(
+                        n_estimators=200,
+                        max_depth=6,
+                        min_samples_leaf=5,
+                        max_features="sqrt",
+                        class_weight="balanced",
+                        random_state=self.config.random_state,
+                        n_jobs=4,
+                    ),
+                ),
+            ]
+        )
+
     def _make_xgb(self, device: DeviceKind):
         from xgboost import XGBClassifier  # type: ignore
 
@@ -140,6 +160,12 @@ class DirectionModel:
         clean_X = X.replace([np.inf, -np.inf], np.nan)
         kind = self.config.model_kind
 
+        if kind == "rf":
+            self.model = self._make_rf()
+            self.model.fit(clean_X, y.astype(int))
+            self.kind_used = "rf"
+            return self
+
         if kind in {"auto", "xgb"}:
             try:
                 self.model = self._make_xgb(self.config.xgb_device)
@@ -149,7 +175,7 @@ class DirectionModel:
             except Exception:
                 if kind == "xgb" and self.config.xgb_device == "cpu":
                     raise
-                # GPU or xgb failure fallback.
+                # GPU or xgb failure → try CPU XGBoost first.
                 try:
                     self.model = self._make_xgb("cpu")
                     self.model.fit(clean_X, y.astype(int))
@@ -158,6 +184,14 @@ class DirectionModel:
                 except Exception:
                     if kind == "xgb":
                         raise
+                    # XGBoost completely unavailable → fall back to RandomForest.
+                    try:
+                        self.model = self._make_rf()
+                        self.model.fit(clean_X, y.astype(int))
+                        self.kind_used = "rf-fallback"
+                        return self
+                    except Exception:
+                        pass
 
         self.model = self._make_logistic()
         self.model.fit(clean_X, y.astype(int))

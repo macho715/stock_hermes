@@ -90,7 +90,7 @@ class RecommendationConfig:
     max_mdd_pct_s: float = 25.0
     max_mdd_pct_l: float = 35.0
     min_risk_reward: float = 2.0
-    model_kind: Literal["auto", "xgb", "logistic"] = "logistic"
+    model_kind: Literal["auto", "xgb", "logistic", "rf"] = "logistic"
     xgb_device: Literal["cpu", "cuda"] = "cpu"
     xgb_estimators: int = 160
     xgb_splits: int = 3

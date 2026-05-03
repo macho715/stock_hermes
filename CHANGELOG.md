@@ -2,6 +2,32 @@
 
 All notable changes for `stock_rtx4060_unified` are documented here.
 
+## 2026-05-03 — Algorithm Upgrade (v2.1)
+
+### Added
+
+- **`src/stock_rtx4060/feature_engine.py`**: 10 new technical indicators (+18 feature columns, total ~93)
+  - `chaikin_money_flow(period=20)` → `cmf_20`: volume-weighted money flow oscillator
+  - `keltner_channel(period=20, atr_mult=2.0)` → `kc_pct`, `kc_width`: ATR-based channel position and width
+  - `vortex_indicator(period=14)` → `vi_plus_14`, `vi_minus_14`, `vi_diff_14`: directional movement indicators
+  - `trix(period=15)` → `trix_15`: triple-smoothed EMA momentum (strong noise filter)
+  - `elder_ray(period=13)` → `elder_bull_13`, `elder_bear_13`: bull/bear power relative to EMA
+  - `dpo(period=20)` → `dpo_20`: Detrended Price Oscillator for cycle detection
+
+- **`src/stock_rtx4060/ensemble_model.py`**: Added `RandomForestClassifier` as a new model kind
+  - New `model_kind = "rf"` option: balanced RF with `max_features="sqrt"`, `n_estimators=200`
+  - Extended "auto" fallback chain: **XGBoost → RandomForest → Logistic Regression**
+  - `ModelKind` type extended to include `"rf"`
+
+- **`src/stock_rtx4060/risk_rules.py`**: ATR-based dynamic stop-loss for Track-S
+  - `evaluate_track_s_candidate()` accepts new `atr_pct: float | None` parameter
+  - When provided, effective stop = `max(fixed_stop_pct, 2 × ATR%)` — adapts to current volatility
+  - `score_track_s()` now includes **Chaikin Money Flow** (+8 pts max) and **Vortex VI diff** (+4/-3 pts) in scoring
+
+- **`src/stock_rtx4060/main.py`**: `predict` command passes `atr_pct_14` to `evaluate_track_s_candidate`; `--model-kind` choices now include `"rf"`
+
+- **`src/stock_rtx4060/recommendation_engine.py`**: `model_kind` Literal extended with `"rf"`
+
 ## 2026-05-03 — Real Data Ops Phase 1-5 Implementation
 
 ### Added
