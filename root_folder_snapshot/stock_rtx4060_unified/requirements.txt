@@ -1,0 +1,10 @@
+numpy>=1.26,<2.0
+pandas>=2.2,<3.0
+scikit-learn>=1.1,<2.0
+tabulate>=0.9
+yfinance>=0.2.66
+# Optional GPU/model backend. The code falls back safely when unavailable.
+xgboost>=3.1.0
+# API server (Option B: HTTP integration with stock-pred-v5 dashboard)
+flask>=3.0
+flask-cors>=4.0

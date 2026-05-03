@@ -1,0 +1,86 @@
+Starting stock_rtx4060 unified API server on http://127.0.0.1:5151
+CORS enabled for http://localhost:5173
+Endpoints:
+  GET /api/health           — health check
+  GET /api/recommend        — run recommendation + return snapshot
+  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot
+ * Serving Flask app 'api_server'
+ * Debug mode: on
+Starting stock_rtx4060 unified API server on http://127.0.0.1:5151
+CORS enabled for http://localhost:5173
+Endpoints:
+  GET /api/health           — health check
+  GET /api/recommend        — run recommendation + return snapshot
+  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot
+Starting stock_rtx4060 unified API server on http://127.0.0.1:5151
+CORS enabled for http://localhost:5173
+Endpoints:
+  GET /api/health           — health check
+  GET /api/recommend        — run recommendation + return snapshot
+  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot
+Starting stock_rtx4060 unified API server on http://127.0.0.1:5151
+CORS enabled for http://localhost:5173
+Endpoints:
+  GET /api/health           — health check
+  GET /api/recommend        — run recommendation + return snapshot
+  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot
+Starting stock_rtx4060 unified API server on http://127.0.0.1:5151
+CORS enabled for http://localhost:5173
+Endpoints:
+  GET /api/health           — health check
+  GET /api/recommend        — run recommendation + return snapshot
+  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot
+Starting stock_rtx4060 unified API server on http://127.0.0.1:5151
+CORS enabled for http://localhost:5173
+Endpoints:
+  GET /api/health           — health check
+  GET /api/recommend        — run recommendation + return snapshot
+  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot
+Starting stock_rtx4060 unified API server on http://127.0.0.1:5151
+CORS enabled for http://localhost:5173
+Endpoints:
+  GET /api/health           — health check
+  GET /api/recommend        — run recommendation + return snapshot
+  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot
+Starting stock_rtx4060 unified API server on http://127.0.0.1:5151
+CORS enabled for http://localhost:5173
+Endpoints:
+  GET /api/health           — health check
+  GET /api/recommend        — run recommendation + return snapshot
+  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot
+Starting stock_rtx4060 unified API server on http://127.0.0.1:5151
+CORS enabled for http://localhost:5173
+Endpoints:
+  GET /api/health           — health check
+  GET /api/recommend        — run recommendation + return snapshot
+  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot
+Starting stock_rtx4060 unified API server on http://127.0.0.1:5151
+CORS enabled for http://localhost:5173
+Endpoints:
+  GET /api/health           — health check
+  GET /api/recommend        — run recommendation + return snapshot
+  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot
+Starting stock_rtx4060 unified API server on http://127.0.0.1:5151
+CORS enabled for http://localhost:5173
+Endpoints:
+  GET /api/health           — health check
+  GET /api/recommend        — run recommendation + return snapshot
+  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot
+Starting stock_rtx4060 unified API server on http://127.0.0.1:5151
+CORS enabled for http://localhost:5173
+Endpoints:
+  GET /api/health           — health check
+  GET /api/recommend        — run recommendation + return snapshot
+  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot
+Starting stock_rtx4060 unified API server on http://127.0.0.1:5151
+CORS enabled for http://localhost:5173
+Endpoints:
+  GET /api/health           — health check
+  GET /api/recommend        — run recommendation + return snapshot
+  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot
+Starting stock_rtx4060 unified API server on http://127.0.0.1:5151
+CORS enabled for http://localhost:5173
+Endpoints:
+  GET /api/health           — health check
+  GET /api/recommend        — run recommendation + return snapshot
+  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot

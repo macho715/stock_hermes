@@ -1,0 +1,3 @@
+# Optional Phase 1 OpenBB provider path.
+# Base offline validation does not require this file.
+openbb>=4.4

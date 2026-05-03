@@ -1,0 +1,3 @@
+[2mPM 3:13:48[22m [31m[1m[vite][22m[39m [31mhttp proxy error: /api/recommend[39m
+Error: connect ECONNREFUSED 127.0.0.1:5151
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)

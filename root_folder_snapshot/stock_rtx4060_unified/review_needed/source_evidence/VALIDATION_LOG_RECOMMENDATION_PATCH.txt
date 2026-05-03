@@ -1,0 +1,18 @@
+Validation Log — Recommendation Patch
+Date: 2026-05-02
+
+1) Tests
+Command: cd /mnt/data/stock_work && python -m pytest -q main.py
+Result: 5 passed in 2.74s
+
+2) Recommendation demo
+Command: python main.py --recommend --synthetic --universe SYNTH-A,SYNTH-B,SYNTH-C --top 3 --output-dir /mnt/data/stock_work/recommendation_reports
+Result: PASS
+Artifacts:
+- recommendation_reports/recommendations_20260502_160206.md
+- recommendation_reports/recommendations_20260502_160206.json
+
+Boundary:
+- No broker API integration.
+- No auto-trading.
+- All candidate outputs are screening_output_only.

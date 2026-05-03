@@ -1,0 +1,12 @@
+{
+  "generated": "20260502_205535",
+  "target": "C:\\Users\\jichu\\Downloads\\주식\\stock_rtx4060_unified",
+  "source_file_count": 238,
+  "kept_count": 11,
+  "excluded_candidate_count": 227,
+  "review_needed_count": 4,
+  "duplicate_group_count": 31,
+  "same_path_diff_count": 9,
+  "same_name_diff_count": 32,
+  "missing_roots": []
+}

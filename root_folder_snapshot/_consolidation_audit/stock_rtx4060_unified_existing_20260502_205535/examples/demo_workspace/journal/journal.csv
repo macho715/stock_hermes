@@ -1,0 +1,2 @@
+timestamp,ticker,track,action,gate,score,entry,stop,target_2,quantity,reason
+2026-05-02T09:38:05,DEMO,S,BUY,AMBER,72.0,111.0061,106.5659,122.1068,22,Market regime positive; 20D relative strength positive; Volume expansion moderate; Catalyst confirmed
