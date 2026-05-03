@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 
@@ -77,17 +78,33 @@ def test_recommendation_engine_synthetic_run(tmp_path):
     assert Path(paths["markdown"]).exists()
     assert Path(paths["json"]).exists()
     assert Path(paths["audit"]).exists()
+    payload = __import__("json").loads(Path(paths["json"]).read_text(encoding="utf-8"))
+    assert payload["provider_summary"]["status"] in {"PASS", "AMBER"}
+    assert "synthetic" in payload["provider_summary"]["providers_used"]
 
 
 def test_recommendation_engine_reuses_ohlcv_for_same_ticker(monkeypatch, tmp_path):
     calls = []
     frame = make_synthetic_ohlcv(760)
 
-    def fake_load_ohlcv(*args, **kwargs):
+    def fake_load_ohlcv_result(*args, **kwargs):
         calls.append((args, kwargs))
-        return frame, "synthetic_demo_data"
+        return SimpleNamespace(
+            frame=frame,
+            source="synthetic_demo_data",
+            provider_used="synthetic",
+            endpoint=None,
+            fallback_reason=None,
+            metadata={
+                "provider_validation_status": "PASS",
+                "provider_used": "synthetic",
+                "row_count": len(frame),
+                "last_date": str(frame.index.max().date()),
+                "freshness_days": 0,
+            },
+        )
 
-    monkeypatch.setattr(recommendation_module, "load_ohlcv", fake_load_ohlcv)
+    monkeypatch.setattr(recommendation_module, "load_ohlcv_result", fake_load_ohlcv_result)
     config = RecommendationConfig(
         universe=["CACHE-A"],
         track="BOTH",
@@ -107,8 +124,15 @@ def test_recommendation_engine_reuses_ohlcv_for_same_ticker(monkeypatch, tmp_pat
 def test_recommendation_engine_loads_kevpe_events_and_exports_dashboard_fields(monkeypatch, tmp_path):
     frame = make_synthetic_ohlcv(760)
 
-    def fake_load_ohlcv(*args, **kwargs):
-        return frame, "synthetic_demo_data"
+    def fake_load_ohlcv_result(*args, **kwargs):
+        return SimpleNamespace(
+            frame=frame,
+            source="synthetic_demo_data",
+            provider_used="synthetic",
+            endpoint=None,
+            fallback_reason=None,
+            metadata={"provider_validation_status": "PASS", "provider_used": "synthetic", "row_count": len(frame)},
+        )
 
     class FakeKevpeAdapter:
         def get_signal_for_ticker(self, ohlcv, events, as_of=None):
@@ -148,7 +172,7 @@ def test_recommendation_engine_loads_kevpe_events_and_exports_dashboard_fields(m
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(recommendation_module, "load_ohlcv", fake_load_ohlcv)
+    monkeypatch.setattr(recommendation_module, "load_ohlcv_result", fake_load_ohlcv_result)
     monkeypatch.setattr(recommendation_module, "get_kevpe_adapter", lambda: FakeKevpeAdapter())
 
     config = RecommendationConfig(

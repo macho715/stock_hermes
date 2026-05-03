@@ -21,7 +21,7 @@ from sklearn.model_selection import TimeSeriesSplit
 
 from .audit_log import AuditLogger
 from .backtester import BacktestConfig, Backtester
-from .data_providers import load_ohlcv_with_provider
+from .data_providers import ProviderResult, load_ohlcv_with_provider
 from .kevpe_adapter import get_kevpe_adapter, kevpe_signal_to_supplement
 from .ensemble_model import DirectionModel, ModelConfig, _safe_auc
 from .feature_engine import TechnicalIndicators, feature_columns
@@ -247,6 +247,27 @@ def load_ohlcv(
     audit_logger: AuditLogger | None = None,
     command: str = "recommend",
 ) -> tuple[pd.DataFrame, str]:
+    provider_result = load_ohlcv_result(
+        ticker,
+        period,
+        synthetic=synthetic,
+        data_provider=data_provider,
+        provider_config=provider_config,
+        audit_logger=audit_logger,
+        command=command,
+    )
+    return provider_result.frame, provider_result.source
+
+
+def load_ohlcv_result(
+    ticker: str,
+    period: str,
+    synthetic: bool = False,
+    data_provider: Literal["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"] = "auto",
+    provider_config: str | None = None,
+    audit_logger: AuditLogger | None = None,
+    command: str = "recommend",
+) -> ProviderResult:
     provider_result = load_ohlcv_with_provider(
         ticker,
         period,
@@ -256,7 +277,7 @@ def load_ohlcv(
         audit_logger=audit_logger,
         command=command,
     )
-    return provider_result.frame, provider_result.source
+    return provider_result
 
 
 def parse_universe(value: str | None) -> list[str]:
@@ -645,8 +666,9 @@ class RecommendationEngine:
     def __init__(self, config: RecommendationConfig | None = None):
         self.config = config or RecommendationConfig()
         self.audit_logger = AuditLogger.for_output_dir(self.config.output_dir)
-        self._ohlcv_cache: dict[tuple[str, str, bool, str, str | None], tuple[pd.DataFrame, str]] = {}
+        self._ohlcv_cache: dict[tuple[str, str, bool, str, str | None], tuple[pd.DataFrame, str, dict]] = {}
         self._ohlcv_error_cache: dict[tuple[str, str, bool, str, str | None], str] = {}
+        self._provider_metadata: list[dict] = []
         self._kevpe_events = load_kevpe_events(self.config.kevpe_events)
 
     def _ohlcv_cache_key(self, ticker: str) -> tuple[str, str, bool, str, str | None]:
@@ -657,12 +679,12 @@ class RecommendationEngine:
         cfg = self.config
         key = self._ohlcv_cache_key(ticker)
         if key in self._ohlcv_cache:
-            frame, source = self._ohlcv_cache[key]
+            frame, source, _metadata = self._ohlcv_cache[key]
             return frame.copy(deep=False), source
         if key in self._ohlcv_error_cache:
             raise RuntimeError(self._ohlcv_error_cache[key])
         try:
-            frame, source = load_ohlcv(
+            provider_result = load_ohlcv_result(
                 ticker,
                 cfg.period,
                 synthetic=cfg.synthetic,
@@ -674,7 +696,17 @@ class RecommendationEngine:
         except Exception as exc:
             self._ohlcv_error_cache[key] = str(exc)
             raise
-        self._ohlcv_cache[key] = (frame, source)
+        frame = provider_result.frame
+        source = provider_result.source
+        metadata = dict(provider_result.metadata or {})
+        metadata.setdefault("provider_used", provider_result.provider_used)
+        metadata.setdefault("source", provider_result.source)
+        if provider_result.endpoint:
+            metadata.setdefault("endpoint", provider_result.endpoint)
+        if provider_result.fallback_reason:
+            metadata.setdefault("fallback_reason", provider_result.fallback_reason)
+        self._provider_metadata.append(metadata)
+        self._ohlcv_cache[key] = (frame, source, metadata)
         return frame.copy(deep=False), source
 
     def evaluate_ticker(self, ticker: str, track: Track) -> RecommendationResult:
@@ -818,12 +850,33 @@ class RecommendationEngine:
             "disclaimer": "screening_output_only; manual approval required; no broker order execution; not financial advice",
             "algorithm_patch": "v2 leak-safe CV + ATR risk plan + fixed-risk sizing + OOF backtest",
             "audit_log_path": str(self.audit_logger.path),
+            "provider_summary": self._provider_summary(),
             "errors": errors,
             "results": [r.to_dict() for r in results],
         }
         json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         md_path.write_text(render_markdown(results, self.config), encoding="utf-8")
         return RecommendationRun(results=results, errors=errors, markdown_path=str(md_path), json_path=str(json_path), audit_path=str(self.audit_logger.path))
+
+    def _provider_summary(self) -> dict | None:
+        if not self._provider_metadata:
+            return None
+        status_order = {"PASS": 0, "AMBER": 1, "FAIL": 2}
+        statuses = [str(item.get("provider_validation_status", "AMBER")) for item in self._provider_metadata]
+        status = max(statuses, key=lambda item: status_order.get(item, 1))
+        row_counts = [int(item["row_count"]) for item in self._provider_metadata if item.get("row_count") is not None]
+        freshness_values = [int(item["freshness_days"]) for item in self._provider_metadata if item.get("freshness_days") is not None]
+        last_dates = [str(item["last_date"]) for item in self._provider_metadata if item.get("last_date")]
+        fallbacks = sorted({str(item["fallback_reason"]) for item in self._provider_metadata if item.get("fallback_reason")})
+        return {
+            "status": status,
+            "providers_used": sorted({str(item.get("provider_used", "unknown")) for item in self._provider_metadata}),
+            "event_count": len(self._provider_metadata),
+            "row_count_min": min(row_counts) if row_counts else None,
+            "last_date_max": max(last_dates) if last_dates else None,
+            "freshness_days_max": max(freshness_values) if freshness_values else None,
+            "fallbacks": fallbacks,
+        }
 
 
 def _error_result(ticker: str, track: Track, message: str) -> RecommendationResult:

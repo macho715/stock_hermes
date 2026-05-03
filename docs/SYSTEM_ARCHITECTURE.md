@@ -23,7 +23,8 @@ flowchart TD
     CLI --> DashboardBridge[dashboard_bridge.py]
     CLI -. adapter contract only .-> MCP[mcp_adapter.py]
     CLI -. quality rules .-> Continue[.continue/checks/*.md]
-    Provider --> Audit[audit_log.py JSONL]
+    Provider --> Gate[provider_validation.py]
+    Gate --> Audit[audit_log.py JSONL]
     Provider --> Synthetic[Synthetic OHLCV]
     Provider --> YFinance[yfinance]
     Provider --> OpenBB[OpenBB optional]
@@ -31,7 +32,7 @@ flowchart TD
     Model --> Backtest
     Model --> Recommend
     Risk --> Recommend
-    Provider --> Recommend
+    Gate --> Recommend
     Recommend --> Ops
     Backtest --> Reports
     Recommend --> Output[Markdown/JSON/CSV reports + audit JSONL]
@@ -47,8 +48,9 @@ flowchart TD
 ```mermaid
 flowchart LR
     Input[CLI arguments / provider config / local sample data] --> Provider[data_providers.py]
-    Provider --> Audit[audit_log.py]
-    Provider --> Features[feature_engine.py]
+    Provider --> Gate[provider_validation.py]
+    Gate --> Audit[audit_log.py]
+    Gate --> Features[feature_engine.py]
     Features --> Model[ensemble_model.py]
     Model --> Backtest[backtester.py]
     Model --> Recommendation[recommendation_engine.py]
@@ -82,6 +84,7 @@ flowchart LR
 | Risk rules | `src/stock_rtx4060/risk_rules.py` | Applies risk-plan checks. |
 | Reports | `src/stock_rtx4060/reports.py` | Writes Markdown and JSON output. |
 | Provider router | `src/stock_rtx4060/data_providers.py` | Selects `synthetic`, `yfinance`, `openbb`, or `auto` OHLCV provider. |
+| Provider validation | `src/stock_rtx4060/provider_validation.py` | Checks OHLCV row count, date range, future rows, duplicate dates, required columns, nulls, and freshness evidence. |
 | Audit log | `src/stock_rtx4060/audit_log.py` | Writes masked append-only JSONL provider/workflow events. |
 | MCP adapter contract | `src/stock_rtx4060/mcp_adapter.py` | Defines read/report-only Phase 1 MCP workflow contract. It does not start a server. |
 | Tests | `tests/test_core.py`, `tests/test_audit_log.py`, `tests/test_data_providers.py`, `tests/test_mcp_adapter.py`, `tests/test_dashboard_bridge.py` | Verify core CLI/package behavior, provider routing, audit masking, MCP boundary, and dashboard snapshot conversion. |
@@ -107,11 +110,14 @@ Browser verification uses `dashboard/bridge_smoke.html` plus `node dashboard\ver
 |---:|---|---|
 | 1 | `src/stock_rtx4060/main.py` | Parses `--data-provider` and optional `--provider-config`. |
 | 2 | `src/stock_rtx4060/data_providers.py` | Loads OHLCV from synthetic, yfinance, or optional OpenBB. |
-| 3 | `src/stock_rtx4060/audit_log.py` | Appends masked JSONL provider attempt events. |
-| 4 | `src/stock_rtx4060/recommendation_engine.py` | Builds recommendation Markdown/JSON and records `audit_log_path`. |
-| 5 | `src/stock_rtx4060/ops_workflow.py` | Includes `audit_log` in Ops v1 returned paths and summary JSON. |
+| 3 | `src/stock_rtx4060/provider_validation.py` | Adds point-in-time OHLCV validation metadata. |
+| 4 | `src/stock_rtx4060/audit_log.py` | Appends masked JSONL provider attempt events with validation evidence. |
+| 5 | `src/stock_rtx4060/recommendation_engine.py` | Builds recommendation Markdown/JSON and records `audit_log_path` plus `provider_summary`. |
+| 6 | `src/stock_rtx4060/ops_workflow.py` | Includes `audit_log` in Ops v1 returned paths and summary JSON. |
 
 `RecommendationEngine` caches OHLCV data by ticker, period, synthetic flag, data provider, and provider config within one CLI run. This keeps Track-S and Track-L from making duplicate provider calls for the same ticker.
+
+Phase A provider validation is evidence-only. A provider validation PASS does not approve a trade and does not bypass the existing risk gates.
 
 ## Validation State
 
@@ -121,13 +127,14 @@ Browser verification uses `dashboard/bridge_smoke.html` plus `node dashboard\ver
 | `python -m compileall .` | PASS |
 | `python main.py --help` | AMBER with global Python if dependencies are missing; PASS with `.venv\Scripts\python.exe main.py --help` |
 | Global `python main.py self-test` | AMBER unless the global interpreter is explicitly prepared |
-| Project `.venv` pytest | PASS, 19 tests passed after dashboard bridge coverage |
+| Project `.venv` pytest | PASS, 26 tests passed after Phase A provider validation coverage |
 | Ops v1 clean smoke | PASS, `AMZN,AAPL` generated review artifacts with `error_count=0` |
 | Phase 1 recommendation smoke | PASS, generated Markdown, JSON, and `audit_log.jsonl` under `reports/recommendations_phase1_smoke` |
 | Phase 1 Ops v1 smoke | PASS, generated Ops v1 artifacts and `audit_log.jsonl` under `reports/ops_v1_phase1_smoke` |
 | OpenBB cache smoke | PASS, `reports/recommendations_openbb_cache_smoke/audit_log.jsonl` contains 1 AAPL provider event |
 | Dashboard bridge smoke | PASS, `reports/dashboard_bridge_smoke/dashboard_snapshot.json` contains `dashboard_snapshot.v1`, `report_only`, 2 results, and `screening_output_only=True` |
 | Dashboard browser verification | PASS, `reports/dashboard_browser_verification/dashboard_browser_verification.md` and `backend_snapshot_smoke.png` generated |
+| Phase A provider validation smoke | PASS, `reports/phase_a_provider_v2_smoke/dashboard_snapshot.json` contains `provider_summary.status=PASS` and `screening_output_only=True` |
 
 ---
 

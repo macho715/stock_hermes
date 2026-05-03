@@ -30,6 +30,15 @@ def _recommendation_payload() -> dict:
         "disclaimer": "screening_output_only; manual approval required; no broker order execution; not financial advice",
         "algorithm_patch": "v2",
         "audit_log_path": "reports/dashboard_bridge_smoke/audit_log.jsonl",
+        "provider_summary": {
+            "status": "PASS",
+            "providers_used": ["synthetic"],
+            "event_count": 1,
+            "row_count_min": 760,
+            "last_date_max": "2026-05-03",
+            "freshness_days_max": 0,
+            "fallbacks": [],
+        },
         "errors": [],
         "results": [
             {
@@ -86,6 +95,8 @@ def test_build_dashboard_snapshot_preserves_report_only_contract():
     assert snapshot["source_recommendation_json"] == "reports/in/recommendations.json"
     assert snapshot["config"]["data_provider"] == "synthetic"
     assert "provider_config" not in snapshot["config"]
+    assert snapshot["provider_summary"]["status"] == "PASS"
+    assert snapshot["provider_summary"]["providers_used"] == ["synthetic"]
     assert snapshot["results"][0]["ticker"] == "SYNTH-A"
     assert snapshot["results"][0]["score"] == 73.5
     assert snapshot["results"][0]["probability"] == 0.54
@@ -144,3 +155,12 @@ def test_dashboard_snapshot_rejects_non_report_only_result():
 
     with pytest.raises(DashboardBridgeError, match="screening_output_only=true"):
         build_dashboard_snapshot(payload)
+
+
+def test_dashboard_snapshot_accepts_older_payload_without_provider_summary():
+    payload = _recommendation_payload()
+    del payload["provider_summary"]
+
+    snapshot = build_dashboard_snapshot(payload)
+
+    assert snapshot["provider_summary"] is None

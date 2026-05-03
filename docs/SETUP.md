@@ -30,7 +30,7 @@ Run tests through the project `.venv`:
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Observed result after dashboard bridge coverage: 19 tests passed.
+Observed result after Phase A provider validation coverage: 26 tests passed.
 
 ## Optional OpenBB Provider
 
@@ -58,6 +58,18 @@ CLI flags override the config:
 
 Each `recommend` and `ops-v1` run writes `audit_log.jsonl` under the recommendation output directory.
 `RecommendationEngine` caches OHLCV data for the same ticker during one CLI run, so a single-ticker `track=BOTH` OpenBB smoke writes one provider event.
+
+## Phase A Provider Validation Smoke
+
+Provider loads run point-in-time OHLCV checks through `src/stock_rtx4060/provider_validation.py`.
+The validation metadata is written to `audit_log.jsonl`, recommendation JSON `provider_summary`, and dashboard snapshot `provider_summary`.
+
+```powershell
+.\run.ps1 recommend --synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports/phase_a_provider_v2_smoke
+.\run.ps1 dashboard-export --recommendation-json reports/phase_a_provider_v2_smoke/recommendations_algo_v2_YYYYMMDD_HHMMSS.json --output reports/phase_a_provider_v2_smoke/dashboard_snapshot.json --public-dir ..\stock-pred-v5\public
+```
+
+The provider validation gate is evidence-only. It does not place orders and does not approve trades.
 
 ## Common Commands
 

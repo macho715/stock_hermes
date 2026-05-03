@@ -14,6 +14,7 @@ import pandas as pd
 
 from .audit_log import AuditEvent, AuditLogger, mask_secret
 from .feature_engine import normalize_ohlcv
+from .provider_validation import validate_provider_frame
 
 DataProviderName = Literal["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"]
 
@@ -90,6 +91,8 @@ def _load_synthetic(
 ) -> ProviderResult:
     started = time.perf_counter()
     frame = _make_synthetic_ohlcv(seed=_stable_seed(ticker))
+    validation = validate_provider_frame(frame, provider_used="synthetic", ticker=ticker, period=period)
+    metadata = {"provider_validation": validation.metadata, **validation.metadata}
     _write_audit(
         audit_logger,
         AuditEvent(
@@ -102,10 +105,11 @@ def _load_synthetic(
             provider_used="synthetic",
             source="synthetic_demo_data",
             message=fallback_reason,
+            metadata=metadata,
             duration_ms=_elapsed_ms(started),
         ),
     )
-    return ProviderResult(frame=frame, provider_requested=requested, provider_used="synthetic", source="synthetic_demo_data", fallback_reason=fallback_reason)
+    return ProviderResult(frame=frame, provider_requested=requested, provider_used="synthetic", source="synthetic_demo_data", fallback_reason=fallback_reason, metadata=metadata)
 
 
 def _load_yfinance(
@@ -123,6 +127,8 @@ def _load_yfinance(
         normalized = normalize_ohlcv(frame)
         if normalized.empty:
             raise RuntimeError("empty OHLCV frame")
+        validation = validate_provider_frame(normalized, provider_used="yfinance", ticker=ticker, period=period)
+        metadata = {"provider_validation": validation.metadata, **validation.metadata}
         _write_audit(
             audit_logger,
             AuditEvent(
@@ -134,10 +140,11 @@ def _load_yfinance(
                 provider_requested=requested,
                 provider_used="yfinance",
                 source="yfinance",
+                metadata=metadata,
                 duration_ms=_elapsed_ms(started),
             ),
         )
-        return ProviderResult(frame=normalized, provider_requested=requested, provider_used="yfinance", source="yfinance")
+        return ProviderResult(frame=normalized, provider_requested=requested, provider_used="yfinance", source="yfinance", metadata=metadata)
     except Exception as exc:
         _write_audit(
             audit_logger,
@@ -177,6 +184,7 @@ def _load_pykrx(
         if frame.empty:
             raise RuntimeError("empty OHLCV frame from PyKRX")
         normalized = normalize_ohlcv(_normalize_pykrx_columns(frame))
+        validation = validate_provider_frame(normalized, provider_used="pykrx", ticker=ticker, period=period)
         _write_audit(
             audit_logger,
             AuditEvent(
@@ -189,6 +197,8 @@ def _load_pykrx(
                 provider_used="pykrx",
                 source="pykrx",
                 metadata={
+                    "provider_validation": validation.metadata,
+                    **validation.metadata,
                     "ticker_type": "KRX",
                     "data_freshness_minutes": 0,
                     "market_close_adj": True,
@@ -203,6 +213,8 @@ def _load_pykrx(
             provider_used="pykrx",
             source="pykrx",
             metadata={
+                "provider_validation": validation.metadata,
+                **validation.metadata,
                 "ticker_type": "KRX",
                 "data_freshness_minutes": 0,
                 "market_close_adj": True,
@@ -253,6 +265,7 @@ def _load_fdr(
         if frame.empty:
             raise RuntimeError("empty OHLCV frame from FDR")
         normalized = normalize_ohlcv(frame)
+        validation = validate_provider_frame(normalized, provider_used="fdr", ticker=ticker, period=period)
         _write_audit(
             audit_logger,
             AuditEvent(
@@ -265,6 +278,8 @@ def _load_fdr(
                 provider_used="fdr",
                 source="FinanceDataReader",
                 metadata={
+                    "provider_validation": validation.metadata,
+                    **validation.metadata,
                     "ticker_type": "KRX" if ticker.endswith((".KS", ".KQ")) else "UNKNOWN",
                     "data_freshness_minutes": 0,
                     "market_close_adj": False,
@@ -279,6 +294,8 @@ def _load_fdr(
             provider_used="fdr",
             source="FinanceDataReader",
             metadata={
+                "provider_validation": validation.metadata,
+                **validation.metadata,
                 "ticker_type": "KRX" if ticker.endswith((".KS", ".KQ")) else "UNKNOWN",
                 "data_freshness_minutes": 0,
                 "market_close_adj": False,
@@ -364,6 +381,8 @@ def _load_openbb(
         frame = _openbb_to_frame(result)
         if frame.empty:
             raise RuntimeError("empty OHLCV frame")
+        validation = validate_provider_frame(frame, provider_used="openbb", ticker=ticker, period=period)
+        metadata = {"provider_validation": validation.metadata, **validation.metadata, "openbb_provider": openbb_provider, "arguments": mask_secret(kwargs)}
         _write_audit(
             audit_logger,
             AuditEvent(
@@ -376,7 +395,7 @@ def _load_openbb(
                 provider_used="openbb",
                 endpoint=OPENBB_EQUITY_HISTORICAL_ENDPOINT,
                 source=f"openbb:{openbb_provider}",
-                metadata={"openbb_provider": openbb_provider, "arguments": mask_secret(kwargs)},
+                metadata=metadata,
                 duration_ms=_elapsed_ms(started),
             ),
         )
@@ -386,6 +405,7 @@ def _load_openbb(
             provider_used="openbb",
             source=f"openbb:{openbb_provider}",
             endpoint=OPENBB_EQUITY_HISTORICAL_ENDPOINT,
+            metadata=metadata,
         )
     except Exception as exc:
         _write_audit(

@@ -26,6 +26,7 @@ The program does not submit broker orders. It does not provide personalized inve
 | Operator self-test | `.\run.ps1 self-test` passed with the project `.venv` |
 | Ops v1 workflow | `.\run.ps1 ops-v1 ...` generates recommendation reports, daily brief, approval template, ZERO log, and summary JSON |
 | Phase 1 provider/audit upgrade | `recommend` and `ops-v1` support `--data-provider auto|synthetic|yfinance|openbb`, optional config, and audit JSONL |
+| Phase A provider validation | `provider_validation.py` adds point-in-time OHLCV checks and exports `provider_summary` to reports and dashboard snapshots |
 | Dashboard report bridge | `dashboard-export` converts recommendation JSON into `dashboard_snapshot.json` for `stock_pred_v5.jsx` file import |
 | Dashboard risk mitigation | `dashboard/` now owns the repo-tracked dashboard copy and browser smoke harness |
 | Default `python` environment | AMBER: use project `.venv`; do not rely on global Python 3.14 |
@@ -74,7 +75,7 @@ For tests, use the project `.venv`:
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Observed result after dashboard bridge coverage: 19 tests passed.
+Observed result after Phase A provider validation coverage: 26 tests passed.
 
 ## Phase 1 Provider And Audit Upgrade
 
@@ -99,6 +100,26 @@ pip install -r requirements-openbb.txt
 
 `RecommendationEngine` caches OHLCV data within one CLI run, so Track-S and Track-L reuse the same ticker/provider load. The cache keeps the OpenBB audit log to one provider event for a single-ticker `track=BOTH` smoke run.
 
+## Phase A Point-in-time Provider Validation
+
+`src/stock_rtx4060/provider_validation.py` validates normalized OHLCV frames after provider loading and before recommendation scoring uses the data.
+
+The validation checks row count, first date, last date, future-dated rows, duplicate dates, required OHLCV columns, null critical values, and freshness evidence.
+
+The result is additive:
+
+- provider audit events include compact provider validation metadata
+- recommendation JSON includes top-level `provider_summary`
+- `dashboard_snapshot.v1` includes `provider_summary`
+- older recommendation JSON without `provider_summary` still exports
+
+Smoke command:
+
+```powershell
+.\run.ps1 recommend --synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports/phase_a_provider_v2_smoke
+.\run.ps1 dashboard-export --recommendation-json reports/phase_a_provider_v2_smoke/recommendations_algo_v2_YYYYMMDD_HHMMSS.json --output reports/phase_a_provider_v2_smoke/dashboard_snapshot.json --public-dir ..\stock-pred-v5\public
+```
+
 MCP Phase 1 is a read/report-only adapter contract in `src/stock_rtx4060/mcp_adapter.py`. It does not start a local MCP server and does not expose broker, account, order, margin, options, or destructive filesystem capabilities.
 
 ## Dashboard Report Bridge
@@ -112,7 +133,7 @@ Workflow:
 .\run.ps1 dashboard-export --recommendation-json reports/dashboard_bridge_smoke/recommendations_algo_v2_YYYYMMDD_HHMMSS.json --output reports/dashboard_bridge_smoke/dashboard_snapshot.json
 ```
 
-`dashboard-export` reads the existing recommendation JSON and writes a `dashboard_snapshot.v1` file. The snapshot preserves `screening_output_only`, `audit_log_path`, verdicts, scores, risk-plan fields, validations, and reasons.
+`dashboard-export` reads the existing recommendation JSON and writes a `dashboard_snapshot.v1` file. The snapshot preserves `screening_output_only`, `audit_log_path`, `provider_summary`, verdicts, scores, risk-plan fields, validations, and reasons.
 
 The dashboard file `C:\Users\jichu\Downloads\주식\stock_pred_v5.jsx` now has a `BACKEND` import button and `BACKEND` tab for loading `dashboard_snapshot.json`. Browser-generated simulated model scores and backend report snapshots remain separate.
 

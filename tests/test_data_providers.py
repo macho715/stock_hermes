@@ -25,6 +25,9 @@ def test_synthetic_provider_writes_audit_event(tmp_path):
     rows = [json.loads(line) for line in (tmp_path / "audit_log.jsonl").read_text(encoding="utf-8").splitlines()]
     assert rows[0]["status"] == "SUCCESS"
     assert rows[0]["provider_used"] == "synthetic"
+    assert rows[0]["metadata"]["provider_validation_status"] == "PASS"
+    assert rows[0]["metadata"]["row_count"] == len(result.frame)
+    assert result.metadata["provider_validation"]["status"] == "PASS"
 
 
 def test_openbb_provider_normalizes_mocked_historical_response(tmp_path, monkeypatch):
@@ -61,6 +64,9 @@ def test_openbb_provider_normalizes_mocked_historical_response(tmp_path, monkeyp
     assert list(result.frame.columns) == ["Open", "High", "Low", "Close", "Volume"]
     log_text = (tmp_path / "audit_log.jsonl").read_text(encoding="utf-8")
     assert "obb.equity.price.historical" in log_text
+    rows = [json.loads(line) for line in log_text.splitlines()]
+    assert rows[0]["metadata"]["provider_validation_status"] == "AMBER"
+    assert result.metadata["provider_validation"]["row_count"] == 3
 
 
 def test_openbb_missing_does_not_break_synthetic(tmp_path, monkeypatch):

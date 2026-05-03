@@ -73,6 +73,7 @@ def build_dashboard_snapshot(payload: dict[str, Any], *, source_json_path: str |
         ),
         "audit_log_path": payload.get("audit_log_path"),
         "algorithm_patch": payload.get("algorithm_patch"),
+        "provider_summary": payload.get("provider_summary"),
         "config": {
             "universe": source_config.get("universe"),
             "track": source_config.get("track"),

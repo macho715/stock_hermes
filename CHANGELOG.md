@@ -2,6 +2,37 @@
 
 All notable changes for `stock_rtx4060_unified` are documented here.
 
+## 2026-05-03 — Phase A Point-in-time Provider Validation + Provider v2 Dashboard
+
+### Added
+
+- **`src/stock_rtx4060/provider_validation.py`**: Added point-in-time OHLCV validation for provider-loaded frames. It checks row count, first/last date, future-dated rows, duplicate dates, required OHLCV columns, null critical values, and freshness evidence.
+- **`tests/test_provider_validation.py`**: Added unit coverage for PASS, missing-column FAIL, future/duplicate-date FAIL, and stale real-provider AMBER behavior.
+- **Provider validation metadata**: Provider audit events now include `provider_validation_status`, row count, first/last date, freshness days, duplicate/future row counts, and evidence.
+- **`provider_summary`**: Recommendation JSON and `dashboard_snapshot.v1` now carry an additive top-level provider summary for dashboard REC display.
+- **Planning docs**: Added `docs/plan_phase_a_point_in_time_provider_v2_dashboard_2026-05-03.md` and `docs/SPEC_PHASE_A_POINT_IN_TIME_PROVIDER_V2_DASHBOARD_2026-05-03.md`.
+
+### Changed
+
+- **`src/stock_rtx4060/data_providers.py`**: Provider loads validate normalized OHLCV frames before returning `ProviderResult`.
+- **`src/stock_rtx4060/recommendation_engine.py`**: Recommendation runs collect provider metadata once per ticker/period/provider cache key and write top-level `provider_summary`.
+- **`src/stock_rtx4060/dashboard_bridge.py`**: Dashboard snapshots preserve `provider_summary` when present and remain compatible with older payloads that do not include it.
+
+### Security
+
+- Audit metadata continues to pass through existing secret masking in `audit_log.py`.
+- Phase A remains report-only. It adds no broker execution, account write, auto-buy, auto-sell, margin, options, or order-routing behavior.
+
+### Evidence
+
+- `python -m compileall main.py src tests`: PASS.
+- `python main.py --help`: PASS with the project `.venv`.
+- `pytest -q`: PASS, 26 tests passed.
+- `.\run.ps1 recommend --synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports/phase_a_provider_v2_smoke`: PASS, generated Markdown, JSON, and `audit_log.jsonl`.
+- `dashboard-export` to `reports/phase_a_provider_v2_smoke/dashboard_snapshot.json` and `..\stock-pred-v5\public`: PASS, exported `dashboard_snapshot.json` and `audit_log.jsonl`.
+- `stock-pred-v5` `npm run build`: PASS with existing Vite chunk-size warning.
+- `stock-pred-v5` `npx playwright test --reporter=line`: PASS, 2 tests passed.
+
 ## 2026-05-03 — Algorithm Upgrade (v2.1)
 
 ### Added

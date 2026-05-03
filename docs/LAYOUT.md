@@ -27,6 +27,7 @@ stock_rtx4060_unified/
 │   ├── risk_rules.py            # Track-S / Track-L risk gate logic
 │   ├── dashboard_bridge.py     # dashboard_snapshot.v1 builder
 │   ├── data_providers.py        # yfinance/openbb/synthetic router
+│   ├── provider_validation.py   # point-in-time OHLCV provider checks
 │   ├── hw_profile.py            # GPU detection (nvidia-smi)
 │   ├── audit_log.py             # Masked JSONL audit writer
 │   ├── ops_workflow.py          # Ops v1 daily brief + manual approval
@@ -39,6 +40,7 @@ stock_rtx4060_unified/
 ├── tests/
 │   ├── test_core.py             # Ops v1 workflow regression tests
 │   ├── test_data_providers.py   # Provider routing tests
+│   ├── test_provider_validation.py # Provider validation tests
 │   ├── test_audit_log.py        # Audit masking tests
 │   ├── test_mcp_adapter.py      # MCP boundary tests
 │   └── test_dashboard_bridge.py # Dashboard bridge tests
@@ -83,6 +85,7 @@ stock_rtx4060_unified/
 | `risk_rules.py` | Track-S / Track-L risk gate rules: stop, take-profit, risk budget, position cap. |
 | `dashboard_bridge.py` | Converts recommendation JSON into `dashboard_snapshot.v1` for frontend file import. |
 | `data_providers.py` | OHLCV provider router: `auto`, `synthetic`, `yfinance`, optional `openbb`. |
+| `provider_validation.py` | Point-in-time OHLCV checks for row count, date range, duplicate/future rows, required columns, nulls, and freshness evidence. |
 | `hw_profile.py` | GPU detection via `nvidia-smi`; device selection and VRAM logging. |
 | `audit_log.py` | Masked JSONL audit event writer; provider attempt events. |
 | `ops_workflow.py` | Ops v1 daily brief, manual approval template, ZERO log, summary generation. |
@@ -132,7 +135,7 @@ stock_rtx4060_unified/
 | `reports/ops_v1*/` | `ops-v1` manual approval workflow runs |
 | `reports/runtime_status.json` | `env` command |
 | `reports/**/audit_log.jsonl` | Provider attempt audit events from `recommend` and `ops-v1` |
-| `reports/**/dashboard_snapshot.json` | Dashboard bridge snapshot from `dashboard-export` |
+| `reports/**/dashboard_snapshot.json` | Dashboard bridge snapshot from `dashboard-export`, including additive `provider_summary` when present |
 
 ## Continue Checks
 
