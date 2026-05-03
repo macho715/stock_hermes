@@ -1,0 +1,1 @@
+{"command": "recommend", "duration_ms": 1360.062, "endpoint": null, "error_type": null, "event_type": "provider_attempt", "message": null, "metadata": {}, "period": "3y", "provider_requested": "yfinance", "provider_used": "yfinance", "source": "yfinance", "status": "SUCCESS", "ticker": "AAPL", "timestamp_utc": "2026-05-03T11:23:34+00:00"}

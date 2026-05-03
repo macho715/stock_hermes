@@ -1,0 +1,15 @@
+{
+  "generated_at": "2026-05-02 20:53:47",
+  "source_file_count": 238,
+  "source_counts": {
+    "algo_v2": 38,
+    "bundle_algo_v2": 26,
+    "recommendation_patch": 31,
+    "workspaces": 143
+  },
+  "kept_source_count": 11,
+  "review_needed_count": 20,
+  "excluded_count": 207,
+  "exact_duplicate_groups": 31,
+  "conflict_count": 15
+}

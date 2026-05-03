@@ -13,9 +13,11 @@ import pandas as pd
 
 from .backtester import Backtester
 from .benchmark import run_benchmark, write_benchmark_report
+from .dashboard_bridge import write_dashboard_snapshot
 from .ensemble_model import EnsemblePredictor, ModelConfig
 from .feature_engine import TechnicalIndicators, make_synthetic_ohlcv, normalize_ohlcv
 from .hw_profile import print_hw_summary, runtime_status, save_runtime_status
+from .ops_workflow import run_ops_v1_workflow
 from .recommendation_engine import RecommendationConfig, RecommendationEngine, parse_universe
 from .reports import ReportWriter
 from .risk_rules import RiskConfig, evaluate_track_l_candidate, evaluate_track_s_candidate
@@ -63,13 +65,39 @@ def build_parser() -> argparse.ArgumentParser:
     recommend.add_argument("--period", default="3y")
     recommend.add_argument("--top", type=int, default=5)
     recommend.add_argument("--synthetic", action="store_true", help="use deterministic synthetic OHLCV for offline validation")
+    recommend.add_argument("--data-provider", choices=["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"], default="auto", help="OHLCV provider; CLI value overrides provider config")
+    recommend.add_argument("--provider-config", help="optional JSON provider config; see config/data_providers.example.json")
+    recommend.add_argument("--kevpe-events", help="optional KEVPE event JSON/CSV file with date/headline/ticker fields")
     recommend.add_argument("--capital", type=float, default=100_000.0)
     recommend.add_argument("--prefer-gpu", action="store_true")
     recommend.add_argument("--full", action="store_true", help="use non-lite model settings")
-    recommend.add_argument("--model-kind", choices=["auto", "xgb", "logistic"], default="logistic")
+    recommend.add_argument("--model-kind", choices=["auto", "xgb", "logistic", "rf"], default="logistic")
     recommend.add_argument("--xgb-device", choices=["cpu", "cuda"], default="cpu")
     recommend.add_argument("--cv-gap", type=int, help="gap between train/test folds for leak-safe walk-forward CV")
     recommend.add_argument("--output-dir", default="reports/recommendations")
+
+    ops = sub.add_parser("ops-v1", help="run report-only Ops v1 workflow with manual approval artifacts")
+    ops.add_argument("--universe", help="comma-separated ticker list; defaults to built-in sample universe")
+    ops.add_argument("--track", choices=["S", "L", "BOTH"], default="BOTH")
+    ops.add_argument("--period", default="3y")
+    ops.add_argument("--top", type=int, default=5)
+    ops.add_argument("--synthetic", action="store_true", help="use deterministic synthetic OHLCV for offline validation")
+    ops.add_argument("--data-provider", choices=["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"], default="auto", help="OHLCV provider; CLI value overrides provider config")
+    ops.add_argument("--provider-config", help="optional JSON provider config; see config/data_providers.example.json")
+    ops.add_argument("--kevpe-events", help="optional KEVPE event JSON/CSV file with date/headline/ticker fields")
+    ops.add_argument("--capital", type=float, default=100_000.0)
+    ops.add_argument("--prefer-gpu", action="store_true")
+    ops.add_argument("--full", action="store_true", help="use non-lite model settings")
+    ops.add_argument("--model-kind", choices=["auto", "xgb", "logistic", "rf"], default="logistic")
+    ops.add_argument("--xgb-device", choices=["cpu", "cuda"], default="cpu")
+    ops.add_argument("--cv-gap", type=int, help="gap between train/test folds for leak-safe walk-forward CV")
+    ops.add_argument("--output-dir", default="reports/ops_v1")
+
+    dashboard = sub.add_parser("dashboard-export", help="convert recommendation JSON into a dashboard snapshot")
+    dashboard.add_argument("--recommendation-json", required=True, help="path to recommendations_algo_v2_*.json")
+    dashboard.add_argument("--output", help="snapshot output path; defaults to dashboard_snapshot.json beside the recommendation JSON")
+    dashboard.add_argument("--public-dir", help="optional Vite public directory to receive dashboard_snapshot.json, audit_log.jsonl, and approval_journal_template.csv")
+    dashboard.add_argument("--approval-journal", help="optional approval_journal_template.csv path to copy with --public-dir")
 
     demo = sub.add_parser("demo", help="create sample data and reports")
     demo.add_argument("--workspace", default="workspaces/demo_workspace")
@@ -106,6 +134,10 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_predict(args)
             case "recommend":
                 return cmd_recommend(args)
+            case "ops-v1":
+                return cmd_ops_v1(args)
+            case "dashboard-export":
+                return cmd_dashboard_export(args)
             case "demo":
                 return cmd_demo(args)
             case "journal":
@@ -148,7 +180,7 @@ def cmd_report(args: argparse.Namespace) -> int:
     latest_row = feature_df.iloc[-1]
     entry = float(normalize_ohlcv(df)["Close"].iloc[-1])
     risk_cfg = RiskConfig(total_capital=args.capital)
-    s_candidate = evaluate_track_s_candidate(args.ticker, latest_row, entry, risk_cfg, prediction_prob=latest_pred["direction_prob"])
+    s_candidate = evaluate_track_s_candidate(args.ticker, latest_row, entry, risk_cfg, prediction_prob=latest_pred["direction_prob"], atr_pct=float(latest_row.get("atr_pct_14", 0.0)))
     l_candidate = evaluate_track_l_candidate(args.ticker, latest_row, entry, risk_cfg, prediction_prob=latest_pred["direction_prob"])
     candidates = [s_candidate, l_candidate]
 
@@ -198,6 +230,9 @@ def cmd_recommend(args: argparse.Namespace) -> int:
         xgb_device=xgb_device,
         cv_gap=args.cv_gap,
         output_dir=args.output_dir,
+        data_provider=args.data_provider,
+        provider_config=args.provider_config,
+        kevpe_events=args.kevpe_events,
     )
     engine = RecommendationEngine(config)
     results = engine.run()
@@ -206,7 +241,55 @@ def cmd_recommend(args: argparse.Namespace) -> int:
     print(json.dumps({"results": [item.to_dict() for item in results], "errors": errors}, ensure_ascii=False, indent=2)[:4000])
     print(f"saved: {paths['markdown']}")
     print(f"saved: {paths['json']}")
+    print(f"saved: {paths['audit']}")
     return 0 if results else 1
+
+
+def cmd_ops_v1(args: argparse.Namespace) -> int:
+    model_kind = args.model_kind
+    xgb_device = "cuda" if args.prefer_gpu else args.xgb_device
+    if args.prefer_gpu and model_kind == "logistic":
+        model_kind = "xgb"
+    config = RecommendationConfig(
+        universe=parse_universe(args.universe),
+        track=args.track,
+        period=args.period,
+        top_n=args.top,
+        synthetic=args.synthetic,
+        capital=args.capital,
+        prefer_gpu=args.prefer_gpu,
+        lite=not args.full,
+        model_kind=model_kind,
+        xgb_device=xgb_device,
+        cv_gap=args.cv_gap,
+        data_provider=args.data_provider,
+        provider_config=args.provider_config,
+        kevpe_events=args.kevpe_events,
+    )
+    paths = run_ops_v1_workflow(config, output_dir=args.output_dir)
+    print(json.dumps(paths, ensure_ascii=False, indent=2))
+    for path in paths.values():
+        print(f"saved: {path}")
+    return 0
+
+
+def cmd_dashboard_export(args: argparse.Namespace) -> int:
+    from .dashboard_bridge import export_dashboard_public_assets
+
+    path = write_dashboard_snapshot(args.recommendation_json, args.output)
+    result = {"dashboard_snapshot": str(path)}
+    if args.public_dir:
+        result["public_assets"] = export_dashboard_public_assets(
+            args.recommendation_json,
+            path,
+            args.public_dir,
+            approval_journal=args.approval_journal,
+        )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print(f"saved: {path}")
+    if args.public_dir:
+        print(f"exported public assets: {args.public_dir}")
+    return 0
 
 
 def cmd_demo(args: argparse.Namespace) -> int:

@@ -1,0 +1,1 @@
+{"command": "recommend", "duration_ms": 12.047, "endpoint": null, "error_type": null, "event_type": "provider_attempt", "message": null, "metadata": {}, "period": "3y", "provider_requested": "synthetic", "provider_used": "synthetic", "source": "synthetic_demo_data", "status": "SUCCESS", "ticker": "SYNTH-A", "timestamp_utc": "2026-05-03T11:28:55+00:00"}

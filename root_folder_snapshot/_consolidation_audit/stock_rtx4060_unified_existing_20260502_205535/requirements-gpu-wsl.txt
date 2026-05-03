@@ -1,0 +1,3 @@
+# Install inside WSL2/Linux for TensorFlow NVIDIA GPU path.
+-r requirements.txt
+tensorflow[and-cuda]>=2.16.1

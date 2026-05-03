@@ -1,0 +1,81 @@
+{
+  "config": {
+    "universe": [
+      "SYNTH-A",
+      "SYNTH-B"
+    ],
+    "track": "BOTH",
+    "period": "3y",
+    "top_n": 2,
+    "synthetic": true,
+    "horizon_s": 20,
+    "horizon_l": 63,
+    "min_rows": 260,
+    "capital": 100000.0,
+    "prefer_gpu": false,
+    "lite": true,
+    "output_dir": "reports/recommendation_validation_legacy"
+  },
+  "results": [
+    {
+      "ticker": "SYNTH-B",
+      "track": "S",
+      "rank_score": 93.13,
+      "gate": "GREEN",
+      "verdict": "Watch/Buy",
+      "screening_output_only": true,
+      "entry": 122.5127,
+      "stop": 117.6122,
+      "tp1": 128.6383,
+      "tp2": 134.7639,
+      "risk_reward": 2.5,
+      "quantity": 30,
+      "direction_prob": 0.819783,
+      "backend": "numpy-logistic",
+      "cv_accuracy_mean": 0.575269,
+      "backtest_return_pct": 9.9376,
+      "backtest_sharpe": 1.4171,
+      "backtest_max_drawdown_pct": 2.2972,
+      "data_source": "synthetic_demo_data",
+      "generated_at_utc": "2026-05-02T16:15:59+00:00",
+      "reasons": [
+        "model_prob=0.820",
+        "rsi_14=49.5",
+        "adx_14=35.5",
+        "volume_ratio_20=0.79",
+        "macd_hist=0.2346"
+      ]
+    },
+    {
+      "ticker": "SYNTH-B",
+      "track": "L",
+      "rank_score": 91.16,
+      "gate": "GREEN",
+      "verdict": "Eligible/DCA",
+      "screening_output_only": true,
+      "entry": 122.5127,
+      "stop": 107.8112,
+      "tp1": 134.7639,
+      "tp2": 147.0152,
+      "risk_reward": 0.0,
+      "quantity": 73,
+      "direction_prob": 0.424268,
+      "backend": "numpy-logistic",
+      "cv_accuracy_mean": 0.764012,
+      "backtest_return_pct": 6.4003,
+      "backtest_sharpe": 1.0498,
+      "backtest_max_drawdown_pct": 2.8541,
+      "data_source": "synthetic_demo_data",
+      "generated_at_utc": "2026-05-02T16:15:59+00:00",
+      "reasons": [
+        "sma_ratio_200=0.0197",
+        "return_20d=0.0117",
+        "hist_vol_20=0.2018",
+        "model_prob=0.424"
+      ]
+    }
+  ],
+  "errors": [],
+  "markdown_path": null,
+  "json_path": null
+}

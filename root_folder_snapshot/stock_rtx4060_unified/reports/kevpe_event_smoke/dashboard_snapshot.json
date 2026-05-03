@@ -1,0 +1,127 @@
+{
+  "schema_version": "dashboard_snapshot.v1",
+  "generated_at_utc": "2026-05-03T11:40:03+00:00",
+  "source": "stock_rtx4060_unified",
+  "source_recommendation_json": "C:\\Users\\jichu\\Downloads\\주식\\stock_rtx4060_unified\\reports\\kevpe_event_smoke\\recommendations_algo_v2_20260503_153948.json",
+  "mode": "report_only",
+  "disclaimer": "screening_output_only; manual approval required; no broker order execution; not financial advice",
+  "audit_log_path": "reports\\kevpe_event_smoke\\audit_log.jsonl",
+  "algorithm_patch": "v2 leak-safe CV + ATR risk plan + fixed-risk sizing + OOF backtest",
+  "config": {
+    "universe": [
+      "SYNTH-A"
+    ],
+    "track": "BOTH",
+    "period": "3y",
+    "top_n": 1,
+    "synthetic": false,
+    "data_provider": "synthetic",
+    "model_kind": "logistic",
+    "xgb_device": "cpu",
+    "cv_gap": null
+  },
+  "result_count": 1,
+  "results": [
+    {
+      "rank": 1,
+      "ticker": "SYNTH-A",
+      "track": "S",
+      "verdict": "ELIGIBLE_RECOMMENDATION",
+      "candidate_label": "Track-S 추천 후보: 수동 승인 필요",
+      "score": 98.34,
+      "probability": 0.7367,
+      "expected_value_pct": 6.313,
+      "entry": 122.0835,
+      "latest_close": 122.0835,
+      "stop": 117.2002,
+      "tp1": 128.1877,
+      "tp2": 134.2919,
+      "stop_pct": 0.04,
+      "tp2_pct": 0.1,
+      "risk_reward": 2.5,
+      "risk_budget_pct": 0.0075,
+      "max_position_pct": 0.2,
+      "suggested_quantity": 153.5834,
+      "suggested_position_value": 18750.0,
+      "model_accuracy": 0.4545,
+      "model_auc": 0.566,
+      "oof_coverage": 0.7454,
+      "backtest_return_pct": -0.64,
+      "backtest_sharpe": -0.42,
+      "backtest_sortino": -0.345,
+      "backtest_mdd_pct": 1.15,
+      "profit_factor": 0.555,
+      "confirmations_passed": 7,
+      "confirmations_total": 9,
+      "screening_output_only": true,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=760, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=455582698.80"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=100.00, atr_pct=0.0220"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "AMBER",
+          "evidence": "prob=0.7367, acc=0.4545, auc=0.5660, models=logistic"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=74.54%, gap=20"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "AMBER",
+          "evidence": "return=-0.64%, sharpe=-0.420, mdd=1.15%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=4.00%, tp2_pct=10.00%, rr=2.50, risk_budget=0.75%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "PASS",
+          "evidence": "score=98.34, green_threshold=75.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "reasons": [
+        "data_source=synthetic_demo_data",
+        "cv_gap=20",
+        "모델 상승확률 73.67%",
+        "단기/중기 추세 확인",
+        "백테스트 MDD 1.15%",
+        "R/R 2.50 통과",
+        "기대값 6.31%",
+        "Track-S 추천 후보: 수동 승인 필요"
+      ],
+      "generated_at_utc": "2026-05-03T11:39:48+00:00",
+      "kevpe_available": true,
+      "kevpe_regime": "AMBER",
+      "kevpe_score": 0.6725,
+      "kevpe_expected_return_pct": -1.3449,
+      "kevpe_ci": [
+        -3.3449,
+        0.6551
+      ],
+      "kevpe_confidence": "low",
+      "kevpe_reason": "KEVPE event overlay: FOMC rate decision surprises semiconductor market"
+    }
+  ]
+}

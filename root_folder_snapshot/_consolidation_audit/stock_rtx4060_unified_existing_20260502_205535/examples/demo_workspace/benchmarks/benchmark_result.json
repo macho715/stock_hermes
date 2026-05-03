@@ -1,0 +1,50 @@
+{
+  "generated_at": "2026-05-02T09:38:42",
+  "hardware_profile": {
+    "cpu_model": "Intel Core i5-13500HX target / detected CPU via OS",
+    "os_name": "Linux 4.4.0",
+    "python_version": "3.13.5",
+    "is_windows": false,
+    "is_wsl": false,
+    "workers": 16,
+    "nvidia_smi": {
+      "available": false,
+      "name": "N/A",
+      "driver_version": "N/A",
+      "cuda_runtime": "N/A",
+      "memory_total_mib": null,
+      "raw": ""
+    }
+  },
+  "benchmarks": [
+    {
+      "name": "make_dummy_ohlcv",
+      "seconds": 0.0072,
+      "rows": 300,
+      "notes": "offline deterministic data"
+    },
+    {
+      "name": "feature_engine",
+      "seconds": 0.3815,
+      "rows": 300,
+      "notes": "vectorized pandas/numpy"
+    },
+    {
+      "name": "backtester",
+      "seconds": 0.0053,
+      "rows": 96,
+      "notes": "Track-S stop/TP/time-stop simulation"
+    }
+  ],
+  "model_summary": {
+    "enabled": false
+  },
+  "backtest_summary": {
+    "total_return_pct": -0.94,
+    "sharpe_ratio": -1.166,
+    "max_drawdown_pct": 1.79,
+    "win_rate": 44.44,
+    "n_trades": 9,
+    "final_capital": 99043.09
+  }
+}

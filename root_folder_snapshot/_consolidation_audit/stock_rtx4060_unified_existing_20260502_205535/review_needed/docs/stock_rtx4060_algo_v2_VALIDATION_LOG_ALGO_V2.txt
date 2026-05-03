@@ -1,0 +1,43 @@
+Validation log — stock_rtx4060 Algorithm v2
+
+Commands executed in container:
+
+1) python main.py --test
+Result: PASS
+- test_feature_engine_basic
+- test_feature_engine_edge
+- test_backtester_basic
+- test_kelly_criterion
+- test_recommendation_engine_synthetic
+- test_ensemble_leak_safe_cv
+self-test: 6/6 passed in 8.61s
+
+2) pytest -q
+Result: PASS
+12 passed
+
+3) python -m py_compile *.py
+Result: PASS
+
+4) python main.py --benchmark --synthetic --benchmark-rows 1200 --universe SYNTH-A,SYNTH-B,SYNTH-C --output-dir reports
+Result: PASS
+Summary:
+- rows=1200
+- feature_rows=942
+- feature_cols=81
+- feature_seconds=0.1190
+- model_seconds=15.1569
+- backtest_seconds=0.1015
+- recommend_seconds=8.6024
+- total_seconds=23.9942
+- cv_accuracy_mean=0.5504
+- cv_auc_mean=0.5574
+- backtest_total_return_pct=0.68
+- backtest_sharpe=0.216
+- backtest_mdd_pct=1.76
+- n_trades=46
+
+Environment note:
+- xgboost_version=1.4.2
+- tensorflow unavailable in container
+- nvidia-smi unavailable in container

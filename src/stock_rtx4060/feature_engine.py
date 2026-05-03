@@ -186,6 +186,47 @@ class TechnicalIndicators:
         ratio = positive / negative.replace(0.0, np.nan)
         return (100.0 - 100.0 / (1.0 + ratio)).clip(0.0, 100.0)
 
+    def chaikin_money_flow(self, period: int = 20) -> pd.Series:
+        """Chaikin Money Flow: volume-weighted close position within high-low range."""
+        hl_range = (self.high - self.low).replace(0.0, np.nan)
+        mfv = ((self.close - self.low) - (self.high - self.close)) / hl_range * self.volume
+        return (mfv.rolling(period, min_periods=period).sum() /
+                self.volume.rolling(period, min_periods=period).sum().replace(0.0, np.nan)).clip(-1.0, 1.0)
+
+    def keltner_channel(self, period: int = 20, atr_mult: float = 2.0) -> tuple[pd.Series, pd.Series, pd.Series]:
+        """Keltner Channels: EMA ± (atr_mult * ATR).  Returns (upper, mid, lower)."""
+        mid = self.ema(period)
+        atr = self.atr(period)
+        upper = mid + atr_mult * atr
+        lower = mid - atr_mult * atr
+        return upper, mid, lower
+
+    def vortex_indicator(self, period: int = 14) -> tuple[pd.Series, pd.Series]:
+        """Vortex Indicator VI+ and VI- (directional movement over True Range sum)."""
+        tr = self.true_range()
+        tr_sum = tr.rolling(period, min_periods=period).sum().replace(0.0, np.nan)
+        vi_plus_raw = (self.high - self.low.shift(1)).abs().rolling(period, min_periods=period).sum()
+        vi_minus_raw = (self.low - self.high.shift(1)).abs().rolling(period, min_periods=period).sum()
+        return vi_plus_raw / tr_sum, vi_minus_raw / tr_sum
+
+    def trix(self, period: int = 15) -> pd.Series:
+        """TRIX: 1-period Rate-of-Change of the triple-smoothed EMA (noise filter)."""
+        ema1 = self.close.ewm(span=period, adjust=False, min_periods=period).mean()
+        ema2 = ema1.ewm(span=period, adjust=False, min_periods=period).mean()
+        ema3 = ema2.ewm(span=period, adjust=False, min_periods=period).mean()
+        return ema3.pct_change(1, fill_method=None) * 100.0
+
+    def elder_ray(self, period: int = 13) -> tuple[pd.Series, pd.Series]:
+        """Elder Ray: Bull Power (High - EMA) and Bear Power (Low - EMA)."""
+        ema = self.ema(period)
+        return self.high - ema, self.low - ema
+
+    def dpo(self, period: int = 20) -> pd.Series:
+        """Detrended Price Oscillator: removes trend to expose short-term cycles."""
+        shift = period // 2 + 1
+        sma = self.close.rolling(period, min_periods=period).mean()
+        return self.close - sma.shift(shift)
+
     @staticmethod
     def _rolling_zscore(series: pd.Series, period: int) -> pd.Series:
         mean = series.rolling(period, min_periods=period).mean()
@@ -273,6 +314,28 @@ class TechnicalIndicators:
         f["volume_ratio_20"] = volume / volume.rolling(20, min_periods=20).mean()
         f["dollar_volume_20"] = dollar_volume.rolling(20, min_periods=20).mean()
         f["dollar_volume_z_60"] = self._rolling_zscore(dollar_volume, 60)
+        f["cmf_20"] = self.chaikin_money_flow(20)
+
+        # Keltner Channel position.
+        kc_upper, kc_mid, kc_lower = self.keltner_channel(20, 2.0)
+        kc_width = (kc_upper - kc_lower).replace(0.0, np.nan)
+        f["kc_pct"] = (close - kc_lower) / kc_width
+        f["kc_width"] = kc_width / kc_mid.replace(0.0, np.nan)
+
+        # Vortex Indicator.
+        vi_plus, vi_minus = self.vortex_indicator(14)
+        f["vi_plus_14"] = vi_plus
+        f["vi_minus_14"] = vi_minus
+        f["vi_diff_14"] = vi_plus - vi_minus
+
+        # TRIX and Elder Ray.
+        f["trix_15"] = self.trix(15)
+        bull_power, bear_power = self.elder_ray(13)
+        f["elder_bull_13"] = bull_power / close.replace(0.0, np.nan)
+        f["elder_bear_13"] = bear_power / close.replace(0.0, np.nan)
+
+        # Detrended Price Oscillator.
+        f["dpo_20"] = self.dpo(20) / close.replace(0.0, np.nan)
 
         # Breakout, drawdown, and regime proxies.
         for period in (20, 60, 252):

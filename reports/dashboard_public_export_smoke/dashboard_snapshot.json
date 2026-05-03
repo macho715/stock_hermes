@@ -1,0 +1,220 @@
+{
+  "schema_version": "dashboard_snapshot.v1",
+  "generated_at_utc": "2026-05-03T12:21:23+00:00",
+  "source": "stock_rtx4060_unified",
+  "source_recommendation_json": "reports\\full_verify_ops_v1\\recommendations\\recommendations_algo_v2_20260503_151612.json",
+  "mode": "report_only",
+  "disclaimer": "screening_output_only; manual approval required; no broker order execution; not financial advice",
+  "audit_log_path": "reports\\full_verify_ops_v1\\recommendations\\audit_log.jsonl",
+  "algorithm_patch": "v2 leak-safe CV + ATR risk plan + fixed-risk sizing + OOF backtest",
+  "config": {
+    "universe": [
+      "SYNTH-A",
+      "SYNTH-B"
+    ],
+    "track": "BOTH",
+    "period": "3y",
+    "top_n": 2,
+    "synthetic": false,
+    "data_provider": "synthetic",
+    "model_kind": "logistic",
+    "xgb_device": "cpu",
+    "cv_gap": 5
+  },
+  "result_count": 2,
+  "results": [
+    {
+      "rank": 1,
+      "ticker": "SYNTH-A",
+      "track": "S",
+      "verdict": "ELIGIBLE_RECOMMENDATION",
+      "candidate_label": "Track-S 추천 후보: 수동 승인 필요",
+      "score": 99.1,
+      "probability": 0.7367,
+      "expected_value_pct": 6.313,
+      "entry": 122.0835,
+      "latest_close": 122.0835,
+      "stop": 117.2002,
+      "tp1": 128.1877,
+      "tp2": 134.2919,
+      "stop_pct": 0.04,
+      "tp2_pct": 0.1,
+      "risk_reward": 2.5,
+      "risk_budget_pct": 0.0075,
+      "max_position_pct": 0.2,
+      "suggested_quantity": 153.5834,
+      "suggested_position_value": 18750.0,
+      "model_accuracy": 0.4711,
+      "model_auc": 0.5699,
+      "oof_coverage": 0.7454,
+      "backtest_return_pct": -0.09,
+      "backtest_sharpe": -0.047,
+      "backtest_sortino": -0.041,
+      "backtest_mdd_pct": 1.25,
+      "profit_factor": 0.924,
+      "confirmations_passed": 8,
+      "confirmations_total": 9,
+      "screening_output_only": true,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=760, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=455582698.80"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=100.00, atr_pct=0.0220"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "AMBER",
+          "evidence": "prob=0.7367, acc=0.4711, auc=0.5699, models=logistic"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=74.54%, gap=5"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "PASS",
+          "evidence": "return=-0.09%, sharpe=-0.047, mdd=1.25%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=4.00%, tp2_pct=10.00%, rr=2.50, risk_budget=0.75%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "PASS",
+          "evidence": "score=99.10, green_threshold=75.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "reasons": [
+        "data_source=synthetic_demo_data",
+        "cv_gap=5",
+        "모델 상승확률 73.67%",
+        "단기/중기 추세 확인",
+        "백테스트 MDD 1.25%",
+        "R/R 2.50 통과",
+        "기대값 6.31%",
+        "Track-S 추천 후보: 수동 승인 필요"
+      ],
+      "generated_at_utc": "2026-05-03T11:16:12+00:00",
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null
+    },
+    {
+      "rank": 2,
+      "ticker": "SYNTH-A",
+      "track": "L",
+      "verdict": "ACCUMULATE_RECOMMENDATION",
+      "candidate_label": "Track-L 누적 후보: 수동 승인 필요",
+      "score": 93.18,
+      "probability": 0.8132,
+      "expected_value_pct": 14.023,
+      "entry": 122.0835,
+      "latest_close": 122.0835,
+      "stop": 107.4335,
+      "tp1": 134.2919,
+      "tp2": 146.5002,
+      "stop_pct": 0.12,
+      "tp2_pct": 0.2,
+      "risk_reward": 1.67,
+      "risk_budget_pct": 0.005,
+      "max_position_pct": 0.12,
+      "suggested_quantity": 34.1296,
+      "suggested_position_value": 4166.67,
+      "model_accuracy": 0.5526,
+      "model_auc": 0.4127,
+      "oof_coverage": 0.75,
+      "backtest_return_pct": 0.85,
+      "backtest_sharpe": 0.717,
+      "backtest_sortino": 0.887,
+      "backtest_mdd_pct": 0.49,
+      "profit_factor": 4.023,
+      "confirmations_passed": 9,
+      "confirmations_total": 9,
+      "screening_output_only": true,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=760, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=455582698.80"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=100.00, atr_pct=0.0220"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "PASS",
+          "evidence": "prob=0.8132, acc=0.5526, auc=0.4127, models=logistic"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=75.00%, gap=5"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "PASS",
+          "evidence": "return=0.85%, sharpe=0.717, mdd=0.49%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=12.00%, tp2_pct=20.00%, rr=1.67, risk_budget=0.50%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "PASS",
+          "evidence": "score=93.18, green_threshold=80.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "reasons": [
+        "data_source=synthetic_demo_data",
+        "cv_gap=5",
+        "장기 추세 구조 양호",
+        "장기 MDD 한도 내",
+        "Track-L 누적 후보: 수동 승인 필요"
+      ],
+      "generated_at_utc": "2026-05-03T11:16:12+00:00",
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null
+    }
+  ]
+}

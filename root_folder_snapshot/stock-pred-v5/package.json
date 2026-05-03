@@ -1,0 +1,23 @@
+{
+  "name": "stock-pred-v5",
+  "private": true,
+  "version": "5.0.0",
+  "type": "module",
+  "description": "STOCK·PRED v5.0 — Dual-Market ML Dashboard (US + KRX)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173",
+    "start": "vite"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^7.3.2"
+  }
+}

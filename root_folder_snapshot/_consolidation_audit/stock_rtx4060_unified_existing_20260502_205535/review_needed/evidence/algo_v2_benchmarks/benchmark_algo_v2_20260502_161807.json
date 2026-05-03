@@ -1,0 +1,41 @@
+{
+  "rows": 1200,
+  "feature_rows": 942,
+  "feature_cols": 81,
+  "feature_seconds": 0.119,
+  "model_seconds": 15.1569,
+  "backtest_seconds": 0.1015,
+  "recommend_seconds": 8.6024,
+  "total_seconds": 23.9942,
+  "cv_accuracy_mean": 0.5504,
+  "cv_auc_mean": 0.5574,
+  "backtest_summary": {
+    "total_return_pct": 0.68,
+    "sharpe_ratio": 0.216,
+    "sortino_ratio": 0.189,
+    "calmar_ratio": 0.386,
+    "max_drawdown_pct": 1.76,
+    "win_rate": 52.17,
+    "n_trades": 46,
+    "profit_factor": 1.192,
+    "expectancy_pct": 0.685,
+    "exposure_pct": 44.16,
+    "final_capital": 100681.23
+  },
+  "recommendation_count": 1,
+  "environment": {
+    "profile": {
+      "cpu_model": "Intel Core i5-13500HX",
+      "logical_cores": 20,
+      "effective_workers": 16,
+      "gpu_model": "NVIDIA GeForce RTX 4060 Laptop",
+      "vram_gb": 8,
+      "preferred_xgb_device": "cuda",
+      "preferred_tf_vram_mb": 6144,
+      "os_name": "Linux-4.4.0-x86_64-with-glibc2.36"
+    },
+    "xgboost_version": "1.4.2",
+    "tensorflow_error": "No module named 'tensorflow'",
+    "nvidia_smi_error": "[Errno 2] No such file or directory: 'nvidia-smi'"
+  }
+}

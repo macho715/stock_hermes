@@ -19,7 +19,10 @@ import pandas as pd
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import TimeSeriesSplit
 
+from .audit_log import AuditLogger
 from .backtester import BacktestConfig, Backtester
+from .data_providers import load_ohlcv_with_provider
+from .kevpe_adapter import get_kevpe_adapter, kevpe_signal_to_supplement
 from .ensemble_model import DirectionModel, ModelConfig, _safe_auc
 from .feature_engine import TechnicalIndicators, feature_columns
 
@@ -87,7 +90,7 @@ class RecommendationConfig:
     max_mdd_pct_s: float = 25.0
     max_mdd_pct_l: float = 35.0
     min_risk_reward: float = 2.0
-    model_kind: Literal["auto", "xgb", "logistic"] = "logistic"
+    model_kind: Literal["auto", "xgb", "logistic", "rf"] = "logistic"
     xgb_device: Literal["cpu", "cuda"] = "cpu"
     xgb_estimators: int = 160
     xgb_splits: int = 3
@@ -97,6 +100,10 @@ class RecommendationConfig:
     prefer_gpu: bool = False
     lite: bool = True
     output_dir: str = "recommendation_reports"
+    data_provider: Literal["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"] = "auto"
+    provider_config: str | None = None
+    kevpe_events: str | None = None
+    audit_command: str = "recommend"
 
     def __post_init__(self) -> None:
         if self.prefer_gpu:
@@ -135,12 +142,15 @@ class RecommendationRun:
     errors: list[dict]
     markdown_path: str
     json_path: str
+    audit_path: str
 
     def __getitem__(self, key: str) -> str:
         if key == "markdown":
             return self.markdown_path
         if key == "json":
             return self.json_path
+        if key == "audit":
+            return self.audit_path
         raise KeyError(key)
 
 
@@ -185,6 +195,14 @@ class RecommendationResult:
     validations: list[ValidationCheck]
     reasons: list[str]
     generated_at_utc: str
+    # KEVPE risk overlay (optional — populated when KEVPE adapter is available)
+    kevpe_available: bool = False
+    kevpe_regime: str | None = None
+    kevpe_score: float | None = None
+    kevpe_expected_return_pct: float | None = None
+    kevpe_ci: list[float] | None = None
+    kevpe_confidence: str | None = None
+    kevpe_reason: str | None = None
 
     def to_dict(self) -> dict:
         data = asdict(self)
@@ -220,25 +238,25 @@ def make_synthetic_ohlcv(n: int = 760, seed: int = 42, drift: float = 0.00035) -
     return pd.DataFrame({"Open": open_, "High": high, "Low": low, "Close": close, "Volume": volume}, index=idx)
 
 
-def load_ohlcv(ticker: str, period: str, synthetic: bool = False) -> tuple[pd.DataFrame, str]:
-    if synthetic:
-        return make_synthetic_ohlcv(seed=_stable_seed(ticker)), "synthetic_demo_data"
-
-    try:
-        import yfinance as yf  # type: ignore
-    except ImportError as exc:
-        raise RuntimeError("yfinance가 설치되지 않았습니다. pip install yfinance 또는 --synthetic 사용") from exc
-
-    df = yf.download(ticker, period=period, auto_adjust=True, progress=False, threads=False)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.droplevel(-1)
-    rename = {c: str(c).capitalize() for c in df.columns if str(c).lower() in {"open", "high", "low", "close", "volume"}}
-    df = df.rename(columns=rename)
-    required = ["Open", "High", "Low", "Close", "Volume"]
-    missing = [c for c in required if c not in df.columns]
-    if df.empty or missing:
-        raise RuntimeError(f"{ticker}: OHLCV 데이터 비어있음 또는 필수 컬럼 누락 {missing}")
-    return df.loc[:, required].dropna(), "yfinance"
+def load_ohlcv(
+    ticker: str,
+    period: str,
+    synthetic: bool = False,
+    data_provider: Literal["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"] = "auto",
+    provider_config: str | None = None,
+    audit_logger: AuditLogger | None = None,
+    command: str = "recommend",
+) -> tuple[pd.DataFrame, str]:
+    provider_result = load_ohlcv_with_provider(
+        ticker,
+        period,
+        synthetic=synthetic,
+        data_provider=data_provider,
+        provider_config_path=provider_config,
+        audit_logger=audit_logger,
+        command=command,
+    )
+    return provider_result.frame, provider_result.source
 
 
 def parse_universe(value: str | None) -> list[str]:
@@ -626,11 +644,43 @@ def _verdict(track: Track, score: float, checks: list[ValidationCheck], cfg: Rec
 class RecommendationEngine:
     def __init__(self, config: RecommendationConfig | None = None):
         self.config = config or RecommendationConfig()
+        self.audit_logger = AuditLogger.for_output_dir(self.config.output_dir)
+        self._ohlcv_cache: dict[tuple[str, str, bool, str, str | None], tuple[pd.DataFrame, str]] = {}
+        self._ohlcv_error_cache: dict[tuple[str, str, bool, str, str | None], str] = {}
+        self._kevpe_events = load_kevpe_events(self.config.kevpe_events)
+
+    def _ohlcv_cache_key(self, ticker: str) -> tuple[str, str, bool, str, str | None]:
+        cfg = self.config
+        return (ticker.strip().upper(), cfg.period, cfg.synthetic, cfg.data_provider, cfg.provider_config)
+
+    def _load_ohlcv_cached(self, ticker: str) -> tuple[pd.DataFrame, str]:
+        cfg = self.config
+        key = self._ohlcv_cache_key(ticker)
+        if key in self._ohlcv_cache:
+            frame, source = self._ohlcv_cache[key]
+            return frame.copy(deep=False), source
+        if key in self._ohlcv_error_cache:
+            raise RuntimeError(self._ohlcv_error_cache[key])
+        try:
+            frame, source = load_ohlcv(
+                ticker,
+                cfg.period,
+                synthetic=cfg.synthetic,
+                data_provider=cfg.data_provider,
+                provider_config=cfg.provider_config,
+                audit_logger=self.audit_logger,
+                command=cfg.audit_command,
+            )
+        except Exception as exc:
+            self._ohlcv_error_cache[key] = str(exc)
+            raise
+        self._ohlcv_cache[key] = (frame, source)
+        return frame.copy(deep=False), source
 
     def evaluate_ticker(self, ticker: str, track: Track) -> RecommendationResult:
         cfg = self.config
         horizon = cfg.horizon_s if track == "S" else cfg.horizon_l
-        df, data_source = load_ohlcv(ticker, cfg.period, synthetic=cfg.synthetic)
+        df, data_source = self._load_ohlcv_cached(ticker)
         min_required = max(cfg.min_rows, horizon + 220)
         if len(df) < min_required:
             raise RuntimeError(f"{ticker}: 데이터 부족 rows={len(df)}, required={min_required}")
@@ -665,6 +715,10 @@ class RecommendationEngine:
         pass_count = sum(1 for check in checks if check.status == "PASS")
         ev = _expected_value_pct(model_stats["latest_prob"], plan)
         reasons = [f"data_source={data_source}", f"cv_gap={model_stats['gap']}"] + reasons + [label]
+
+        # ── KEVPE risk overlay (supplementary only — never overrides Risk Gate) ──
+        kevpe_result = get_kevpe_adapter().get_signal_for_ticker(df, self._events_for_ticker(ticker), as_of=pd.Timestamp.now().normalize())
+        kevpe_supp = kevpe_signal_to_supplement(kevpe_result)
 
         return RecommendationResult(
             ticker=ticker,
@@ -706,7 +760,25 @@ class RecommendationEngine:
             validations=checks,
             reasons=reasons,
             generated_at_utc=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            # KEVPE overlay fields (populated from supplementary signal)
+            kevpe_available=kevpe_supp.get("kevpe_available", False),
+            kevpe_regime=kevpe_supp.get("kevpe_regime"),
+            kevpe_score=kevpe_supp.get("kevpe_score"),
+            kevpe_expected_return_pct=kevpe_supp.get("kevpe_expected_return_pct"),
+            kevpe_ci=kevpe_supp.get("kevpe_ci"),
+            kevpe_confidence=kevpe_supp.get("kevpe_confidence"),
+            kevpe_reason=kevpe_supp.get("kevpe_reason"),
         )
+
+    def _events_for_ticker(self, ticker: str) -> list[dict]:
+        clean = ticker.strip().upper()
+        events: list[dict] = []
+        for event in self._kevpe_events:
+            event_ticker = str(event.get("ticker", "") or "").strip().upper()
+            if event_ticker and event_ticker != clean:
+                continue
+            events.append(event)
+        return events
 
     def run(self) -> list[RecommendationResult]:
         tracks: list[Track] = ["S", "L"] if self.config.track == "BOTH" else [self.config.track]  # type: ignore[list-item]
@@ -745,12 +817,13 @@ class RecommendationEngine:
             "config": asdict(self.config),
             "disclaimer": "screening_output_only; manual approval required; no broker order execution; not financial advice",
             "algorithm_patch": "v2 leak-safe CV + ATR risk plan + fixed-risk sizing + OOF backtest",
+            "audit_log_path": str(self.audit_logger.path),
             "errors": errors,
             "results": [r.to_dict() for r in results],
         }
         json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         md_path.write_text(render_markdown(results, self.config), encoding="utf-8")
-        return RecommendationRun(results=results, errors=errors, markdown_path=str(md_path), json_path=str(json_path))
+        return RecommendationRun(results=results, errors=errors, markdown_path=str(md_path), json_path=str(json_path), audit_path=str(self.audit_logger.path))
 
 
 def _error_result(ticker: str, track: Track, message: str) -> RecommendationResult:
@@ -799,6 +872,38 @@ def _error_result(ticker: str, track: Track, message: str) -> RecommendationResu
     )
 
 
+def load_kevpe_events(path: str | None) -> list[dict]:
+    if not path:
+        return []
+    event_path = Path(path)
+    if not event_path.exists():
+        raise FileNotFoundError(f"KEVPE event file not found: {event_path}")
+    suffix = event_path.suffix.lower()
+    if suffix == ".json":
+        payload = json.loads(event_path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            payload = payload.get("events", [])
+        if not isinstance(payload, list):
+            raise ValueError("KEVPE JSON event file must contain a list or an object with events")
+        return [_normalize_kevpe_event(item) for item in payload if isinstance(item, dict)]
+    if suffix == ".csv":
+        frame = pd.read_csv(event_path)
+        return [_normalize_kevpe_event(row) for row in frame.to_dict(orient="records")]
+    raise ValueError(f"unsupported KEVPE event file extension: {event_path.suffix}")
+
+
+def _normalize_kevpe_event(event: dict) -> dict:
+    normalized = dict(event)
+    topics = normalized.get("topics", ())
+    if isinstance(topics, str):
+        normalized["topics"] = tuple(item.strip() for item in topics.replace(";", ",").split(",") if item.strip())
+    elif isinstance(topics, list):
+        normalized["topics"] = tuple(str(item).strip() for item in topics if str(item).strip())
+    elif not isinstance(topics, tuple):
+        normalized["topics"] = ()
+    return normalized
+
+
 def render_markdown(results: list[RecommendationResult], cfg: RecommendationConfig) -> str:
     lines = [
         "# Stock Recommendation Report — Algorithm v2",
@@ -811,6 +916,8 @@ def render_markdown(results: list[RecommendationResult], cfg: RecommendationConf
         "",
         f"Universe: {', '.join(cfg.universe)}",
         f"Track: {cfg.track} | Period: {cfg.period} | Top-N: {cfg.top_n}",
+        f"Data provider: {cfg.data_provider} | Synthetic flag: {cfg.synthetic}",
+        f"Audit log: {Path(cfg.output_dir) / 'audit_log.jsonl'}",
         "",
         "| Rank | Ticker | Track | Verdict | Score | Prob | EV% | Entry | Stop | TP2 | R/R | Risk% | MaxPos% | Qty | Confirms | Evidence |",
         "|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
@@ -847,6 +954,8 @@ def run_recommendation_cli(args) -> int:
         model_kind=args.model_kind,
         xgb_device=args.xgb_device,
         cv_gap=args.cv_gap,
+        data_provider=getattr(args, "data_provider", "auto"),
+        provider_config=getattr(args, "provider_config", None),
     )
     engine = RecommendationEngine(cfg)
     results = engine.run()
@@ -854,4 +963,5 @@ def run_recommendation_cli(args) -> int:
     print(render_markdown(results, cfg))
     print(f"\nReport saved: {paths['markdown']}")
     print(f"JSON saved:   {paths['json']}")
+    print(f"Audit saved:  {paths['audit']}")
     return 0

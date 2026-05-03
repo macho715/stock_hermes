@@ -1,0 +1,4 @@
+{
+  "default_provider": "yfinance",
+  "openbb_provider": "yfinance"
+}

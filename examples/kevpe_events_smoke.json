@@ -1,0 +1,12 @@
+[
+  {
+    "ticker": "SYNTH-A",
+    "date": "2026-05-01",
+    "headline": "FOMC rate decision surprises semiconductor market",
+    "country": "US",
+    "tone": -6.0,
+    "volume": 120.0,
+    "source_diversity": 10.0,
+    "topics": ["central_bank", "semiconductor_ai"]
+  }
+]

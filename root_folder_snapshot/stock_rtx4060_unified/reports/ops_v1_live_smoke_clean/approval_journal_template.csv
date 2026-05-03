@@ -1,0 +1,3 @@
+ticker,track,verdict,score,entry,stop,tp1,tp2,risk_reward,suggested_quantity,suggested_position_value,manual_action,manual_approval_required,broker_order_execution,screening_output_only,reviewer,reviewed_at,final_decision,journal_reason
+AAPL,S,ELIGIBLE_RECOMMENDATION,100.0,280.14,268.9344,294.147,308.154,2.5,66.9308,18750.0,REVIEW_PENDING,True,False,True,,,,
+AMZN,S,ELIGIBLE_RECOMMENDATION,95.72,268.26,257.5296,281.673,295.086,2.5,69.8949,18750.0,REVIEW_PENDING,True,False,True,,,,

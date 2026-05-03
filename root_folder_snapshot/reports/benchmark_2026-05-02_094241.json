@@ -1,0 +1,53 @@
+{
+  "rows": 800,
+  "repeats": 2,
+  "runtime_gate": "AMBER",
+  "items": [
+    {
+      "name": "feature_engine.build_all",
+      "seconds": 1.190636,
+      "rows": 591,
+      "backend": "pandas/numpy",
+      "status": "ok",
+      "notes": ""
+    },
+    {
+      "name": "walk_forward_train",
+      "seconds": 0.204867,
+      "rows": 591,
+      "backend": "numpy-logistic",
+      "status": "ok",
+      "notes": ""
+    },
+    {
+      "name": "backtester.run",
+      "seconds": 0.02052,
+      "rows": 591,
+      "backend": "python/pandas",
+      "status": "ok",
+      "notes": ""
+    }
+  ],
+  "status": {
+    "os_name": "Linux-4.4.0-x86_64-with-glibc2.41",
+    "python": "3.13.5",
+    "nvidia_smi": {
+      "ok": false,
+      "reason": "nvidia-smi not found on PATH"
+    },
+    "tensorflow_gpu": {
+      "ok": false,
+      "skipped": true,
+      "reason": "not requested"
+    },
+    "xgboost_gpu": {
+      "ok": false,
+      "skipped": true,
+      "reason": "not requested"
+    },
+    "gate": "AMBER",
+    "notes": [
+      "nvidia-smi did not validate an NVIDIA GPU; benchmark will run CPU-only here."
+    ]
+  }
+}

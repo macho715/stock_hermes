@@ -1,0 +1,552 @@
+{
+  "generated_at_utc": "2026-05-03T04:56:46+00:00",
+  "config": {
+    "universe": [
+      "AAPL",
+      "MSFT",
+      "NVDA",
+      "AMD",
+      "AVGO",
+      "GOOGL",
+      "AMZN",
+      "META",
+      "TSLA",
+      "JPM",
+      "XOM",
+      "LLY",
+      "UNH",
+      "COST",
+      "QQQ",
+      "SPY",
+      "XLK",
+      "XLE",
+      "GLD"
+    ],
+    "track": "BOTH",
+    "period": "3y",
+    "horizon_s": 20,
+    "horizon_l": 63,
+    "top_n": 5,
+    "synthetic": false,
+    "min_rows": 260,
+    "min_avg_dollar_volume": 10000000.0,
+    "short_green_score": 75.0,
+    "short_amber_score": 65.0,
+    "long_green_score": 80.0,
+    "long_amber_score": 70.0,
+    "stop_loss_pct_s": 0.04,
+    "hard_stop_loss_pct_s": 0.05,
+    "take_profit_1_pct_s": 0.05,
+    "take_profit_2_pct_s": 0.1,
+    "stop_loss_pct_l": 0.12,
+    "max_stop_loss_pct_l": 0.18,
+    "target_return_pct_l": 0.2,
+    "risk_per_trade_pct_s": 0.0075,
+    "risk_per_trade_pct_l": 0.005,
+    "max_position_pct_s": 0.2,
+    "max_position_pct_l": 0.12,
+    "max_mdd_pct_s": 25.0,
+    "max_mdd_pct_l": 35.0,
+    "min_risk_reward": 2.0,
+    "model_kind": "logistic",
+    "xgb_device": "cpu",
+    "xgb_estimators": 120,
+    "xgb_splits": 3,
+    "cv_gap": null,
+    "min_oof_coverage": 0.45,
+    "capital": 100000.0,
+    "prefer_gpu": false,
+    "lite": true,
+    "output_dir": "reports/api_recommend",
+    "data_provider": "auto",
+    "provider_config": null,
+    "audit_command": "recommend"
+  },
+  "disclaimer": "screening_output_only; manual approval required; no broker order execution; not financial advice",
+  "algorithm_patch": "v2 leak-safe CV + ATR risk plan + fixed-risk sizing + OOF backtest",
+  "audit_log_path": "reports\\api_recommend\\audit_log.jsonl",
+  "errors": [],
+  "results": [
+    {
+      "ticker": "XLE",
+      "track": "L",
+      "verdict": "ACCUMULATE_RECOMMENDATION",
+      "recommendation_rank_score": 100.0,
+      "candidate_label": "Track-L 누적 후보: 수동 승인 필요",
+      "screening_output_only": true,
+      "latest_close": 58.85,
+      "entry": 58.85,
+      "stop": 51.788,
+      "tp1": 64.735,
+      "tp2": 70.62,
+      "stop_pct": 0.12,
+      "tp2_pct": 0.2,
+      "risk_reward": 1.67,
+      "risk_budget_pct": 0.005,
+      "max_position_pct": 0.12,
+      "suggested_quantity": 70.8015,
+      "suggested_position_value": 4166.67,
+      "direction_prob": 0.9351,
+      "expected_value_pct": 17.925,
+      "model_accuracy": 0.5749,
+      "model_auc": 0.8335,
+      "oof_coverage": 0.7483,
+      "backtest_return_pct": 0.03,
+      "backtest_sharpe": 0.048,
+      "backtest_sortino": 0.032,
+      "backtest_mdd_pct": 0.62,
+      "profit_factor": 1.038,
+      "avg_dollar_volume_20d": 2532175196.71,
+      "volume_ratio_20d": 0.81,
+      "market_regime_score": 85.0,
+      "return_20d_pct": -0.68,
+      "return_60d_pct": 12.12,
+      "drawdown_252d_pct": -7.26,
+      "confirmations_passed": 9,
+      "confirmations_total": 9,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=753, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=2532175196.71"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=85.00, atr_pct=0.0238"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "PASS",
+          "evidence": "prob=0.9351, acc=0.5749, auc=0.8335, models=logistic"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=74.83%, gap=63"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "PASS",
+          "evidence": "return=0.03%, sharpe=0.048, mdd=0.62%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=12.00%, tp2_pct=20.00%, rr=1.67, risk_budget=0.50%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "PASS",
+          "evidence": "score=100.00, green_threshold=80.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "reasons": [
+        "data_source=yfinance",
+        "cv_gap=63",
+        "장기 추세 구조 양호",
+        "52주 고점 대비 과열이 아닌 조정권",
+        "장기 MDD 한도 내",
+        "Track-L 누적 후보: 수동 승인 필요"
+      ],
+      "generated_at_utc": "2026-05-03T04:56:45+00:00"
+    },
+    {
+      "ticker": "QQQ",
+      "track": "S",
+      "verdict": "ELIGIBLE_RECOMMENDATION",
+      "recommendation_rank_score": 100.0,
+      "candidate_label": "Track-S 추천 후보: 수동 승인 필요",
+      "screening_output_only": true,
+      "latest_close": 674.15,
+      "entry": 674.15,
+      "stop": 647.184,
+      "tp1": 707.8575,
+      "tp2": 741.565,
+      "stop_pct": 0.04,
+      "tp2_pct": 0.1,
+      "risk_reward": 2.5,
+      "risk_budget_pct": 0.0075,
+      "max_position_pct": 0.2,
+      "suggested_quantity": 27.8128,
+      "suggested_position_value": 18750.0,
+      "direction_prob": 0.9854,
+      "expected_value_pct": 9.796,
+      "model_accuracy": 0.3806,
+      "model_auc": 0.628,
+      "oof_coverage": 0.75,
+      "backtest_return_pct": -0.4,
+      "backtest_sharpe": -0.194,
+      "backtest_sortino": -0.15,
+      "backtest_mdd_pct": 1.97,
+      "profit_factor": 0.786,
+      "avg_dollar_volume_20d": 26333511708.52,
+      "volume_ratio_20d": 0.94,
+      "market_regime_score": 100.0,
+      "return_20d_pct": 15.24,
+      "return_60d_pct": 11.43,
+      "drawdown_252d_pct": -0.27,
+      "confirmations_passed": 8,
+      "confirmations_total": 9,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=753, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=26333511708.52"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=100.00, atr_pct=0.0146"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "AMBER",
+          "evidence": "prob=0.9854, acc=0.3806, auc=0.6280, models=logistic"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=75.00%, gap=20"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "PASS",
+          "evidence": "return=-0.40%, sharpe=-0.194, mdd=1.97%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=4.00%, tp2_pct=10.00%, rr=2.50, risk_budget=0.75%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "PASS",
+          "evidence": "score=100.00, green_threshold=75.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "reasons": [
+        "data_source=yfinance",
+        "cv_gap=20",
+        "모델 상승확률 98.54%",
+        "단기/중기 추세 확인",
+        "20일 고점권/돌파 후보",
+        "백테스트 MDD 1.97%",
+        "R/R 2.50 통과",
+        "기대값 9.80%",
+        "Track-S 추천 후보: 수동 승인 필요"
+      ],
+      "generated_at_utc": "2026-05-03T04:56:42+00:00"
+    },
+    {
+      "ticker": "XLK",
+      "track": "S",
+      "verdict": "ELIGIBLE_RECOMMENDATION",
+      "recommendation_rank_score": 100.0,
+      "candidate_label": "Track-S 추천 후보: 수동 승인 필요",
+      "screening_output_only": true,
+      "latest_close": 161.87,
+      "entry": 161.87,
+      "stop": 155.3952,
+      "tp1": 169.9635,
+      "tp2": 178.057,
+      "stop_pct": 0.04,
+      "tp2_pct": 0.1,
+      "risk_reward": 2.5,
+      "risk_budget_pct": 0.0075,
+      "max_position_pct": 0.2,
+      "suggested_quantity": 115.8337,
+      "suggested_position_value": 18750.0,
+      "direction_prob": 0.9421,
+      "expected_value_pct": 9.19,
+      "model_accuracy": 0.3472,
+      "model_auc": 0.5776,
+      "oof_coverage": 0.75,
+      "backtest_return_pct": -2.51,
+      "backtest_sharpe": -0.718,
+      "backtest_sortino": -0.584,
+      "backtest_mdd_pct": 3.18,
+      "profit_factor": 0.356,
+      "avg_dollar_volume_20d": 1564678515.88,
+      "volume_ratio_20d": 0.99,
+      "market_regime_score": 100.0,
+      "return_20d_pct": 19.03,
+      "return_60d_pct": 17.34,
+      "drawdown_252d_pct": -0.26,
+      "confirmations_passed": 7,
+      "confirmations_total": 9,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=753, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=1564678515.88"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=100.00, atr_pct=0.0186"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "AMBER",
+          "evidence": "prob=0.9421, acc=0.3472, auc=0.5776, models=logistic"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=75.00%, gap=20"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "AMBER",
+          "evidence": "return=-2.51%, sharpe=-0.718, mdd=3.18%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=4.00%, tp2_pct=10.00%, rr=2.50, risk_budget=0.75%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "PASS",
+          "evidence": "score=100.00, green_threshold=75.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "reasons": [
+        "data_source=yfinance",
+        "cv_gap=20",
+        "모델 상승확률 94.21%",
+        "단기/중기 추세 확인",
+        "20일 고점권/돌파 후보",
+        "백테스트 MDD 3.18%",
+        "R/R 2.50 통과",
+        "기대값 9.19%",
+        "Track-S 추천 후보: 수동 승인 필요"
+      ],
+      "generated_at_utc": "2026-05-03T04:56:44+00:00"
+    },
+    {
+      "ticker": "AVGO",
+      "track": "S",
+      "verdict": "ELIGIBLE_RECOMMENDATION",
+      "recommendation_rank_score": 100.0,
+      "candidate_label": "Track-S 추천 후보: 수동 승인 필요",
+      "screening_output_only": true,
+      "latest_close": 421.28,
+      "entry": 421.28,
+      "stop": 404.0127,
+      "tp1": 442.344,
+      "tp2": 463.408,
+      "stop_pct": 0.041,
+      "tp2_pct": 0.1,
+      "risk_reward": 2.44,
+      "risk_budget_pct": 0.0075,
+      "max_position_pct": 0.2,
+      "suggested_quantity": 43.4348,
+      "suggested_position_value": 18298.2,
+      "direction_prob": 0.8698,
+      "expected_value_pct": 8.165,
+      "model_accuracy": 0.4556,
+      "model_auc": 0.6735,
+      "oof_coverage": 0.75,
+      "backtest_return_pct": 8.39,
+      "backtest_sharpe": 1.161,
+      "backtest_sortino": 1.042,
+      "backtest_mdd_pct": 4.67,
+      "profit_factor": 2.134,
+      "avg_dollar_volume_20d": 8479723534.32,
+      "volume_ratio_20d": 0.54,
+      "market_regime_score": 100.0,
+      "return_20d_pct": 33.93,
+      "return_60d_pct": 37.04,
+      "drawdown_252d_pct": -1.87,
+      "confirmations_passed": 8,
+      "confirmations_total": 9,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=753, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=8479723534.32"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=100.00, atr_pct=0.0304"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "AMBER",
+          "evidence": "prob=0.8698, acc=0.4556, auc=0.6735, models=logistic"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=75.00%, gap=20"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "PASS",
+          "evidence": "return=8.39%, sharpe=1.161, mdd=4.67%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=4.10%, tp2_pct=10.00%, rr=2.44, risk_budget=0.75%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "PASS",
+          "evidence": "score=100.00, green_threshold=75.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "reasons": [
+        "data_source=yfinance",
+        "cv_gap=20",
+        "모델 상승확률 86.98%",
+        "단기/중기 추세 확인",
+        "백테스트 MDD 4.67%",
+        "R/R 2.44 통과",
+        "기대값 8.16%",
+        "Track-S 추천 후보: 수동 승인 필요"
+      ],
+      "generated_at_utc": "2026-05-03T04:56:33+00:00"
+    },
+    {
+      "ticker": "GOOGL",
+      "track": "S",
+      "verdict": "ELIGIBLE_RECOMMENDATION",
+      "recommendation_rank_score": 100.0,
+      "candidate_label": "Track-S 추천 후보: 수동 승인 필요",
+      "screening_output_only": true,
+      "latest_close": 385.69,
+      "entry": 385.69,
+      "stop": 370.2624,
+      "tp1": 404.9745,
+      "tp2": 424.259,
+      "stop_pct": 0.04,
+      "tp2_pct": 0.1,
+      "risk_reward": 2.5,
+      "risk_budget_pct": 0.0075,
+      "max_position_pct": 0.2,
+      "suggested_quantity": 48.6142,
+      "suggested_position_value": 18750.0,
+      "direction_prob": 0.6318,
+      "expected_value_pct": 4.846,
+      "model_accuracy": 0.5528,
+      "model_auc": 0.7119,
+      "oof_coverage": 0.75,
+      "backtest_return_pct": 5.11,
+      "backtest_sharpe": 1.73,
+      "backtest_sortino": 1.267,
+      "backtest_mdd_pct": 0.83,
+      "profit_factor": 12.181,
+      "avg_dollar_volume_20d": 9178084949.6,
+      "volume_ratio_20d": 1.12,
+      "market_regime_score": 100.0,
+      "return_20d_pct": 30.4,
+      "return_60d_pct": 15.89,
+      "drawdown_252d_pct": -0.28,
+      "confirmations_passed": 9,
+      "confirmations_total": 9,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=753, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=9178084949.60"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=100.00, atr_pct=0.0260"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "PASS",
+          "evidence": "prob=0.6318, acc=0.5528, auc=0.7119, models=logistic"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=75.00%, gap=20"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "PASS",
+          "evidence": "return=5.11%, sharpe=1.730, mdd=0.83%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=4.00%, tp2_pct=10.00%, rr=2.50, risk_budget=0.75%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "PASS",
+          "evidence": "score=100.00, green_threshold=75.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "reasons": [
+        "data_source=yfinance",
+        "cv_gap=20",
+        "모델 상승확률 63.18%",
+        "단기/중기 추세 확인",
+        "20일 고점권/돌파 후보",
+        "백테스트 MDD 0.83%",
+        "R/R 2.50 통과",
+        "기대값 4.85%",
+        "Track-S 추천 후보: 수동 승인 필요"
+      ],
+      "generated_at_utc": "2026-05-03T04:56:35+00:00"
+    }
+  ]
+}

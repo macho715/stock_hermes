@@ -1,0 +1,138 @@
+{
+  "generated_at_utc": "2026-05-02T16:19:55+00:00",
+  "config": {
+    "universe": [
+      "SYNTH-A"
+    ],
+    "track": "S",
+    "period": "5y",
+    "horizon_s": 20,
+    "horizon_l": 63,
+    "top_n": 1,
+    "synthetic": true,
+    "min_rows": 260,
+    "min_avg_dollar_volume": 10000000.0,
+    "short_green_score": 75.0,
+    "short_amber_score": 65.0,
+    "long_green_score": 80.0,
+    "long_amber_score": 70.0,
+    "stop_loss_pct_s": 0.04,
+    "hard_stop_loss_pct_s": 0.05,
+    "take_profit_1_pct_s": 0.05,
+    "take_profit_2_pct_s": 0.1,
+    "stop_loss_pct_l": 0.12,
+    "max_stop_loss_pct_l": 0.18,
+    "target_return_pct_l": 0.2,
+    "risk_per_trade_pct_s": 0.0075,
+    "risk_per_trade_pct_l": 0.005,
+    "max_position_pct_s": 0.2,
+    "max_position_pct_l": 0.12,
+    "max_mdd_pct_s": 25.0,
+    "max_mdd_pct_l": 35.0,
+    "min_risk_reward": 2.0,
+    "model_kind": "logistic",
+    "xgb_device": "cpu",
+    "xgb_estimators": 160,
+    "xgb_splits": 3,
+    "cv_gap": null,
+    "min_oof_coverage": 0.45,
+    "output_dir": "recommendation_reports"
+  },
+  "disclaimer": "screening_output_only; manual approval required; no broker order execution; not financial advice",
+  "algorithm_patch": "v2 leak-safe CV + ATR risk plan + fixed-risk sizing + OOF backtest",
+  "results": [
+    {
+      "ticker": "SYNTH-A",
+      "track": "S",
+      "verdict": "RED_NOT_RECOMMENDED",
+      "recommendation_rank_score": 63.54,
+      "candidate_label": "Track-S 기준 미달",
+      "screening_output_only": true,
+      "latest_close": 79.3744,
+      "entry": 79.3744,
+      "stop": 76.1994,
+      "tp1": 83.3431,
+      "tp2": 87.3119,
+      "stop_pct": 0.04,
+      "tp2_pct": 0.1,
+      "risk_reward": 2.5,
+      "risk_budget_pct": 0.0075,
+      "max_position_pct": 0.2,
+      "suggested_quantity": 236.2222,
+      "suggested_position_value": 18750.0,
+      "direction_prob": 0.013,
+      "expected_value_pct": -3.818,
+      "model_accuracy": 0.5592,
+      "model_auc": 0.5905,
+      "oof_coverage": 0.7454,
+      "backtest_return_pct": 0.32,
+      "backtest_sharpe": 0.285,
+      "backtest_sortino": 0.186,
+      "backtest_mdd_pct": 0.76,
+      "profit_factor": 1.306,
+      "avg_dollar_volume_20d": 315129826.77,
+      "volume_ratio_20d": 1.28,
+      "market_regime_score": 65.0,
+      "return_20d_pct": -0.08,
+      "return_60d_pct": 0.88,
+      "drawdown_252d_pct": -9.44,
+      "confirmations_passed": 7,
+      "confirmations_total": 9,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=760, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=315129826.77"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=65.00, atr_pct=0.0218"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "AMBER",
+          "evidence": "prob=0.0130, acc=0.5592, auc=0.5905, models=logistic"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=74.54%, gap=20"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "PASS",
+          "evidence": "return=0.32%, sharpe=0.285, mdd=0.76%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=4.00%, tp2_pct=10.00%, rr=2.50, risk_budget=0.75%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "FAIL",
+          "evidence": "score=63.54, green_threshold=75.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "reasons": [
+        "data_source=synthetic_demo_data",
+        "cv_gap=20",
+        "백테스트 MDD 0.76%",
+        "R/R 2.50 통과",
+        "Track-S 기준 미달"
+      ],
+      "generated_at_utc": "2026-05-02T16:19:55+00:00"
+    }
+  ]
+}
