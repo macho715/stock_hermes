@@ -2,6 +2,52 @@
 
 All notable changes for `stock_rtx4060_unified` are documented here.
 
+## 2026-05-03 — Phase B Backtest Honesty Suite + Risk-adjusted Evidence
+
+### Added
+
+- **`src/stock_rtx4060/backtest_honesty.py`**: Added evidence-only PASS/AMBER/FAIL checks for OOF coverage, Sharpe floor, max drawdown, transaction-cost buffer, and walk-forward gap.
+- **`tests/test_backtest_honesty.py`**: Added deterministic unit tests for strong evidence, weak OOF/cost buffer evidence, excessive drawdown, and run-level summary aggregation.
+- **`backtest_honesty` result field**: Recommendation JSON now carries candidate-level Phase B honesty evidence.
+- **`backtest_honesty_summary` top-level field**: Recommendation JSON and `dashboard_snapshot.v1` now carry additive run-level honesty evidence.
+- **Audit event**: `audit_log.jsonl` now includes a `backtest_honesty_summary` event after report writing.
+
+### Changed
+
+- **`src/stock_rtx4060/recommendation_engine.py`**: Adds Phase B honesty evidence after model/backtest calculation without changing score functions or ranking keys.
+- **`src/stock_rtx4060/dashboard_bridge.py`**: Preserves additive Phase B honesty fields while remaining compatible with older payloads.
+
+### Security
+
+- Phase B remains report-only. A Backtest Honesty PASS is evidence for manual review only and does not approve a trade.
+- Phase B adds no broker execution, account write, auto-buy, auto-sell, margin, options, or order-routing behavior.
+
+### Evidence
+
+- RED test observed first: `tests/test_backtest_honesty.py` failed with `ModuleNotFoundError: No module named 'stock_rtx4060.backtest_honesty'`.
+- Targeted GREEN check: `pytest tests/test_backtest_honesty.py tests/test_dashboard_bridge.py::test_build_dashboard_snapshot_preserves_report_only_contract tests/test_dashboard_bridge.py::test_dashboard_snapshot_accepts_older_payload_without_provider_summary tests/test_core.py::test_recommendation_engine_synthetic_run -q`: PASS, 7 tests passed.
+- `python -m compileall main.py src tests`: PASS.
+- `python main.py --help`: PASS with the project `.venv`.
+- `pytest -q`: PASS, 30 tests passed.
+- `.\run.ps1 recommend --synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports\phase_b_backtest_honesty_smoke`: PASS, generated Markdown, JSON, and `audit_log.jsonl`.
+- `dashboard-export` to `reports\phase_b_backtest_honesty_smoke\dashboard_snapshot.json`: PASS, preserved `backtest_honesty_summary.status=AMBER`, candidate `backtest_honesty.status=AMBER`, and `screening_output_only=True`.
+- `audit_log.jsonl`: PASS, includes event type `backtest_honesty_summary`.
+
+## 2026-05-03 — Phase A Commit And GitHub Upload Evidence
+
+### Added
+
+- Recorded the Phase A local commit and remote upload evidence for the point-in-time provider validation and Provider v2 dashboard work.
+
+### Evidence
+
+- Local commit created: `cb98a21 Add Phase A provider validation dashboard evidence`.
+- Remote upload command: `git push origin main`.
+- Remote repository: `https://github.com/macho715/stock_1901.git`.
+- Branch: `main`.
+- Post-push verification: `HEAD` and `origin/main` both resolved to `cb98a210e6a391342971fb5a1e1aeb2a301917e5`.
+- Working tree check: `git status --short` showed no changed files, with only existing permission warnings for `pytest-cache-files-kejv6w85/` and `pytest-cache-files-kr3txwkz/`.
+
 ## 2026-05-03 — Phase A Point-in-time Provider Validation + Provider v2 Dashboard
 
 ### Added

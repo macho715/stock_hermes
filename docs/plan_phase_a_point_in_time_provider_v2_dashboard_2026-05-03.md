@@ -244,6 +244,21 @@ sequenceDiagram
 | Future smoke output | `reports/phase_a_provider_v2_smoke/` |
 | Future dashboard public export evidence | `reports/phase_a_provider_v2_smoke/dashboard_snapshot.json` and `..\stock-pred-v5\public\dashboard_snapshot.json` |
 
+## Implementation And Publish Evidence
+
+| Item | Evidence |
+|---|---|
+| Implementation status | Phase A Option B implemented. |
+| Local commit | `cb98a21 Add Phase A provider validation dashboard evidence` |
+| Full commit hash | `cb98a210e6a391342971fb5a1e1aeb2a301917e5` |
+| Remote repository | `https://github.com/macho715/stock_1901.git` |
+| Remote branch | `main` |
+| Upload command | `git push origin main` |
+| Post-push verification | `HEAD` and `origin/main` resolved to `cb98a210e6a391342971fb5a1e1aeb2a301917e5`. |
+| Smoke report directory | `reports/phase_a_provider_v2_smoke/` |
+| Review smoke directory | `reports/phase_a_provider_v2_review_round3/` |
+| Known Git status warning | `pytest-cache-files-kejv6w85/` and `pytest-cache-files-kr3txwkz/` remain unreadable permission-warning folders during `git status`. |
+
 ## Approval Readiness
 
 Status: approved and implemented for Phase A; verification evidence is recorded in the current Codex session output.

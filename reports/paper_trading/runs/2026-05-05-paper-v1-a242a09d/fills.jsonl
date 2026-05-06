@@ -1,0 +1,1 @@
+{"schema_version": "paper_trading.v1", "run_id": "2026-05-05-paper-v1-a242a09d", "order_id": "2026-05-05-paper-v1-a242a09d-AAPL-OPEN_LONG", "ticker": "AAPL", "fill_price": 105.0525, "shares": 95, "notional": 9979.99, "slippage_pct": 0.0005, "commission": 0.0, "paper_trading_only": true}

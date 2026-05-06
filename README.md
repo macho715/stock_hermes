@@ -27,6 +27,9 @@ The program does not submit broker orders. It does not provide personalized inve
 | Ops v1 workflow | `.\run.ps1 ops-v1 ...` generates recommendation reports, daily brief, approval template, ZERO log, and summary JSON |
 | Phase 1 provider/audit upgrade | `recommend` and `ops-v1` support `--data-provider auto|synthetic|yfinance|openbb`, optional config, and audit JSONL |
 | Phase A provider validation | `provider_validation.py` adds point-in-time OHLCV checks and exports `provider_summary` to reports and dashboard snapshots |
+| Phase B backtest honesty | `backtest_honesty.py` adds evidence-only OOF, Sharpe, MDD, cost-buffer, and walk-forward gap checks |
+| Latest Phase A commit | `cb98a21 Add Phase A provider validation dashboard evidence` |
+| Latest remote verification | `origin/main` resolved to `cb98a210e6a391342971fb5a1e1aeb2a301917e5` after `git push origin main` |
 | Dashboard report bridge | `dashboard-export` converts recommendation JSON into `dashboard_snapshot.json` for `stock_pred_v5.jsx` file import |
 | Dashboard risk mitigation | `dashboard/` now owns the repo-tracked dashboard copy and browser smoke harness |
 | Default `python` environment | AMBER: use project `.venv`; do not rely on global Python 3.14 |
@@ -77,6 +80,10 @@ For tests, use the project `.venv`:
 
 Observed result after Phase A provider validation coverage: 26 tests passed.
 
+Observed targeted Phase B result: 7 tests passed for `test_backtest_honesty.py`, dashboard bridge compatibility, and synthetic recommendation JSON evidence.
+
+Observed full Phase B regression result: 30 tests passed.
+
 ## Phase 1 Provider And Audit Upgrade
 
 The recommendation workflow now routes OHLCV loading through `src/stock_rtx4060/data_providers.py`.
@@ -119,6 +126,36 @@ Smoke command:
 .\run.ps1 recommend --synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports/phase_a_provider_v2_smoke
 .\run.ps1 dashboard-export --recommendation-json reports/phase_a_provider_v2_smoke/recommendations_algo_v2_YYYYMMDD_HHMMSS.json --output reports/phase_a_provider_v2_smoke/dashboard_snapshot.json --public-dir ..\stock-pred-v5\public
 ```
+
+## Phase B Backtest Honesty
+
+`src/stock_rtx4060/backtest_honesty.py` adds report-only evidence checks after the model and backtest have produced metrics.
+
+The checks cover:
+
+- OOF coverage
+- Sharpe floor
+- maximum drawdown
+- transaction-cost buffer
+- walk-forward gap evidence
+
+The result is additive:
+
+- candidate JSON includes `backtest_honesty`
+- recommendation JSON includes top-level `backtest_honesty_summary`
+- `dashboard_snapshot.v1` includes `backtest_honesty_summary`
+- `audit_log.jsonl` includes a `backtest_honesty_summary` event
+- existing score functions and ranking keys are not changed
+
+Targeted test command:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests\test_backtest_honesty.py tests\test_dashboard_bridge.py::test_build_dashboard_snapshot_preserves_report_only_contract tests\test_dashboard_bridge.py::test_dashboard_snapshot_accepts_older_payload_without_provider_summary tests\test_core.py::test_recommendation_engine_synthetic_run -q
+```
+
+Phase B is evidence-only. A Backtest Honesty PASS does not approve a trade and does not bypass risk gates.
+
+Observed Phase B smoke result: `reports\phase_b_backtest_honesty_smoke\dashboard_snapshot.json` contains `backtest_honesty_summary.status=AMBER`, candidate `backtest_honesty.status=AMBER`, and `screening_output_only=True`.
 
 MCP Phase 1 is a read/report-only adapter contract in `src/stock_rtx4060/mcp_adapter.py`. It does not start a local MCP server and does not expose broker, account, order, margin, options, or destructive filesystem capabilities.
 
@@ -268,6 +305,7 @@ flowchart TD
 - Track-L: GREEN requires score >= 80.00, multi-confirmation, manual thesis required
 - dashboard_bridge.py → dashboard_snapshot.v1 JSON schema
 - Flask API server (api_server.py) with CORS for stock-pred-v5 integration
+- `/api/model-scores` can return selected backend evidence for `model_kind=auto|xgb|logistic`; add `use_lstm=1` to request TensorFlow/LSTM evidence when the runtime environment supports it.
 
 ## Cross-Project Role
 
@@ -287,3 +325,46 @@ flowchart TD
 | API | Flask + flask-cors | >=3.0 | REST API for stock-pred-v5 |
 | Optional | OpenBB | — | Extended data provider |
 | GPU | WSL2/CUDA | — | XGBoost GPU acceleration (RTX 4060) |
+
+---
+
+## Dashboard API Real Data Update - 2026-05-06
+
+This append-only update records the current dashboard-facing API behavior after the 2026-05-06 stabilization pass.
+
+| Endpoint | Current documented behavior |
+|---|---|
+| `/api/symbol` | Returns dashboard chart OHLCV records. KRX `.KS` and `.KQ` symbols use `pykrx` first, then chart-only yfinance fallback if KRX providers are unavailable. |
+| `/api/model-scores` | Returns backend model evidence for a selected ticker. `model_kind=auto` can select XGBoost, and `use_lstm=1` requests TensorFlow/LSTM evidence when the runtime supports it. |
+| `/api/universe` | Provides backend-owned US/KRX selector symbols for the dashboard. |
+| `/api/recommend` | Runs report-only recommendation generation for REC API mode. |
+
+Current verified dashboard proxy observation:
+
+```text
+GET http://127.0.0.1:5174/api/symbol?symbol=005930.KS&period=6mo&data_provider=pykrx
+symbol=005930.KS
+source=PYKRX
+provider=pykrx
+row_count=729
+last_date=2026-05-06
+freshness_days=0
+```
+
+Relevant verification:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests\test_api_model_scores.py -q -p no:cacheprovider --basetemp C:\tmp\stock-pytest-symbol-fallback-green-20260506
+.\.venv\Scripts\python.exe -m py_compile api_server.py src\stock_rtx4060\data_providers.py
+```
+
+Evidence files:
+
+- `..\output\playwright\xgboost-lstm-applied-2026-05-06.json`
+- `..\output\playwright\krx-chart-provider-fix-2026-05-06.json`
+- `..\docs\DASHBOARD_API_REALDATA_UPDATE_SUMMARY_2026-05-06.md`
+
+Known limits:
+
+- Native Windows TensorFlow remains CPU-only unless a separate supported GPU path is verified.
+- The dashboard remains report-only. It does not place broker orders.

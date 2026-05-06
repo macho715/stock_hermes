@@ -294,7 +294,7 @@ Note: exact key names are draft contract names until implementation approval.
 
 ## Approval Readiness
 
-Status: approved for Phase A implementation.
+Status: approved, implemented, committed, and uploaded to `origin/main` for Phase A.
 
 Approved implementation decisions:
 
@@ -302,3 +302,15 @@ Approved implementation decisions:
 2. AMBER-first freshness behavior is approved for Phase A.
 3. Additive dashboard key name is `provider_summary`.
 4. Provider validation affects evidence only in Phase A, not ranking.
+
+## Implementation Evidence
+
+| Item | Evidence |
+|---|---|
+| Local commit | `cb98a21 Add Phase A provider validation dashboard evidence` |
+| Full commit hash | `cb98a210e6a391342971fb5a1e1aeb2a301917e5` |
+| Remote upload | `git push origin main` |
+| Remote verification | `HEAD` and `origin/main` both resolved to `cb98a210e6a391342971fb5a1e1aeb2a301917e5`. |
+| Smoke report evidence | `reports/phase_a_provider_v2_smoke/` |
+| Review round 3 evidence | `reports/phase_a_provider_v2_review_round3/` |
+| Remaining operational warning | `git status --short` emits permission warnings for `pytest-cache-files-kejv6w85/` and `pytest-cache-files-kr3txwkz/`; no changed files were listed after push. |

@@ -1,0 +1,30 @@
+{
+  "schema_version": "paper_trading.v1",
+  "run_id": "2026-05-05-paper-v1-a242a09d",
+  "status": "READY",
+  "paper_trading_only": true,
+  "paper_only_label": "Paper trading only - no broker orders",
+  "config": {
+    "output_root": "reports/paper_trading/runs",
+    "run_date": "2026-05-05",
+    "strategy_id": "paper-v1",
+    "starting_cash": 100000.0,
+    "cash_buffer_pct": 0.05,
+    "max_position_pct": 0.1,
+    "max_exposure_pct": 0.6,
+    "risk_budget_pct": 0.0075,
+    "min_model_auc": 0.55,
+    "min_model_accuracy": 0.52,
+    "min_oof_coverage": 0.8,
+    "max_missing_bar_ratio": 0.05,
+    "stale_days": 10,
+    "split_raw_move_threshold": 0.35,
+    "adjusted_raw_mismatch_threshold": 0.1,
+    "split_ratio_tolerance": 0.03,
+    "slippage_pct": 0.0005,
+    "commission": 0.0,
+    "phase1_us_only": true,
+    "force_rerun": false,
+    "rerun_reason": null
+  }
+}

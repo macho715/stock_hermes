@@ -1,0 +1,1 @@
+{"schema_version": "paper_trading.v1", "run_id": "2026-05-05-paper-v1-a242a09d", "order_id": "2026-05-05-paper-v1-a242a09d-AAPL-OPEN_LONG", "ticker": "AAPL", "order_type": "OPEN_LONG", "status": "FILLED", "shares": 95, "limit_price": null, "reason": "passed_paper_gates", "paper_trading_only": true}

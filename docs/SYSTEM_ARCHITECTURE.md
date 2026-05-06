@@ -15,6 +15,7 @@ flowchart TD
     CLI --> Feature[feature_engine.py]
     CLI --> Model[ensemble_model.py]
     CLI --> Backtest[backtester.py]
+    CLI --> Honesty[backtest_honesty.py]
     CLI --> Risk[risk_rules.py]
     CLI --> Recommend[recommendation_engine.py]
     CLI --> Ops[ops_workflow.py]
@@ -30,9 +31,11 @@ flowchart TD
     Provider --> OpenBB[OpenBB optional]
     Feature --> Model
     Model --> Backtest
+    Backtest --> Honesty
     Model --> Recommend
     Risk --> Recommend
     Gate --> Recommend
+    Honesty --> Recommend
     Recommend --> Ops
     Backtest --> Reports
     Recommend --> Output[Markdown/JSON/CSV reports + audit JSONL]
@@ -53,6 +56,8 @@ flowchart LR
     Gate --> Features[feature_engine.py]
     Features --> Model[ensemble_model.py]
     Model --> Backtest[backtester.py]
+    Backtest --> Honesty[backtest_honesty.py]
+    Honesty --> Recommendation[recommendation_engine.py]
     Model --> Recommendation[recommendation_engine.py]
     Backtest --> ReportWriter[reports.py]
     Recommendation --> ReportWriter
@@ -78,6 +83,7 @@ flowchart LR
 | Features | `src/stock_rtx4060/feature_engine.py` | Builds feature inputs for model/backtest paths. |
 | Model | `src/stock_rtx4060/ensemble_model.py` | Provides the model path used by recommendation and validation. |
 | Backtest | `src/stock_rtx4060/backtester.py` | Runs dry-run portfolio/backtest calculations. |
+| Backtest honesty | `src/stock_rtx4060/backtest_honesty.py` | Adds evidence-only OOF, Sharpe, MDD, transaction-cost buffer, and walk-forward gap checks. |
 | Recommendation | `src/stock_rtx4060/recommendation_engine.py` | Produces screening verdicts and recommendation evidence. |
 | Dashboard bridge | `src/stock_rtx4060/dashboard_bridge.py` | Converts recommendation JSON into `dashboard_snapshot.v1` for dashboard file import. |
 | Ops workflow | `src/stock_rtx4060/ops_workflow.py` | Produces the Ops v1 daily brief, manual approval template, ZERO log, and workflow summary. |
@@ -119,6 +125,18 @@ Browser verification uses `dashboard/bridge_smoke.html` plus `node dashboard\ver
 
 Phase A provider validation is evidence-only. A provider validation PASS does not approve a trade and does not bypass the existing risk gates.
 
+Phase B backtest honesty is evidence-only. A Backtest Honesty PASS does not approve a trade, does not change ranking keys, and does not bypass risk gates.
+
+## Backtest Honesty Flow
+
+| Step | Component | Output |
+|---:|---|---|
+| 1 | `src/stock_rtx4060/backtester.py` | Produces return, Sharpe, Sortino, MDD, and profit-factor metrics. |
+| 2 | `src/stock_rtx4060/backtest_honesty.py` | Evaluates OOF coverage, Sharpe floor, max drawdown, transaction-cost buffer, and walk-forward gap. |
+| 3 | `src/stock_rtx4060/recommendation_engine.py` | Writes candidate-level `backtest_honesty` and top-level `backtest_honesty_summary`. |
+| 4 | `src/stock_rtx4060/audit_log.py` | Appends `backtest_honesty_summary` JSONL event. |
+| 5 | `src/stock_rtx4060/dashboard_bridge.py` | Preserves `backtest_honesty_summary` in `dashboard_snapshot.v1`. |
+
 ## Validation State
 
 | Check | Current Result |
@@ -135,6 +153,9 @@ Phase A provider validation is evidence-only. A provider validation PASS does no
 | Dashboard bridge smoke | PASS, `reports/dashboard_bridge_smoke/dashboard_snapshot.json` contains `dashboard_snapshot.v1`, `report_only`, 2 results, and `screening_output_only=True` |
 | Dashboard browser verification | PASS, `reports/dashboard_browser_verification/dashboard_browser_verification.md` and `backend_snapshot_smoke.png` generated |
 | Phase A provider validation smoke | PASS, `reports/phase_a_provider_v2_smoke/dashboard_snapshot.json` contains `provider_summary.status=PASS` and `screening_output_only=True` |
+| Phase B targeted tests | PASS, 7 tests passed for backtest honesty, dashboard bridge compatibility, and synthetic recommendation JSON evidence |
+| Phase B full regression | PASS, 30 tests passed |
+| Phase B smoke | PASS, `reports/phase_b_backtest_honesty_smoke/dashboard_snapshot.json` contains `backtest_honesty_summary.status=AMBER`, candidate `backtest_honesty.status=AMBER`, and `screening_output_only=True` |
 
 ---
 

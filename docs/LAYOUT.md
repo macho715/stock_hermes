@@ -23,6 +23,7 @@ stock_rtx4060_unified/
 │   ├── feature_engine.py        # 60+ technical indicators
 │   ├── ensemble_model.py        # XGBoost + LogisticRegression ensemble
 │   ├── backtester.py            # Dry-run trade simulation
+│   ├── backtest_honesty.py      # Phase B evidence-only backtest honesty checks
 │   ├── benchmark.py             # Benchmark runner
 │   ├── risk_rules.py            # Track-S / Track-L risk gate logic
 │   ├── dashboard_bridge.py     # dashboard_snapshot.v1 builder
@@ -39,6 +40,7 @@ stock_rtx4060_unified/
 │   └── verify_bridge_smoke.mjs
 ├── tests/
 │   ├── test_core.py             # Ops v1 workflow regression tests
+│   ├── test_backtest_honesty.py # Phase B backtest honesty tests
 │   ├── test_data_providers.py   # Provider routing tests
 │   ├── test_provider_validation.py # Provider validation tests
 │   ├── test_audit_log.py        # Audit masking tests
@@ -81,6 +83,7 @@ stock_rtx4060_unified/
 | `feature_engine.py` | 60+ technical indicators: SMA, EMA, RSI, MACD, ATR, Bollinger, volume delta, etc. |
 | `ensemble_model.py` | XGBoost + LogisticRegression ensemble with OOF CV, `TimeSeriesSplit(gap=horizon)`. |
 | `backtester.py` | Dry-run trade simulation: entry/exit logic, P&L, Sharpe, MDD. |
+| `backtest_honesty.py` | Phase B evidence-only checks for OOF coverage, Sharpe floor, max drawdown, cost buffer, and walk-forward gap. |
 | `benchmark.py` | Benchmark smoke runner. |
 | `risk_rules.py` | Track-S / Track-L risk gate rules: stop, take-profit, risk budget, position cap. |
 | `dashboard_bridge.py` | Converts recommendation JSON into `dashboard_snapshot.v1` for frontend file import. |
@@ -135,7 +138,7 @@ stock_rtx4060_unified/
 | `reports/ops_v1*/` | `ops-v1` manual approval workflow runs |
 | `reports/runtime_status.json` | `env` command |
 | `reports/**/audit_log.jsonl` | Provider attempt audit events from `recommend` and `ops-v1` |
-| `reports/**/dashboard_snapshot.json` | Dashboard bridge snapshot from `dashboard-export`, including additive `provider_summary` when present |
+| `reports/**/dashboard_snapshot.json` | Dashboard bridge snapshot from `dashboard-export`, including additive `provider_summary` and `backtest_honesty_summary` when present |
 
 ## Continue Checks
 
