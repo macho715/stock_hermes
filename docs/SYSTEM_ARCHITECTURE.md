@@ -205,10 +205,10 @@ flowchart TD
         RR --> RPT[Markdown / JSON Report]
         RR --> OPS[ops_workflow.py]
     end
-    subgraph API["Flask API"]
-        API[/api/recommend] --> RE
-        API --> DB
-        API --> SNAP[dashboard_snapshot.json]
+    subgraph ApiServer["Flask API"]
+        ApiRecommend[/api/recommend] --> RE
+        ApiRecommend --> DB
+        ApiRecommend --> SNAP[dashboard_snapshot.json]
     end
 ```
 

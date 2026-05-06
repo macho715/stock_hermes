@@ -290,9 +290,9 @@ flowchart TD
         RR --> REPORT[Markdown Report]
         RR --> JSON[Recommendation JSON]
     end
-    subgraph API["🌐 Optional API Server"]
-        RE --> API[Flask :5151]
-        API --> SNAP
+    subgraph ApiServer["🌐 Optional API Server"]
+        RE --> FlaskAPI[Flask :5151]
+        FlaskAPI --> SNAP
     end
 ```
 

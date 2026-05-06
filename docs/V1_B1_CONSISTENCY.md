@@ -92,9 +92,9 @@ Both documents are **consistent** on the cross-project consumer claim. No mismat
 Add `api_server.py` to the Component Topology Mermaid diagram. Example insertion point in the `API["Flask API"]` subgraph:
 
 ```mermaid
-    subgraph API["Flask API"]
-        API[/api/recommend] --> RE
-        API --> DB
+    subgraph ApiServer["Flask API"]
+        ApiRecommend[/api/recommend] --> RE
+        ApiRecommend --> DB
         API_SRV[api_server.py :5151]
     end
 ```
