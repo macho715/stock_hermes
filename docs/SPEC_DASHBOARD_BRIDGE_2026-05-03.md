@@ -237,3 +237,25 @@ Smallest approval packet:
 | Dashboard load method | File import |
 | CLI surface | New `dashboard-export` command |
 | Dashboard file ownership | Keep external JSX path and repo-owned `dashboard/stock_pred_v5.jsx` copy synchronized |
+
+## Current-Session Note - 2026-05-06
+
+This specification remains the historical contract for the file-based dashboard bridge. It should not be read as the full current dashboard runtime contract.
+
+Current dashboard behavior also includes live API-first paths:
+
+| Runtime path | Current role |
+|---|---|
+| `/api/symbol` | Live chart data endpoint. KRX `.KS` and `.KQ` symbols use `pykrx` first. |
+| `/api/model-scores` | Backend model evidence endpoint. Dashboard defaults request `model_kind=auto` and `use_lstm=1`. |
+| `/api/universe` | Live API universe source. Fallback symbols are only for screen continuity when the API is unavailable. |
+| `/api/recommend` | Live REC API mode. |
+| Public snapshot files | Static FILE mode only. They are not live market data. |
+
+Evidence added after this original file-bridge spec:
+
+- `docs/DASHBOARD_API_REALDATA_UPDATE_SUMMARY_2026-05-06.md`
+- `output/playwright/krx-chart-provider-fix-2026-05-06.json`
+- `output/playwright/xgboost-lstm-applied-2026-05-06.json`
+
+The older non-goal that says no mandatory local API server is preserved for the 2026-05-03 file-bridge phase. The current Vite dashboard can still use FILE mode, but the active API mode requires the local Flask API.

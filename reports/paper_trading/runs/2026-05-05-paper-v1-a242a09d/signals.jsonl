@@ -1,0 +1,2 @@
+{"schema_version": "paper_trading.v1", "run_id": "2026-05-05-paper-v1-a242a09d", "ticker": "AAPL", "status": "ACCEPTED", "reason": "passed_paper_gates", "signal": "BUY", "score": 67, "paper_trading_only": true}
+{"schema_version": "paper_trading.v1", "run_id": "2026-05-05-paper-v1-a242a09d", "ticker": "005930.KS", "status": "REJECTED", "reason": "market_not_enabled_phase1", "signal": "BUY", "score": 80, "paper_trading_only": true}

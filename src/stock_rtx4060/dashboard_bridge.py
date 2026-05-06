@@ -74,6 +74,7 @@ def build_dashboard_snapshot(payload: dict[str, Any], *, source_json_path: str |
         "audit_log_path": payload.get("audit_log_path"),
         "algorithm_patch": payload.get("algorithm_patch"),
         "provider_summary": payload.get("provider_summary"),
+        "backtest_honesty_summary": payload.get("backtest_honesty_summary"),
         "config": {
             "universe": source_config.get("universe"),
             "track": source_config.get("track"),
@@ -227,6 +228,7 @@ def _normalize_result(result: Any, *, rank: int) -> dict[str, Any]:
         "confirmations_total": result.get("confirmations_total"),
         "screening_output_only": result["screening_output_only"],
         "validations": result["validations"],
+        "backtest_honesty": result.get("backtest_honesty"),
         "reasons": result.get("reasons", []),
         "generated_at_utc": result.get("generated_at_utc"),
         # KEVPE overlay (optional — only present when kevpe_adapter was used)

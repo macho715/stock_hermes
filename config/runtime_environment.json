@@ -1,0 +1,14 @@
+{
+  "schema_version": "stock_runtime_environment.v1",
+  "status": "locked",
+  "locked_at": "2026-05-05",
+  "project_root": "stock_rtx4060_unified",
+  "python": ".venv\\Scripts\\python.exe",
+  "test_command": ".venv\\Scripts\\python.exe -m pytest",
+  "compile_command": ".venv\\Scripts\\python.exe -m compileall",
+  "notes": [
+    "Use the project .venv for KRX pilot implementation and verification.",
+    "Do not use the parent folder .venv or global python for KRX pilot evidence.",
+    "This lock does not approve broker integration, real orders, account actions, credentials, auto buy, or auto sell."
+  ]
+}

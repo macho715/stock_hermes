@@ -430,6 +430,8 @@ class EnsemblePredictor:
         prediction = self.predict(X)
         return {
             "direction_prob": round(float(prediction["direction_prob"]), 6),
+            "main_prob": round(float(prediction["main_prob"]), 6),
+            "lstm_prob": round(float(prediction["lstm_prob"]), 6),
             "signal": prediction["signal"],
             "confidence": round(float(prediction["confidence"]), 6),
             "backend": prediction["model_kind"],

@@ -19,8 +19,9 @@ import pandas as pd
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import TimeSeriesSplit
 
-from .audit_log import AuditLogger
+from .audit_log import AuditEvent, AuditLogger
 from .backtester import BacktestConfig, Backtester
+from .backtest_honesty import evaluate_backtest_honesty, summarize_honesty
 from .data_providers import ProviderResult, load_ohlcv_with_provider
 from .kevpe_adapter import get_kevpe_adapter, kevpe_signal_to_supplement
 from .ensemble_model import DirectionModel, ModelConfig, _safe_auc
@@ -96,6 +97,8 @@ class RecommendationConfig:
     xgb_splits: int = 3
     cv_gap: int | None = None
     min_oof_coverage: float = 0.45
+    min_backtest_sharpe: float = -0.25
+    transaction_cost_buffer_pct: float = 0.50
     capital: float = 100_000.0
     prefer_gpu: bool = False
     lite: bool = True
@@ -195,6 +198,7 @@ class RecommendationResult:
     validations: list[ValidationCheck]
     reasons: list[str]
     generated_at_utc: str
+    backtest_honesty: dict | None = None
     # KEVPE risk overlay (optional — populated when KEVPE adapter is available)
     kevpe_available: bool = False
     kevpe_regime: str | None = None
@@ -743,6 +747,18 @@ class RecommendationEngine:
             score, reasons = _score_track_l(model_stats["latest_prob"], snap, backtest, plan, model_stats, cfg)
 
         checks = _validation_checks(track, df, snap, model_stats, backtest, plan, score, cfg)
+        honesty = evaluate_backtest_honesty(
+            oof_coverage=float(model_stats["oof_coverage"]),
+            min_oof_coverage=cfg.min_oof_coverage,
+            sharpe=float(backtest.get("sharpe_ratio", 0.0)),
+            min_sharpe=cfg.min_backtest_sharpe,
+            mdd_pct=float(backtest.get("max_drawdown_pct", 0.0)),
+            max_mdd_pct=cfg.max_mdd_pct_s if track == "S" else cfg.max_mdd_pct_l,
+            total_return_pct=float(backtest.get("total_return_pct", 0.0)),
+            transaction_cost_buffer_pct=cfg.transaction_cost_buffer_pct,
+            cv_gap=int(model_stats["gap"]),
+            horizon=horizon,
+        )
         verdict, label = _verdict(track, score, checks, cfg)
         pass_count = sum(1 for check in checks if check.status == "PASS")
         ev = _expected_value_pct(model_stats["latest_prob"], plan)
@@ -792,6 +808,7 @@ class RecommendationEngine:
             validations=checks,
             reasons=reasons,
             generated_at_utc=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            backtest_honesty=honesty,
             # KEVPE overlay fields (populated from supplementary signal)
             kevpe_available=kevpe_supp.get("kevpe_available", False),
             kevpe_regime=kevpe_supp.get("kevpe_regime"),
@@ -844,6 +861,7 @@ class RecommendationEngine:
         json_path = out_dir / f"recommendations_algo_v2_{ts}.json"
         md_path = out_dir / f"recommendations_algo_v2_{ts}.md"
         errors = [r.to_dict() for r in results if r.verdict == "RED_DATA_OR_MODEL_ERROR"]
+        honesty_summary = summarize_honesty([r.backtest_honesty or {} for r in results])
         payload = {
             "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "config": asdict(self.config),
@@ -851,11 +869,20 @@ class RecommendationEngine:
             "algorithm_patch": "v2 leak-safe CV + ATR risk plan + fixed-risk sizing + OOF backtest",
             "audit_log_path": str(self.audit_logger.path),
             "provider_summary": self._provider_summary(),
+            "backtest_honesty_summary": honesty_summary,
             "errors": errors,
             "results": [r.to_dict() for r in results],
         }
         json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         md_path.write_text(render_markdown(results, self.config), encoding="utf-8")
+        self.audit_logger.write(
+            AuditEvent(
+                event_type="backtest_honesty_summary",
+                status="SUCCESS",
+                command=self.config.audit_command,
+                metadata=honesty_summary,
+            )
+        )
         return RecommendationRun(results=results, errors=errors, markdown_path=str(md_path), json_path=str(json_path), audit_path=str(self.audit_logger.path))
 
     def _provider_summary(self) -> dict | None:
@@ -922,6 +949,14 @@ def _error_result(ticker: str, track: Track, message: str) -> RecommendationResu
         validations=[fail],
         reasons=[message],
         generated_at_utc=now,
+        backtest_honesty={
+            "status": "FAIL",
+            "checks": [{"name": "ERROR", "status": "FAIL", "value": None, "threshold": None, "reason": message}],
+            "passed": 0,
+            "amber": 0,
+            "failed": 1,
+            "generated_at_utc": now,
+        },
     )
 
 
@@ -987,6 +1022,11 @@ def render_markdown(results: list[RecommendationResult], cfg: RecommendationConf
     for r in results:
         lines.append(f"### {r.ticker} / Track-{r.track} / {r.verdict}")
         lines.append(f"- Backtest: return={r.backtest_return_pct:.2f}%, Sharpe={r.backtest_sharpe:.3f}, Sortino={r.backtest_sortino:.3f}, MDD={r.backtest_mdd_pct:.2f}%")
+        if r.backtest_honesty:
+            lines.append(
+                f"- Backtest honesty: {r.backtest_honesty.get('status')} "
+                f"(pass={r.backtest_honesty.get('passed', 0)}, amber={r.backtest_honesty.get('amber', 0)}, fail={r.backtest_honesty.get('failed', 0)})"
+            )
         lines.append(f"- Model: prob={r.direction_prob:.2%}, acc={r.model_accuracy:.2%}, auc={r.model_auc:.3f}, oof_coverage={r.oof_coverage:.2%}")
         lines.append(f"- Risk plan: stop={r.stop_pct:.2%}, tp2={r.tp2_pct:.2%}, R/R={r.risk_reward:.2f}, position_value={r.suggested_position_value:.2f}")
         for check in r.validations:

@@ -39,6 +39,13 @@ def _recommendation_payload() -> dict:
             "freshness_days_max": 0,
             "fallbacks": [],
         },
+        "backtest_honesty_summary": {
+            "status": "PASS",
+            "result_count": 1,
+            "passed": 5,
+            "amber": 0,
+            "failed": 0,
+        },
         "errors": [],
         "results": [
             {
@@ -79,6 +86,10 @@ def _recommendation_payload() -> dict:
                 "confirmations_passed": 6,
                 "confirmations_total": 9,
                 "validations": [{"name": "AUTOMATION_BOUNDARY", "status": "PASS", "evidence": "screening_output_only"}],
+                "backtest_honesty": {
+                    "status": "PASS",
+                    "checks": [{"name": "OOF_COVERAGE", "status": "PASS", "reason": "coverage=88.00%"}],
+                },
                 "reasons": ["manual approval required"],
                 "generated_at_utc": "2026-05-03T00:00:00+00:00",
             }
@@ -97,10 +108,12 @@ def test_build_dashboard_snapshot_preserves_report_only_contract():
     assert "provider_config" not in snapshot["config"]
     assert snapshot["provider_summary"]["status"] == "PASS"
     assert snapshot["provider_summary"]["providers_used"] == ["synthetic"]
+    assert snapshot["backtest_honesty_summary"]["status"] == "PASS"
     assert snapshot["results"][0]["ticker"] == "SYNTH-A"
     assert snapshot["results"][0]["score"] == 73.5
     assert snapshot["results"][0]["probability"] == 0.54
     assert snapshot["results"][0]["screening_output_only"] is True
+    assert snapshot["results"][0]["backtest_honesty"]["status"] == "PASS"
 
 
 def test_write_dashboard_snapshot_creates_file(tmp_path):
@@ -160,7 +173,11 @@ def test_dashboard_snapshot_rejects_non_report_only_result():
 def test_dashboard_snapshot_accepts_older_payload_without_provider_summary():
     payload = _recommendation_payload()
     del payload["provider_summary"]
+    del payload["backtest_honesty_summary"]
+    del payload["results"][0]["backtest_honesty"]
 
     snapshot = build_dashboard_snapshot(payload)
 
     assert snapshot["provider_summary"] is None
+    assert snapshot["backtest_honesty_summary"] is None
+    assert snapshot["results"][0]["backtest_honesty"] is None

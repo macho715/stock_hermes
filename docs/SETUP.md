@@ -32,6 +32,10 @@ Run tests through the project `.venv`:
 
 Observed result after Phase A provider validation coverage: 26 tests passed.
 
+Observed targeted Phase B result: 7 tests passed for Backtest Honesty unit tests, dashboard bridge compatibility, and synthetic recommendation JSON evidence.
+
+Observed full Phase B regression result: 30 tests passed.
+
 ## Optional OpenBB Provider
 
 OpenBB is optional in Phase 1. The offline synthetic and current yfinance paths must work without it.
@@ -70,6 +74,26 @@ The validation metadata is written to `audit_log.jsonl`, recommendation JSON `pr
 ```
 
 The provider validation gate is evidence-only. It does not place orders and does not approve trades.
+
+## Phase B Backtest Honesty Smoke
+
+Backtest honesty checks run after model/backtest metrics are produced.
+They are evidence-only and do not approve trades.
+
+Targeted verification:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests\test_backtest_honesty.py tests\test_dashboard_bridge.py::test_build_dashboard_snapshot_preserves_report_only_contract tests\test_dashboard_bridge.py::test_dashboard_snapshot_accepts_older_payload_without_provider_summary tests\test_core.py::test_recommendation_engine_synthetic_run -q
+```
+
+Synthetic smoke output should include:
+
+- candidate-level `backtest_honesty`
+- top-level `backtest_honesty_summary`
+- `dashboard_snapshot.v1.backtest_honesty_summary`
+- `audit_log.jsonl` event type `backtest_honesty_summary`
+
+Observed Phase B smoke result: `reports\phase_b_backtest_honesty_smoke\dashboard_snapshot.json` contains `backtest_honesty_summary.status=AMBER`, candidate `backtest_honesty.status=AMBER`, and `screening_output_only=True`.
 
 ## Common Commands
 

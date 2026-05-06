@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "C:\Users\jichu\Downloads\주식\stock_rtx4060_unified\api_server.py", line 20, in <module>
+    from flask import Flask, jsonify, request
+ModuleNotFoundError: No module named 'flask'

@@ -81,6 +81,13 @@ def test_recommendation_engine_synthetic_run(tmp_path):
     payload = __import__("json").loads(Path(paths["json"]).read_text(encoding="utf-8"))
     assert payload["provider_summary"]["status"] in {"PASS", "AMBER"}
     assert "synthetic" in payload["provider_summary"]["providers_used"]
+    assert payload["backtest_honesty_summary"]["status"] in {"PASS", "AMBER", "FAIL"}
+    assert payload["backtest_honesty_summary"]["result_count"] == len(results)
+    assert all(result["backtest_honesty"]["checks"] for result in payload["results"])
+    assert any(
+        event.get("event_type") == "backtest_honesty_summary"
+        for event in [__import__("json").loads(line) for line in Path(paths["audit"]).read_text(encoding="utf-8").splitlines() if line.strip()]
+    )
 
 
 def test_recommendation_engine_reuses_ohlcv_for_same_ticker(monkeypatch, tmp_path):
