@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   ComposedChart,
   LineChart,
@@ -19,8 +19,8 @@ import RecommendationPanel from "./components/RecommendationPanel";
 /* ============================================================
  * STOCK·PRED v5.0  —  Dual-Market ML Dashboard
  * Markets: US (NYSE/NASDAQ) + KRX (Korea Exchange)
- * Models : Logistic Regression · XGBoost-sim · LSTM-sim · Elman RNN
- * Engine : Yahoo Finance via allorigins proxy + synthetic fallback
+ * Models : Backend model evidence API · browser demo scores isolated from primary signal
+ * Engine : Local stock_rtx4060 API-first real data path
  * ============================================================ */
 
 const C = {
@@ -52,120 +52,126 @@ const C = {
 const FONT =
   '"JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace';
 
-const US_SYMBOLS = [
-  { symbol: "AAPL", name: "Apple Inc." },
-  { symbol: "MSFT", name: "Microsoft" },
-  { symbol: "NVDA", name: "NVIDIA" },
-  { symbol: "TSLA", name: "Tesla" },
-  { symbol: "AMZN", name: "Amazon" },
-  { symbol: "GOOGL", name: "Alphabet" },
-  { symbol: "META", name: "Meta" },
-  { symbol: "SPY", name: "S&P 500 ETF" },
-  { symbol: "QQQ", name: "Nasdaq 100 ETF" },
-];
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const apiUrl = (path) => `${API_BASE}${path}`;
+const DASHBOARD_CONFIG_PATH = "/dashboard_config.json";
 
-const KRX_SYMBOLS = [
-  { symbol: "005930.KS", name: "삼성전자", basePrice: 75000 },
-  { symbol: "000660.KS", name: "SK하이닉스", basePrice: 180000 },
-  { symbol: "005380.KS", name: "현대차", basePrice: 220000 },
-  { symbol: "005490.KS", name: "POSCO홀딩스", basePrice: 380000 },
-  { symbol: "035420.KS", name: "NAVER", basePrice: 195000 },
-  { symbol: "035720.KS", name: "카카오", basePrice: 42000 },
-  { symbol: "051910.KS", name: "LG화학", basePrice: 320000 },
-  { symbol: "006400.KS", name: "삼성SDI", basePrice: 280000 },
-  { symbol: "003670.KS", name: "포스코퓨처엠", basePrice: 195000 },
-];
+function normalizeSymbolList(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .filter((item) => item && typeof item.symbol === "string" && item.symbol.trim())
+    .map((item) => ({
+      ...item,
+      symbol: item.symbol.trim(),
+      name: typeof item.name === "string" && item.name.trim() ? item.name.trim() : item.symbol.trim(),
+    }));
+}
 
-const US_BASE = {
-  AAPL: 190, MSFT: 410, NVDA: 880, TSLA: 240, AMZN: 175,
-  GOOGL: 165, META: 480, SPY: 510, QQQ: 430,
-};
-
-/* ----------  PRNG / hash  ---------- */
-function mulberry32(seed) {
-  return function () {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = seed;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+function normalizeDashboardConfig(raw) {
+  const markets = raw?.markets || {};
+  return {
+    markets: {
+      US: { fallback_symbols: normalizeSymbolList(markets.US?.fallback_symbols) },
+      KRX: { fallback_symbols: normalizeSymbolList(markets.KRX?.fallback_symbols) },
+    },
+    api_defaults: {
+      symbol_period: String(raw?.api_defaults?.symbol_period || ""),
+      model_scores: raw?.api_defaults?.model_scores || {},
+      recommend: raw?.api_defaults?.recommend || {},
+    },
+    signal_thresholds: raw?.signal_thresholds || {},
+    model_quality: raw?.model_quality || {},
   };
 }
-function hashSeed(s) {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
+
+async function fetchDashboardConfig() {
+  const res = await fetch(DASHBOARD_CONFIG_PATH, { cache: "no-store" });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(payload.error || `dashboard config ${res.status}`);
+  return normalizeDashboardConfig(payload);
 }
 
-/* ----------  Synthetic OHLCV  ---------- */
-function generateSynthetic(symbol, days = 130) {
-  const rng = mulberry32(hashSeed(symbol));
-  const krx = KRX_SYMBOLS.find((s) => s.symbol === symbol);
-  const base = krx ? krx.basePrice : US_BASE[symbol] || 100;
-  const vol = 0.018 + rng() * 0.018;
-  const trend = (rng() - 0.45) * 0.001;
+/* ----------  Backend OHLCV API  ---------- */
+const SYMBOL_FETCH_RETRY_DELAYS_MS = [250, 750];
 
-  let price = base * (0.85 + rng() * 0.25);
-  const out = [];
-  const now = Date.now();
-  for (let i = days - 1; i >= 0; i--) {
-    const t = now - i * 86_400_000;
-    const dt = new Date(t);
-    if (dt.getDay() === 0 || dt.getDay() === 6) continue;
-    const drift = trend + (rng() - 0.5) * vol;
-    const open = price;
-    const close = price * (1 + drift);
-    const intra = vol * 0.55;
-    const high = Math.max(open, close) * (1 + rng() * intra);
-    const low = Math.min(open, close) * (1 - rng() * intra);
-    const volBase = krx ? 5_000_000 : 30_000_000;
-    const volume = Math.floor(volBase * (0.45 + rng() * 1.1));
-    out.push({
-      date: dt.toISOString().slice(0, 10),
-      timestamp: t,
-      open, high, low, close, volume,
-    });
-    price = close;
-  }
-  return out;
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/* ----------  Yahoo Finance via allorigins  ---------- */
-async function fetchSymbol(symbol) {
-  try {
-    const yahoo = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=6mo`;
-    const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(yahoo)}`;
-    const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 9000);
-    const res = await fetch(url, { signal: ctrl.signal });
-    clearTimeout(tid);
-    if (!res.ok) throw new Error("net");
-    const j = await res.json();
-    const r = j?.chart?.result?.[0];
-    if (!r) throw new Error("empty");
-    const ts = r.timestamp || [];
-    const q = r.indicators?.quote?.[0] || {};
-    const data = [];
-    for (let i = 0; i < ts.length; i++) {
-      if (q.close[i] == null) continue;
-      data.push({
-        date: new Date(ts[i] * 1000).toISOString().slice(0, 10),
-        timestamp: ts[i] * 1000,
-        open: q.open[i] ?? q.close[i],
-        high: q.high[i] ?? q.close[i],
-        low: q.low[i] ?? q.close[i],
-        close: q.close[i],
-        volume: q.volume[i] ?? 0,
-      });
+async function fetchSymbol(symbol, period, dataProvider) {
+  let lastError = "backend API returned insufficient OHLCV rows";
+  let lastErrorKind = "provider";
+
+  for (let attempt = 0; attempt <= SYMBOL_FETCH_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const params = new URLSearchParams({ symbol, period });
+      if (dataProvider) params.set("data_provider", dataProvider);
+      const local = apiUrl(`/api/symbol?${params.toString()}`);
+      const localCtrl = new AbortController();
+      const localTid = setTimeout(() => localCtrl.abort(), 12000);
+      const localRes = await fetch(local, { signal: localCtrl.signal });
+      clearTimeout(localTid);
+      const localJson = await localRes.json().catch(() => ({}));
+      if (!localRes.ok) {
+        lastErrorKind = localRes.status >= 500 ? "network" : "provider";
+        lastError = localJson.error || `backend API ${localRes.status}`;
+      } else if (Array.isArray(localJson.data) && localJson.data.length >= 30) {
+        return { data: localJson.data, source: localJson.source || "YFINANCE" };
+      } else {
+        lastErrorKind = "provider";
+        lastError = "backend API returned insufficient OHLCV rows";
+        break;
+      }
+    } catch (e) {
+      lastErrorKind = "network";
+      lastError = e.message || "backend API request failed";
     }
-    if (data.length < 30) throw new Error("short");
-    return { data, source: "YAHOO" };
-  } catch (e) {
-    return { data: generateSynthetic(symbol, 130), source: "SYN" };
+
+    if (attempt < SYMBOL_FETCH_RETRY_DELAYS_MS.length) {
+      await sleep(SYMBOL_FETCH_RETRY_DELAYS_MS[attempt]);
+    }
   }
+
+  return { data: [], source: "ERROR", errorKind: lastErrorKind, error: lastError };
+}
+
+async function fetchModelEvidence(symbol, defaults) {
+  const params = new URLSearchParams({
+    symbol,
+    ...defaults,
+  });
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await fetch(apiUrl(`/api/model-scores?${params.toString()}`), {
+      cache: "no-store",
+      signal: ctrl.signal,
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok || payload.status !== "PASS") {
+      throw new Error(payload.error || `model evidence API ${res.status}`);
+    }
+    return payload;
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
+async function fetchUniverse(market) {
+  const res = await fetch(apiUrl(`/api/universe?market=${encodeURIComponent(market)}`), { cache: "no-store" });
+  if (!res.ok) throw new Error(`universe API ${res.status}`);
+  const data = await res.json();
+  if (!Array.isArray(data.symbols) || data.symbols.length === 0) {
+    throw new Error("universe API returned no symbols");
+  }
+  return data;
+}
+
+async function fetchPaperStatus() {
+  const res = await fetch(apiUrl("/api/paper-status"), { cache: "no-store" });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `paper status API ${res.status}`);
+  return data;
 }
 
 /* ----------  Indicators  ---------- */
@@ -332,14 +338,47 @@ function rnnPredict(en, idx) {
 function ensembleScore(s) {
   return Math.round(s.lstm * 0.30 + s.lr * 0.25 + s.xgb * 0.25 + s.rnn * 0.20);
 }
-function signalFromScore(s) {
-  if (s >= 65) return "BUY";
-  if (s <= 35) return "SELL";
+function signalFromScore(s, thresholds) {
+  const buy = Number(thresholds?.buy);
+  const sell = Number(thresholds?.sell);
+  if (Number.isFinite(buy) && s >= buy) return "BUY";
+  if (Number.isFinite(sell) && s <= sell) return "SELL";
   return "HOLD";
+}
+function scoresFromModelEvidence(evidence) {
+  if (!evidence || evidence.status !== "PASS" || !evidence.model_scores) return null;
+  const main = Number(evidence.model_scores.main ?? evidence.ensemble_score);
+  if (!Number.isFinite(main)) return null;
+  return {
+    main,
+    lr: evidence.model_scores.logistic == null ? null : Number(evidence.model_scores.logistic),
+    xgb: evidence.model_scores.xgboost == null ? null : Number(evidence.model_scores.xgboost),
+    lstm: evidence.model_scores.lstm == null ? null : Number(evidence.model_scores.lstm),
+    rnn: evidence.model_scores.rnn == null ? null : Number(evidence.model_scores.rnn),
+  };
+}
+
+function getModelQualityWarning(evidence, qualityConfig) {
+  const metrics = evidence?.evidence;
+  if (!metrics) return null;
+  const auc = Number(metrics.model_auc);
+  const accuracy = Number(metrics.model_accuracy);
+  const oofCoverage = Number(metrics.oof_coverage);
+  const minAuc = Number(qualityConfig?.min_auc);
+  const minAccuracy = Number(qualityConfig?.min_accuracy);
+  const minOofCoverage = Number(qualityConfig?.min_oof_coverage);
+  if (
+    (Number.isFinite(auc) && Number.isFinite(minAuc) && auc < minAuc) ||
+    (Number.isFinite(accuracy) && Number.isFinite(minAccuracy) && accuracy < minAccuracy) ||
+    (Number.isFinite(oofCoverage) && Number.isFinite(minOofCoverage) && oofCoverage < minOofCoverage)
+  ) {
+    return qualityConfig?.warning || "MODEL QUALITY REVIEW ONLY";
+  }
+  return null;
 }
 
 /* ----------  Backtest  ---------- */
-function runBacktest(en) {
+function runBacktest(en, thresholds) {
   const startIdx = 30;
   if (en.length < startIdx + 5) return null;
   const initial = 10_000;
@@ -358,7 +397,7 @@ function runBacktest(en) {
       rnn: rnnPredict(en, i),
     };
     const ens = ensembleScore(sc);
-    const sig = signalFromScore(ens);
+    const sig = signalFromScore(ens, thresholds);
     const px = en[i].close;
     if (sig === "BUY" && pos === "CASH") {
       shares = cash / px;
@@ -418,18 +457,63 @@ function runBacktest(en) {
 /* ====================  COMPONENT  ==================== */
 export default function StockPredV5() {
   const [market, setMarket] = useState("US");
-  const [selected, setSelected] = useState("AAPL");
+  const [selected, setSelected] = useState("");
+  const [dashboardConfig, setDashboardConfig] = useState(null);
+  const [dashboardConfigError, setDashboardConfigError] = useState("");
+  const [universeByMarket, setUniverseByMarket] = useState({ US: [], KRX: [] });
+  const [universeSource, setUniverseSource] = useState("loading");
+  const [universeError, setUniverseError] = useState("");
   const [cache, setCache] = useState({});
+  const [symbolErrors, setSymbolErrors] = useState({});
+  const [modelEvidenceCache, setModelEvidenceCache] = useState({});
+  const [modelEvidenceErrors, setModelEvidenceErrors] = useState({});
+  const [modelEvidenceLoading, setModelEvidenceLoading] = useState(false);
+  const [paperStatus, setPaperStatus] = useState(null);
+  const [paperStatusError, setPaperStatusError] = useState("");
+  const [paperStatusLoading, setPaperStatusLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState("SIGNAL");
-  const [recSource, setRecSource] = useState("file"); // "file" | "api"
+  const [recSource, setRecSource] = useState("api"); // "file" | "api"
   const [bench, setBench] = useState({ open: false, rows: [], loading: false, progress: 0 });
   const [clock, setClock] = useState("");
   const [exportFlash, setExportFlash] = useState("");
 
-  const symbols = market === "US" ? US_SYMBOLS : KRX_SYMBOLS;
+  const symbols = universeByMarket[market] || [];
   const accent = market === "US" ? C.us : C.krx;
   const currency = market === "US" ? "$" : "₩";
+  const fallbackSymbolsByMarket = useMemo(() => ({
+    US: dashboardConfig?.markets?.US?.fallback_symbols || [],
+    KRX: dashboardConfig?.markets?.KRX?.fallback_symbols || [],
+  }), [dashboardConfig]);
+  const symbolPeriod = dashboardConfig?.api_defaults?.symbol_period || "";
+  const symbolProviderByMarket = dashboardConfig?.api_defaults?.symbol_data_provider || {};
+  const symbolDataProvider = symbolProviderByMarket[market] || (market === "KRX" ? "pykrx" : "yfinance");
+  const modelScoreDefaults = dashboardConfig?.api_defaults?.model_scores || {};
+  const recApiDefaults = dashboardConfig?.api_defaults?.recommend || {};
+  const signalThresholds = dashboardConfig?.signal_thresholds || {};
+  const signalThresholdLabel = signalThresholds.label || "";
+  const modelQualityConfig = dashboardConfig?.model_quality || {};
+  const recUniverse = useMemo(() => symbols.map((s) => s.symbol).join(","), [symbols]);
+  const universeIsLoading = universeSource === "loading";
+  const universeIsFallback = universeSource === "fallback";
+  const universeLabel = universeIsLoading ? "LOADING" : (universeIsFallback ? "FALLBACK" : "API");
+  const effectiveRecSource = market === "KRX" ? "api" : recSource;
+  const recApiReady = effectiveRecSource === "api" && !universeIsLoading && recUniverse.length > 0;
+  const recApiUrl = useMemo(() => {
+    const params = new URLSearchParams({
+      universe: recUniverse,
+      ...recApiDefaults,
+      output_dir: `reports/api_recommend_${market.toLowerCase()}`,
+    });
+    return apiUrl(`/api/recommend?${params.toString()}`);
+  }, [market, recUniverse, recApiDefaults]);
+  const recApiDefaultText = useMemo(
+    () => Object.entries(recApiDefaults).map(([key, value]) => `${key}=${value}`).join(" · "),
+    [recApiDefaults]
+  );
+  const pickSymbol = useCallback((symbol) => {
+    setSelected(symbol);
+  }, []);
 
   /* font + clock */
   useEffect(() => {
@@ -455,24 +539,144 @@ export default function StockPredV5() {
     };
   }, []);
 
+  /* runtime dashboard config */
+  useEffect(() => {
+    let cancelled = false;
+    fetchDashboardConfig()
+      .then((config) => {
+        if (cancelled) return;
+        setDashboardConfig(config);
+        setDashboardConfigError("");
+        setUniverseByMarket({
+          US: config.markets.US.fallback_symbols,
+          KRX: config.markets.KRX.fallback_symbols,
+        });
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setDashboardConfigError(e.message || "dashboard config unavailable");
+        setUniverseSource("fallback");
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  /* backend-owned universe */
+  useEffect(() => {
+    if (!dashboardConfig) return;
+    let cancelled = false;
+    setUniverseSource("loading");
+    setUniverseError("");
+    fetchUniverse(market)
+      .then((payload) => {
+        if (cancelled) return;
+        setUniverseByMarket((current) => ({ ...current, [market]: payload.symbols }));
+        setUniverseSource(payload.source || "backend_config");
+        setUniverseError("");
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        const fallback = fallbackSymbolsByMarket[market] || [];
+        setUniverseByMarket((current) => ({ ...current, [market]: fallback }));
+        setUniverseSource("fallback");
+        setUniverseError(e.message || "universe API failed");
+      });
+    return () => { cancelled = true; };
+  }, [market, dashboardConfig, fallbackSymbolsByMarket]);
+
   /* fetch on selection */
   useEffect(() => {
-    if (cache[selected]) return;
+    if (!selected) return;
+    if (!symbolPeriod) return;
+    if (cache[selected]) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
-    fetchSymbol(selected).then((res) => {
+    fetchSymbol(selected, symbolPeriod, symbolDataProvider).then((res) => {
       if (cancelled) return;
+      if (res.error || !Array.isArray(res.data) || res.data.length < 30) {
+        setSymbolErrors((current) => ({
+          ...current,
+          [selected]: res.error || "real provider returned insufficient OHLCV rows",
+        }));
+        setCache((c) => ({ ...c, [selected]: { ...res, fetchedAt: Date.now() } }));
+        setLoading(false);
+        return;
+      }
+      setSymbolErrors((current) => {
+        const next = { ...current };
+        delete next[selected];
+        return next;
+      });
       setCache((c) => ({ ...c, [selected]: { ...res, fetchedAt: Date.now() } }));
       setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [selected, cache]);
+  }, [selected, cache, symbolPeriod, symbolDataProvider]);
 
-  /* market toggle: reset to first symbol */
+  /* backend model evidence for primary SIGNAL/MODELS */
   useEffect(() => {
-    setSelected(market === "US" ? US_SYMBOLS[0].symbol : KRX_SYMBOLS[0].symbol);
+    if (!selected) return;
+    if (Object.keys(modelScoreDefaults).length === 0) return;
+    if (modelEvidenceCache[selected]) return;
+    let cancelled = false;
+    setModelEvidenceLoading(true);
+    fetchModelEvidence(selected, modelScoreDefaults)
+      .then((payload) => {
+        if (cancelled) return;
+        setModelEvidenceCache((current) => ({ ...current, [selected]: payload }));
+        setModelEvidenceErrors((current) => {
+          const next = { ...current };
+          delete next[selected];
+          return next;
+        });
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setModelEvidenceErrors((current) => ({
+          ...current,
+          [selected]: e.message || "MODEL EVIDENCE UNAVAILABLE",
+        }));
+      })
+      .finally(() => {
+        if (!cancelled) setModelEvidenceLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [selected, modelEvidenceCache, modelScoreDefaults]);
+
+  /* paper-only trading status */
+  useEffect(() => {
+    if (tab !== "PAPER" || paperStatusLoading) return;
+    let cancelled = false;
+    setPaperStatusLoading(true);
+    fetchPaperStatus()
+      .then((payload) => {
+        if (cancelled) return;
+        setPaperStatus(payload);
+        setPaperStatusError("");
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setPaperStatusError(e.message || "paper status API failed");
+      })
+      .finally(() => {
+        if (!cancelled) setPaperStatusLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [tab]);
+
+  /* universe source controls the initial selected symbol */
+  useEffect(() => {
+    if (universeSource === "loading") return;
+    const first = symbols[0]?.symbol;
+    if (!first) return;
+    const selectedIsValid = symbols.some((s) => s.symbol === selected);
+    if (!selected || !selectedIsValid) {
+      setSelected(first);
+    }
     setBench({ open: false, rows: [], loading: false, progress: 0 });
-  }, [market]);
+  }, [market, selected, symbols, universeSource]);
 
   const cur = cache[selected];
   const enriched = useMemo(() => (cur ? enrich(cur.data) : []), [cur]);
@@ -483,7 +687,7 @@ export default function StockPredV5() {
   const changePct = last && prev ? (change / prev.close) * 100 : 0;
 
   const feat = useMemo(() => (last ? features(enriched, lastIdx) : null), [enriched, lastIdx, last]);
-  const scores = useMemo(() => {
+  const browserScores = useMemo(() => {
     if (!last) return null;
     return {
       lr: lrPredict(feat),
@@ -492,14 +696,26 @@ export default function StockPredV5() {
       rnn: rnnPredict(enriched, lastIdx),
     };
   }, [feat, enriched, lastIdx, last]);
-  const ens = scores ? ensembleScore(scores) : null;
-  const sig = ens != null ? signalFromScore(ens) : null;
+  const modelEvidence = modelEvidenceCache[selected] || null;
+  const modelEvidenceError = modelEvidenceErrors[selected] || "";
+  const scores = useMemo(() => scoresFromModelEvidence(modelEvidence), [modelEvidence]);
+  const modelQualityWarning = useMemo(
+    () => getModelQualityWarning(modelEvidence, modelQualityConfig),
+    [modelEvidence, modelQualityConfig]
+  );
+  const ens = scores ? Number(modelEvidence.ensemble_score) : null;
+  const sig = scores ? modelEvidence.signal : null;
 
-  const backtest = useMemo(() => (enriched.length > 35 ? runBacktest(enriched) : null), [enriched]);
+  const backtest = useMemo(
+    () => (enriched.length > 35 ? runBacktest(enriched, signalThresholds) : null),
+    [enriched, signalThresholds]
+  );
 
   /* prefetch other symbols' last-prices for sidebar */
   const [sidebarSnap, setSidebarSnap] = useState({});
   useEffect(() => {
+    if (universeSource === "loading") return;
+    if (!symbolPeriod) return;
     let cancel = false;
     (async () => {
       for (const s of symbols) {
@@ -518,8 +734,17 @@ export default function StockPredV5() {
           }
           continue;
         }
-        const res = await fetchSymbol(s.symbol);
+        const res = await fetchSymbol(s.symbol, symbolPeriod, symbolDataProvider);
         if (cancel) return;
+        if (res.error || !Array.isArray(res.data) || res.data.length < 30) {
+          setSidebarSnap((x) => ({
+            ...x,
+            [s.symbol]: { error: res.error || "real provider unavailable", src: "ERROR" },
+          }));
+          setCache((c) => ({ ...c, [s.symbol]: { ...res, fetchedAt: Date.now() } }));
+          await new Promise((r) => setTimeout(r, 80));
+          continue;
+        }
         const en = enrich(res.data);
         const l = en[en.length - 1];
         const p = en[en.length - 2];
@@ -535,18 +760,24 @@ export default function StockPredV5() {
     })();
     return () => { cancel = true; };
     // eslint-disable-next-line
-  }, [market]);
+  }, [market, universeSource, symbols, symbolPeriod, symbolDataProvider]);
 
   /* benchmark scan */
   const runBenchmark = useCallback(async () => {
+    if (!symbolPeriod) return;
     setBench({ open: true, rows: [], loading: true, progress: 0 });
     const rows = [];
     let done = 0;
     for (const s of symbols) {
       let pkg = cache[s.symbol];
       if (!pkg) {
-        pkg = await fetchSymbol(s.symbol);
+        pkg = await fetchSymbol(s.symbol, symbolPeriod, symbolDataProvider);
         setCache((c) => ({ ...c, [s.symbol]: { ...pkg, fetchedAt: Date.now() } }));
+      }
+      if (pkg.error || !Array.isArray(pkg.data) || pkg.data.length < 30) {
+        done++;
+        setBench((b) => ({ ...b, progress: done / symbols.length }));
+        continue;
       }
       const en = enrich(pkg.data);
       const i = en.length - 1;
@@ -563,7 +794,7 @@ export default function StockPredV5() {
           symbol: s.symbol, name: s.name,
           price: en[i].close,
           chg: en[i - 1] ? ((en[i].close - en[i - 1].close) / en[i - 1].close) * 100 : 0,
-          rsi: en[i].rsi, ...sc, ens: e, sig: signalFromScore(e),
+          rsi: en[i].rsi, ...sc, ens: e, sig: signalFromScore(e, signalThresholds),
           src: pkg.source,
         });
       }
@@ -572,7 +803,7 @@ export default function StockPredV5() {
     }
     rows.sort((a, b) => b.ens - a.ens);
     setBench({ open: true, rows, loading: false, progress: 1 });
-  }, [cache, symbols]);
+  }, [cache, symbols, signalThresholds, symbolPeriod]);
 
   /* export helpers */
   const fmtMoney = (v) =>
@@ -605,7 +836,8 @@ export default function StockPredV5() {
         bbMid: last.bbMid, bbLower: last.bbLower,
         ema12: last.ema12, ema26: last.ema26, ema50: last.ema50,
       },
-      models: scores,
+      modelEvidence,
+      browserDemoModels: browserScores,
       ensemble: ens, signal: sig,
       backtest: backtest && {
         initial: backtest.initial,
@@ -630,7 +862,7 @@ export default function StockPredV5() {
   };
 
   const exportMD = () => {
-    if (!cur || !last || !scores) return;
+    if (!cur || !last) return;
     const md = `# STOCK·PRED v5.0 — ${selected}
 *Generated: ${new Date().toISOString()}*
 
@@ -654,15 +886,18 @@ export default function StockPredV5() {
 | EMA26 | ${last.ema26?.toFixed(2)} |
 
 ## Model Scores
+${modelEvidence && scores ? `Backend model evidence: ${modelEvidence.model_kind} from ${modelEvidence.provider}, generated ${modelEvidence.evidence?.generated_at_utc || "unknown"}.
+
 | Model | Score |
 |---|---|
-| LSTM (sim) | ${scores.lstm} |
-| Logistic Regression | ${scores.lr} |
-| XGBoost (sim) | ${scores.xgb} |
-| Elman RNN | ${scores.rnn} |
-| **Ensemble** | **${ens}** |
+| Backend main | ${scores.main} |
+| Logistic Regression | ${scores.lr ?? "N/A"} |
+| XGBoost | ${scores.xgb ?? "N/A"} |
+| LSTM | ${scores.lstm ?? "N/A"} |
+| RNN | ${scores.rnn ?? "N/A"} |
+| **Ensemble** | **${ens}** |` : "MODEL EVIDENCE UNAVAILABLE"}
 
-## Signal: **${sig}**
+## Signal: **${sig || "MODEL EVIDENCE UNAVAILABLE"}**
 
 ${backtest ? `## Backtest (\\$10,000 initial)
 - Final ML: ${fmtMoney(backtest.finalVal)}
@@ -729,7 +964,7 @@ ${backtest ? `## Backtest (\\$10,000 initial)
               <span style={{ color: C.textDim, fontSize: 10, letterSpacing: 1 }}>v5.0</span>
             </div>
             <div style={{ color: C.textMuted, fontSize: 10 }}>
-              ML ENSEMBLE · DUAL MARKET · CLIENT-SIDE INFERENCE
+              BACKEND MODEL EVIDENCE · DUAL MARKET · REPORT-ONLY
             </div>
           </div>
 
@@ -837,6 +1072,10 @@ ${backtest ? `## Backtest (\\$10,000 initial)
               }}
             >
               ── SYMBOLS · {market} ──
+              <div style={{ marginTop: 4, color: universeIsFallback ? C.amber : C.green, fontSize: 8 }}>
+                UNIVERSE: {universeLabel}
+                {universeError ? ` · ${universeError}` : ""}
+              </div>
             </div>
             {symbols.map((s) => {
               const snap = sidebarSnap[s.symbol];
@@ -844,7 +1083,7 @@ ${backtest ? `## Backtest (\\$10,000 initial)
               return (
                 <button
                   key={s.symbol}
-                  onClick={() => setSelected(s.symbol)}
+                  onClick={() => pickSymbol(s.symbol)}
                   style={{
                     width: "100%", textAlign: "left",
                     padding: "8px 10px", marginBottom: 3,
@@ -870,7 +1109,7 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                     >
                       {s.symbol.replace(".KS", "")}
                     </span>
-                    {snap && (
+                    {snap && !snap.error && (
                       <span
                         style={{
                           fontSize: 10,
@@ -883,7 +1122,7 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                   </div>
                   <div className="flex justify-between mt-0.5">
                     <span style={{ fontSize: 9, color: C.textDim }}>{s.name}</span>
-                    {snap && (
+                    {snap && !snap.error && (
                       <span style={{ fontSize: 9, color: C.textDim }}>
                         {market === "US"
                           ? `$${snap.price.toFixed(2)}`
@@ -891,8 +1130,8 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                       </span>
                     )}
                   </div>
-                  {snap?.src === "SYN" && (
-                    <div style={{ fontSize: 8, color: C.amber, letterSpacing: 1 }}>SYN</div>
+                  {snap?.error && (
+                    <div style={{ fontSize: 8, color: C.red, letterSpacing: 1 }}>DATA ERROR</div>
                   )}
                 </button>
               );
@@ -903,10 +1142,15 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                 fontSize: 9, color: C.textMuted, letterSpacing: 1, lineHeight: 1.5,
               }}
             >
-              <div>BUY ≥ 65 · HOLD 36-64 · SELL ≤ 35</div>
+              <div>{signalThresholdLabel}</div>
               <div style={{ marginTop: 4 }}>
-                ENS = LSTM·30 + LR·25 + XGB·25 + RNN·20
+                SIGNAL/MODELS = BACKEND MODEL EVIDENCE
               </div>
+              {dashboardConfigError && (
+                <div style={{ marginTop: 4, color: C.red }}>
+                  CONFIG: {dashboardConfigError}
+                </div>
+              )}
             </div>
           </aside>
 
@@ -919,7 +1163,7 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                 market={market}
                 onClose={() => setBench({ open: false, rows: [], loading: false, progress: 0 })}
                 onPick={(sym) => {
-                  setSelected(sym);
+                  pickSymbol(sym);
                   setBench({ open: false, rows: [], loading: false, progress: 0 });
                 }}
               />
@@ -937,6 +1181,7 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                 selected={selected}
                 symbolName={symbols.find((s) => s.symbol === selected)?.name || ""}
                 fmtMoney={fmtMoney}
+                error={symbolErrors[selected] || cur?.error || ""}
               />
             )}
           </main>
@@ -953,7 +1198,7 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                 display: "flex", borderBottom: `1px solid ${C.border}`, background: C.bgDeep,
               }}
             >
-              {["SIGNAL", "MODELS", "BACKTEST", "REC"].map((t) => (
+              {["SIGNAL", "MODELS", "BACKTEST", "REC", "PAPER"].map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -982,10 +1227,26 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                   sigColor={sigColor}
                   feat={feat}
                   accent={accent}
+                  modelEvidence={modelEvidence}
+                  modelEvidenceError={modelEvidenceError}
+                  modelEvidenceLoading={modelEvidenceLoading}
+                  modelQualityWarning={modelQualityWarning}
+                  signalThresholdLabel={signalThresholdLabel}
+                  signalThresholds={signalThresholds}
                 />
               )}
               {tab === "MODELS" && (
-                <ModelsTab scores={scores} ens={ens} sig={sig} sigColor={sigColor} />
+                <ModelsTab
+                  scores={scores}
+                  ens={ens}
+                  sig={sig}
+                  sigColor={sigColor}
+                  modelEvidence={modelEvidence}
+                  modelEvidenceError={modelEvidenceError}
+                  modelEvidenceLoading={modelEvidenceLoading}
+                  modelQualityWarning={modelQualityWarning}
+                  signalThresholds={signalThresholds}
+                />
               )}
               {tab === "BACKTEST" && (
                 <BacktestTab
@@ -1005,27 +1266,76 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                     ].map((s) => (
                       <button
                         key={s.k}
+                        disabled={market === "KRX" && s.k === "file"}
                         onClick={() => setRecSource(s.k)}
                         style={{
                           flex: 1, padding: "4px 0",
-                          background: recSource === s.k ? C.panelHi : "transparent",
-                          border: `1px solid ${recSource === s.k ? accent : C.border}`,
-                          color: recSource === s.k ? accent : C.textMuted,
+                          background: effectiveRecSource === s.k ? C.panelHi : "transparent",
+                          border: `1px solid ${effectiveRecSource === s.k ? accent : C.border}`,
+                          color: market === "KRX" && s.k === "file" ? C.textMuted : (effectiveRecSource === s.k ? accent : C.textMuted),
+                          opacity: market === "KRX" && s.k === "file" ? 0.45 : 1,
                           fontFamily: FONT, fontSize: 8, letterSpacing: 1.5, fontWeight: 600,
-                          cursor: "pointer",
+                          cursor: market === "KRX" && s.k === "file" ? "not-allowed" : "pointer",
                         }}
                       >
                         {s.l}
                       </button>
                     ))}
                   </div>
-                  <RecommendationPanel
-                    jsonPath={recSource === "file" ? "/dashboard_snapshot.json" : null}
-                    apiUrl={recSource === "api" ? "/api/recommend" : null}
-                    currency={currency}
-                    accent={accent}
-                  />
+                  {effectiveRecSource === "api" && (
+                    <div style={{
+                      margin: "8px 8px 0",
+                      padding: "6px 8px",
+                      border: `1px solid ${C.border}`,
+                      color: C.textDim,
+                      background: C.bgDeep,
+                      fontFamily: FONT,
+                      fontSize: 8,
+                      letterSpacing: 1,
+                      lineHeight: 1.5,
+                    }}>
+                      <span style={{ color: accent, fontWeight: 700 }}>API REQUEST DEFAULTS</span>
+                      <span> · {recApiDefaultText}</span>
+                    </div>
+                  )}
+                  {effectiveRecSource === "file" && (
+                    <div style={{
+                      margin: "8px 8px 0",
+                      padding: "6px 8px",
+                      border: `1px solid ${C.amber}`,
+                      color: C.amber,
+                      background: C.bgDeep,
+                      fontFamily: FONT,
+                      fontSize: 8,
+                      letterSpacing: 1,
+                      lineHeight: 1.5,
+                    }}>
+                      STATIC SNAPSHOT · FILE mode reads saved public JSON. It is not live market data.
+                    </div>
+                  )}
+                  {effectiveRecSource === "api" && !recApiReady ? (
+                    <div style={{ padding: 12, color: C.textDim, fontSize: 10 }}>
+                      REC API is waiting for `/api/universe` before requesting recommendations.
+                    </div>
+                  ) : (
+                    <RecommendationPanel
+                      key={`${market}-${effectiveRecSource}-${recUniverse}`}
+                      jsonPath={effectiveRecSource === "file" ? "/dashboard_snapshot.json" : null}
+                      apiUrl={effectiveRecSource === "api" ? recApiUrl : null}
+                      currency={currency}
+                      accent={accent}
+                    />
+                  )}
                 </div>
+              )}
+              {tab === "PAPER" && (
+                <PaperTradingTab
+                  status={paperStatus}
+                  loading={paperStatusLoading}
+                  error={paperStatusError}
+                  accent={accent}
+                  fmtMoney={fmtMoney}
+                />
               )}
             </div>
           </aside>
@@ -1040,7 +1350,29 @@ ${backtest ? `## Backtest (\\$10,000 initial)
 function CenterPanel({
   cur, loading, last, prev, change, changePct, chartSlice, accent,
   market, selected, symbolName, fmtMoney,
+  error,
 }) {
+  if (error) {
+    const isNetworkError = /failed to fetch|abort|network|request failed/i.test(String(error));
+    const failureReason = isNetworkError
+      ? "the backend API could not be reached."
+      : "the backend/provider did not return enough OHLCV rows.";
+    return (
+      <div
+        style={{
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          height: "100%", color: C.amber, fontSize: 12, letterSpacing: 1.5, textAlign: "center", padding: 24,
+        }}
+      >
+        <div style={{ color: C.red, fontWeight: 700, marginBottom: 8 }}>REAL DATA LOAD FAILED</div>
+        <div style={{ maxWidth: 520, lineHeight: 1.7 }}>
+          {selected} chart data was not rendered because {failureReason}
+        </div>
+        <div style={{ marginTop: 8, color: C.textDim, fontSize: 10 }}>{error}</div>
+      </div>
+    );
+  }
+
   if (loading || !cur || !last) {
     return (
       <div
@@ -1081,7 +1413,7 @@ function CenterPanel({
           ({changePct >= 0 ? "+" : ""}{changePct.toFixed(2)}%)
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <Badge label="SRC" value={cur.source} color={cur.source === "YAHOO" ? C.green : C.amber} />
+          <Badge label="SRC" value={cur.source} color={cur.source === "YAHOO" || cur.source === "YFINANCE" ? C.green : C.amber} />
           <Badge label="O" value={fmtMoney(last.open)} color={C.textDim} />
           <Badge label="H" value={fmtMoney(last.high)} color={C.green} />
           <Badge label="L" value={fmtMoney(last.low)} color={C.red} />
@@ -1227,8 +1559,37 @@ function Panel({ title, right, rightColor, children }) {
 }
 
 /* ----------  SIGNAL TAB  ---------- */
-function SignalTab({ last, scores, ens, sig, sigColor, feat, accent }) {
-  if (!last || !scores) return <Empty />;
+function EvidenceUnavailable({ loading, error }) {
+  return (
+    <div
+      style={{
+        background: C.bgDeep,
+        border: `1px solid ${loading ? C.amber : C.red}`,
+        color: loading ? C.amber : C.red,
+        padding: 12,
+        marginBottom: 12,
+        fontSize: 10,
+        letterSpacing: 1.2,
+        lineHeight: 1.5,
+      }}
+    >
+      <div style={{ fontWeight: 700, marginBottom: 4 }}>
+        {loading ? "MODEL EVIDENCE LOADING" : "MODEL EVIDENCE UNAVAILABLE"}
+      </div>
+      <div style={{ color: C.textDim }}>
+        SIGNAL and MODELS are waiting for backend `/api/model-scores`; browser simulation is not used as the primary score.
+      </div>
+      {error && <div style={{ marginTop: 6 }}>{error}</div>}
+    </div>
+  );
+}
+
+function SignalTab({
+  last, scores, ens, sig, sigColor, feat, accent,
+  modelEvidence, modelEvidenceError, modelEvidenceLoading,
+  modelQualityWarning, signalThresholdLabel, signalThresholds,
+}) {
+  if (!last) return <Empty />;
   const rsiState = last.rsi > 70 ? "OVERBOUGHT" : last.rsi < 30 ? "OVERSOLD" : "NEUTRAL";
   const rsiColor = last.rsi > 70 ? C.red : last.rsi < 30 ? C.green : C.textDim;
   const macdState = last.macdHist > 0 ? "BULLISH" : "BEARISH";
@@ -1238,38 +1599,67 @@ function SignalTab({ last, scores, ens, sig, sigColor, feat, accent }) {
 
   return (
     <>
-      {/* SIGNAL CARD */}
-      <div
-        style={{
-          background: C.bgDeep,
-          border: `2px solid ${sigColor}`,
-          padding: 16, marginBottom: 14,
-          textAlign: "center", position: "relative",
-          boxShadow: `0 0 24px ${sigColor}33, inset 0 0 24px ${sigColor}11`,
-        }}
-      >
-        <div style={{ fontSize: 9, color: C.textMuted, letterSpacing: 2, marginBottom: 4 }}>
-          ENSEMBLE SIGNAL
+      {scores ? (
+        <div
+          style={{
+            background: C.bgDeep,
+            border: `2px solid ${sigColor}`,
+            padding: 16, marginBottom: 14,
+            textAlign: "center", position: "relative",
+            boxShadow: `0 0 24px ${sigColor}33, inset 0 0 24px ${sigColor}11`,
+          }}
+        >
+          <div style={{ fontSize: 9, color: C.textMuted, letterSpacing: 2, marginBottom: 4 }}>
+            BACKEND MODEL EVIDENCE
+          </div>
+          <div style={{ fontSize: 36, fontWeight: 700, color: sigColor, letterSpacing: 4, lineHeight: 1 }}>
+            {sig}
+          </div>
+          <div style={{ fontSize: 11, color: C.textDim, marginTop: 6, letterSpacing: 1 }}>
+            SCORE <span style={{ color: sigColor, fontWeight: 700, fontSize: 14 }}>{ens}</span> / 100
+          </div>
+          <div style={{ fontSize: 9, color: C.textMuted, marginTop: 6, lineHeight: 1.5 }}>
+            {modelEvidence.model_kind} · {modelEvidence.provider} · rows {modelEvidence.evidence?.row_count ?? "N/A"}
+          </div>
+          {modelQualityWarning && (
+            <div
+              style={{
+                display: "inline-block",
+                marginTop: 10,
+                padding: "5px 8px",
+                border: `1px solid ${C.amber}`,
+                color: C.amber,
+                background: `${C.amber}14`,
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: 1,
+              }}
+            >
+              {modelQualityWarning}
+            </div>
+          )}
+          <div style={{ marginTop: 10, height: 4, background: C.border, position: "relative" }}>
+            <div
+              style={{
+                position: "absolute", left: 0, top: 0, height: "100%",
+                width: `${ens}%`, background: sigColor,
+                boxShadow: `0 0 8px ${sigColor}`,
+              }}
+            />
+            {Number.isFinite(Number(signalThresholds?.sell)) && (
+              <div style={{ position: "absolute", left: `${Number(signalThresholds.sell)}%`, top: -2, width: 1, height: 8, background: C.textMuted }} />
+            )}
+            {Number.isFinite(Number(signalThresholds?.buy)) && (
+              <div style={{ position: "absolute", left: `${Number(signalThresholds.buy)}%`, top: -2, width: 1, height: 8, background: C.textMuted }} />
+            )}
+          </div>
+          {signalThresholdLabel && (
+            <div style={{ fontSize: 8, color: C.textMuted, marginTop: 6 }}>{signalThresholdLabel}</div>
+          )}
         </div>
-        <div style={{ fontSize: 36, fontWeight: 700, color: sigColor, letterSpacing: 4, lineHeight: 1 }}>
-          {sig}
-        </div>
-        <div style={{ fontSize: 11, color: C.textDim, marginTop: 6, letterSpacing: 1 }}>
-          SCORE <span style={{ color: sigColor, fontWeight: 700, fontSize: 14 }}>{ens}</span> / 100
-        </div>
-        {/* score bar */}
-        <div style={{ marginTop: 10, height: 4, background: C.border, position: "relative" }}>
-          <div
-            style={{
-              position: "absolute", left: 0, top: 0, height: "100%",
-              width: `${ens}%`, background: sigColor,
-              boxShadow: `0 0 8px ${sigColor}`,
-            }}
-          />
-          <div style={{ position: "absolute", left: "35%", top: -2, width: 1, height: 8, background: C.textMuted }} />
-          <div style={{ position: "absolute", left: "65%", top: -2, width: 1, height: 8, background: C.textMuted }} />
-        </div>
-      </div>
+      ) : (
+        <EvidenceUnavailable loading={modelEvidenceLoading} error={modelEvidenceError} />
+      )}
 
       {/* INDICATORS */}
       <SectionLabel>INDICATORS</SectionLabel>
@@ -1280,11 +1670,17 @@ function SignalTab({ last, scores, ens, sig, sigColor, feat, accent }) {
 
       {/* MODEL BARS */}
       <SectionLabel style={{ marginTop: 14 }}>MODELS</SectionLabel>
-      <ModelBar label="LSTM" value={scores.lstm} color={C.lstm} />
-      <ModelBar label="LogReg" value={scores.lr} color={C.lr} />
-      <ModelBar label="XGBoost" value={scores.xgb} color={C.xgb} />
-      <ModelBar label="RNN" value={scores.rnn} color={C.rnn} />
-      <ModelBar label="ENSEMBLE" value={ens} color={accent} weight={700} />
+      {scores ? (
+        <>
+          <ModelBar label="Backend Main" value={scores.main} color={accent} weight={700} />
+          <ModelBar label="LogReg" value={scores.lr} color={C.lr} />
+          <ModelBar label="XGBoost" value={scores.xgb} color={C.xgb} />
+          <ModelBar label="LSTM" value={scores.lstm} color={C.lstm} />
+          <ModelBar label="RNN" value={scores.rnn} color={C.rnn} />
+        </>
+      ) : (
+        <ModelBar label="Backend Main" value={null} color={accent} weight={700} />
+      )}
     </>
   );
 }
@@ -1328,18 +1724,20 @@ function IndRow({ label, value, state, color, bar, barMax }) {
 }
 
 function ModelBar({ label, value, color, weight }) {
+  const displayValue = value == null || Number.isNaN(value) ? "N/A" : value;
+  const width = value == null || Number.isNaN(value) ? 0 : Math.max(0, Math.min(100, value));
   return (
     <div style={{ marginBottom: 6 }}>
       <div className="flex justify-between" style={{ marginBottom: 2 }}>
         <span style={{ fontSize: 10, color: C.textDim, letterSpacing: 1, fontWeight: weight || 400 }}>
           {label}
         </span>
-        <span style={{ fontSize: 11, color, fontWeight: weight || 600 }}>{value}</span>
+        <span style={{ fontSize: 11, color, fontWeight: weight || 600 }}>{displayValue}</span>
       </div>
       <div style={{ height: weight ? 6 : 4, background: C.border, position: "relative" }}>
         <div
           style={{
-            height: "100%", width: `${value}%`, background: color,
+            height: "100%", width: `${width}%`, background: color,
             boxShadow: weight ? `0 0 6px ${color}` : "none",
             transition: "width .3s",
           }}
@@ -1350,18 +1748,21 @@ function ModelBar({ label, value, color, weight }) {
 }
 
 /* ----------  MODELS TAB  ---------- */
-function ModelsTab({ scores, ens, sig, sigColor }) {
-  if (!scores) return <Empty />;
+function ModelsTab({
+  scores, ens, sig, sigColor,
+  modelEvidence, modelEvidenceError, modelEvidenceLoading,
+  modelQualityWarning, signalThresholds,
+}) {
+  if (!scores) {
+    return <EvidenceUnavailable loading={modelEvidenceLoading} error={modelEvidenceError} />;
+  }
   const data = [
-    { name: "LSTM", value: scores.lstm, color: C.lstm,
-      desc: "20-step recurrent · forget/input/output gates · tanh+sigmoid" },
-    { name: "LogReg", value: scores.lr, color: C.lr,
-      desc: "Sigmoid(weighted features) · RSI · MACD · momentum · BB · vol" },
-    { name: "XGBoost", value: scores.xgb, color: C.xgb,
-      desc: "3 decision stumps · trend / momentum / positioning · weighted" },
-    { name: "Elman RNN", value: scores.rnn, color: C.rnn,
-      desc: "15-step simple recurrent · single hidden state · tanh activation" },
+    { name: "Main", value: scores.main, color: sigColor },
+    { name: "LogReg", value: scores.lr, color: C.lr },
+    { name: "XGBoost", value: scores.xgb, color: C.xgb },
+    { name: "LSTM", value: scores.lstm, color: C.lstm },
   ];
+  const chartData = data.map((item) => ({ ...item, value: item.value == null ? 0 : item.value }));
 
   return (
     <>
@@ -1376,19 +1777,40 @@ function ModelsTab({ scores, ens, sig, sigColor }) {
           {ens}
         </div>
         <div style={{ fontSize: 10, color: sigColor, letterSpacing: 2, marginTop: 2 }}>{sig}</div>
+        {modelQualityWarning && (
+          <div
+            style={{
+              display: "inline-block",
+              marginTop: 8,
+              padding: "5px 8px",
+              border: `1px solid ${C.amber}`,
+              color: C.amber,
+              background: `${C.amber}14`,
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: 1,
+            }}
+          >
+            {modelQualityWarning}
+          </div>
+        )}
       </div>
 
-      <SectionLabel>MODEL COMPARISON</SectionLabel>
+      <SectionLabel>BACKEND MODEL COMPARISON</SectionLabel>
       <ResponsiveContainer width="100%" height={140}>
-        <BarChart data={data} margin={{ top: 10, right: 4, left: -28, bottom: 0 }}>
+        <BarChart data={chartData} margin={{ top: 10, right: 4, left: -28, bottom: 0 }}>
           <CartesianGrid stroke={C.grid} strokeDasharray="2 4" vertical={false} />
           <XAxis dataKey="name" tick={{ fill: C.textDim, fontSize: 9, fontFamily: FONT }} stroke={C.border} />
           <YAxis domain={[0, 100]} tick={{ fill: C.textDim, fontSize: 9, fontFamily: FONT }} stroke={C.border} />
           <Tooltip
             contentStyle={{ background: C.bgDeep, border: `1px solid ${C.borderHi}`, fontFamily: FONT, fontSize: 11, color: C.text }}
           />
-          <ReferenceLine y={65} stroke={C.green} strokeDasharray="3 3" />
-          <ReferenceLine y={35} stroke={C.red} strokeDasharray="3 3" />
+          {Number.isFinite(Number(signalThresholds?.buy)) && (
+            <ReferenceLine y={Number(signalThresholds.buy)} stroke={C.green} strokeDasharray="3 3" />
+          )}
+          {Number.isFinite(Number(signalThresholds?.sell)) && (
+            <ReferenceLine y={Number(signalThresholds.sell)} stroke={C.red} strokeDasharray="3 3" />
+          )}
           <Bar dataKey="value" radius={[2, 2, 0, 0]}>
             {data.map((d, i) => (
               <rect key={i} fill={d.color} />
@@ -1397,25 +1819,23 @@ function ModelsTab({ scores, ens, sig, sigColor }) {
         </BarChart>
       </ResponsiveContainer>
 
-      <SectionLabel style={{ marginTop: 14 }}>WEIGHTING</SectionLabel>
+      <SectionLabel style={{ marginTop: 14 }}>EVIDENCE</SectionLabel>
       {[
-        { l: "LSTM", v: 30, c: C.lstm },
-        { l: "LogReg", v: 25, c: C.lr },
-        { l: "XGBoost", v: 25, c: C.xgb },
-        { l: "RNN", v: 20, c: C.rnn },
+        { l: "Provider", v: modelEvidence.provider, c: C.text },
+        { l: "Model", v: modelEvidence.model_kind, c: sigColor },
+        { l: "OOF coverage", v: `${((modelEvidence.evidence?.oof_coverage ?? 0) * 100).toFixed(1)}%`, c: C.lr },
+        { l: "Accuracy", v: (modelEvidence.evidence?.model_accuracy ?? 0).toFixed(3), c: C.hold },
+        { l: "AUC", v: (modelEvidence.evidence?.model_auc ?? 0.5).toFixed(3), c: C.xgb },
       ].map((w) => (
         <div key={w.l} style={{ marginBottom: 4 }}>
           <div className="flex justify-between">
             <span style={{ fontSize: 10, color: w.c }}>{w.l}</span>
-            <span style={{ fontSize: 10, color: C.textDim }}>{w.v}%</span>
-          </div>
-          <div style={{ height: 3, background: C.border }}>
-            <div style={{ height: "100%", width: `${w.v * 3.33}%`, background: w.c }} />
+            <span style={{ fontSize: 10, color: C.textDim }}>{w.v}</span>
           </div>
         </div>
       ))}
 
-      <SectionLabel style={{ marginTop: 14 }}>ARCHITECTURE</SectionLabel>
+      <SectionLabel style={{ marginTop: 14 }}>MODEL SCORES</SectionLabel>
       {data.map((d) => (
         <div
           key={d.name}
@@ -1430,7 +1850,6 @@ function ModelsTab({ scores, ens, sig, sigColor }) {
             </span>
             <span style={{ color: d.color, fontSize: 11, fontWeight: 600 }}>{d.value}</span>
           </div>
-          <div style={{ color: C.textDim, fontSize: 9, lineHeight: 1.4 }}>{d.desc}</div>
         </div>
       ))}
     </>
@@ -1503,6 +1922,188 @@ function BacktestTab({ backtest, market, fmtMoney, accent }) {
           ))
         )}
       </div>
+    </>
+  );
+}
+
+/* ----------  PAPER TAB  ---------- */
+function PaperTradingTab({ status, loading, error, accent, fmtMoney }) {
+  if (loading && !status) return <Empty />;
+  if (error) {
+    return (
+      <div style={{ padding: 12, color: C.red, background: C.bgDeep, border: `1px solid ${C.red}`, fontSize: 10 }}>
+        {error}
+      </div>
+    );
+  }
+  const latestRun = status?.latest_run;
+  const positions = Array.isArray(status?.positions) ? status.positions : [];
+  const rejected = Array.isArray(status?.rejected_signals) ? status.rejected_signals : [];
+  const equityCurve = Array.isArray(status?.equity_curve) ? status.equity_curve : [];
+  const lastEquity = equityCurve[equityCurve.length - 1]?.equity;
+  const drawdown = status?.drawdown || {};
+  const gate = status?.model_quality_gate || {};
+  const krxPilot = status?.krx_pilot || null;
+  const krxPositions = Array.isArray(krxPilot?.positions) ? krxPilot.positions : [];
+  const krxRejected = Array.isArray(krxPilot?.rejected_signals) ? krxPilot.rejected_signals : [];
+  const krxEquityCurve = Array.isArray(krxPilot?.equity_curve) ? krxPilot.equity_curve : [];
+  const krxLastEquity = krxEquityCurve[krxEquityCurve.length - 1]?.equity;
+  const krxDrawdown = krxPilot?.drawdown || {};
+  const krxBenchmark = krxPilot?.benchmark || {};
+  const krxMoney = (value) => `₩${Math.round(Number(value || 0)).toLocaleString()}`;
+
+  return (
+    <>
+      <div
+        style={{
+          background: C.bgDeep,
+          border: `1px solid ${accent}`,
+          padding: 10,
+          marginBottom: 12,
+        }}
+      >
+        <div style={{ color: accent, fontSize: 10, fontWeight: 700, letterSpacing: 1.2 }}>
+          Paper trading only - no broker orders
+        </div>
+        <div style={{ color: C.textDim, fontSize: 9, lineHeight: 1.6, marginTop: 4 }}>
+          Status {status?.status || "EMPTY"} · Run {latestRun?.run_id || "no run yet"}
+        </div>
+      </div>
+
+      <SectionLabel>SUMMARY</SectionLabel>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        <Stat label="POSITIONS" value={positions.length} color={positions.length ? C.green : C.textDim} />
+        <Stat label="REJECTED" value={rejected.length} color={rejected.length ? C.amber : C.textDim} />
+        <Stat label="EQUITY" value={Number.isFinite(Number(lastEquity)) ? fmtMoney(Number(lastEquity)) : "N/A"} color={C.text} />
+        <Stat
+          label="MAX DD"
+          value={Number.isFinite(Number(drawdown.max_drawdown_pct)) ? `${Number(drawdown.max_drawdown_pct).toFixed(2)}%` : "N/A"}
+          color={drawdown.promotion_hard_fail ? C.red : C.textDim}
+        />
+      </div>
+
+      <SectionLabel style={{ marginTop: 14 }}>VIRTUAL POSITIONS</SectionLabel>
+      {positions.length === 0 ? (
+        <div style={{ color: C.textDim, fontSize: 10, padding: "8px 0" }}>no virtual positions</div>
+      ) : (
+        positions.map((p) => (
+          <div
+            key={`${p.run_id}-${p.ticker}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 58px 74px",
+              gap: 6,
+              padding: "7px 8px",
+              marginBottom: 5,
+              background: C.bgDeep,
+              borderLeft: `2px solid ${C.green}`,
+              fontSize: 10,
+            }}
+          >
+            <span style={{ color: C.text, fontWeight: 700 }}>{p.ticker}</span>
+            <span style={{ color: C.textDim, textAlign: "right" }}>{p.shares} sh</span>
+            <span style={{ color: C.text, textAlign: "right" }}>{fmtMoney(Number(p.market_value || 0))}</span>
+          </div>
+        ))
+      )}
+
+      <SectionLabel style={{ marginTop: 14 }}>REJECTED SIGNALS</SectionLabel>
+      {rejected.length === 0 ? (
+        <div style={{ color: C.textDim, fontSize: 10, padding: "8px 0" }}>no rejected signals</div>
+      ) : (
+        rejected.slice(0, 8).map((r, i) => (
+          <div
+            key={`${r.ticker}-${r.reason}-${i}`}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "84px 1fr",
+              gap: 8,
+              padding: "7px 8px",
+              marginBottom: 5,
+              background: C.bgDeep,
+              borderLeft: `2px solid ${C.amber}`,
+              fontSize: 10,
+            }}
+          >
+            <span style={{ color: C.text, fontWeight: 700 }}>{r.ticker}</span>
+            <span style={{ color: C.amber }}>{r.reason}</span>
+          </div>
+        ))
+      )}
+
+      <SectionLabel style={{ marginTop: 14 }}>MODEL QUALITY GATE</SectionLabel>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6 }}>
+        <Stat label="MIN AUC" value={Number(gate.min_model_auc ?? 0.55).toFixed(2)} color={C.xgb} />
+        <Stat label="MIN ACC" value={Number(gate.min_model_accuracy ?? 0.52).toFixed(2)} color={C.hold} />
+        <Stat label="MIN OOF" value={`${(Number(gate.min_oof_coverage ?? 0.8) * 100).toFixed(0)}%`} color={C.lr} />
+      </div>
+
+      {krxPilot && (
+        <>
+          <SectionLabel style={{ marginTop: 14 }}>KRX PILOT</SectionLabel>
+          <div style={{ background: C.bgDeep, border: `1px solid ${C.krx}`, padding: 10, marginBottom: 10 }}>
+            <div style={{ color: C.krx, fontSize: 10, fontWeight: 700, letterSpacing: 1.2 }}>
+              {krxPilot.pilot_label || "KRX paper trading pilot"}
+            </div>
+            <div style={{ color: C.textDim, fontSize: 9, lineHeight: 1.6, marginTop: 4 }}>
+              Paper trading only - no broker orders · Status {krxPilot.status || "EMPTY"} · Run {krxPilot.latest_run?.run_id || "no run yet"}
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
+            <Stat label="KRX EQUITY" value={Number.isFinite(Number(krxLastEquity)) ? krxMoney(krxLastEquity) : "N/A"} color={C.text} />
+            <Stat
+              label="KRX MAX DD"
+              value={Number.isFinite(Number(krxDrawdown.max_drawdown_pct)) ? `${Number(krxDrawdown.max_drawdown_pct).toFixed(2)}%` : "N/A"}
+              color={krxDrawdown.not_promotable ? C.red : C.textDim}
+            />
+            <Stat label="BENCHMARK" value={krxBenchmark.ticker || "N/A"} color={C.krx} />
+            <Stat label="BENCH STATUS" value={krxBenchmark.status || "N/A"} color={krxBenchmark.not_promotable ? C.red : C.green} />
+          </div>
+          {krxPositions.length === 0 ? (
+            <div style={{ color: C.textDim, fontSize: 10, padding: "8px 0" }}>no KRX virtual positions</div>
+          ) : (
+            krxPositions.map((p) => (
+              <div
+                key={`${p.run_id || "krx"}-${p.ticker}`}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 58px 82px",
+                  gap: 6,
+                  padding: "7px 8px",
+                  marginBottom: 5,
+                  background: C.bgDeep,
+                  borderLeft: `2px solid ${C.krx}`,
+                  fontSize: 10,
+                }}
+              >
+                <span style={{ color: C.text, fontWeight: 700 }}>{p.ticker}</span>
+                <span style={{ color: C.textDim, textAlign: "right" }}>{p.shares} sh</span>
+                <span style={{ color: C.text, textAlign: "right" }}>{krxMoney(p.market_value)}</span>
+              </div>
+            ))
+          )}
+          {krxRejected.length > 0 && (
+            krxRejected.slice(0, 8).map((r, i) => (
+              <div
+                key={`${r.ticker}-${r.reason}-${i}`}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "84px 1fr",
+                  gap: 8,
+                  padding: "7px 8px",
+                  marginBottom: 5,
+                  background: C.bgDeep,
+                  borderLeft: `2px solid ${C.amber}`,
+                  fontSize: 10,
+                }}
+              >
+                <span style={{ color: C.text, fontWeight: 700 }}>{r.ticker}</span>
+                <span style={{ color: C.amber }}>{r.reason}</span>
+              </div>
+            ))
+          )}
+        </>
+      )}
     </>
   );
 }
@@ -1625,7 +2226,7 @@ function BenchmarkPanel({ bench, accent, market, onClose, onPick }) {
                   {r.symbol.replace(".KS", "")}
                 </span>
                 <span style={{ fontSize: 9, color: C.textDim }}>
-                  {r.name} {r.src === "SYN" && <span style={{ color: C.amber, marginLeft: 4 }}>SYN</span>}
+                  {r.name}
                 </span>
               </div>
               <span style={{ textAlign: "right", color: C.text, fontWeight: 500 }}>
@@ -1692,7 +2293,7 @@ function BenchmarkPanel({ bench, accent, market, onClose, onPick }) {
             SELL: <span style={{ color: C.sell }}>{bench.rows.filter((r) => r.sig === "SELL").length}</span>
           </div>
           <div>
-            ◇ Click any row to load full chart · Synthetic data marked SYN
+            ◇ Click any row to load full chart · Data source labels come from API results
           </div>
         </div>
       )}

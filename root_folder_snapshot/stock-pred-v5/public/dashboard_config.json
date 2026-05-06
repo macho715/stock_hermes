@@ -1,0 +1,62 @@
+{
+  "markets": {
+    "US": {
+      "fallback_symbols": [
+        { "symbol": "AAPL", "name": "Apple Inc." },
+        { "symbol": "MSFT", "name": "Microsoft" },
+        { "symbol": "NVDA", "name": "NVIDIA" },
+        { "symbol": "TSLA", "name": "Tesla" },
+        { "symbol": "AMZN", "name": "Amazon" },
+        { "symbol": "GOOGL", "name": "Alphabet" },
+        { "symbol": "META", "name": "Meta" },
+        { "symbol": "SPY", "name": "S&P 500 ETF" },
+        { "symbol": "QQQ", "name": "Nasdaq 100 ETF" }
+      ]
+    },
+    "KRX": {
+      "fallback_symbols": [
+        { "symbol": "005930.KS", "name": "삼성전자", "basePrice": 75000 },
+        { "symbol": "000660.KS", "name": "SK하이닉스", "basePrice": 180000 },
+        { "symbol": "005380.KS", "name": "현대차", "basePrice": 220000 },
+        { "symbol": "005490.KS", "name": "POSCO홀딩스", "basePrice": 380000 },
+        { "symbol": "035420.KS", "name": "NAVER", "basePrice": 195000 },
+        { "symbol": "035720.KS", "name": "카카오", "basePrice": 42000 },
+        { "symbol": "051910.KS", "name": "LG화학", "basePrice": 320000 },
+        { "symbol": "006400.KS", "name": "삼성SDI", "basePrice": 280000 },
+        { "symbol": "003670.KS", "name": "포스코퓨처엠", "basePrice": 195000 }
+      ]
+    }
+  },
+  "api_defaults": {
+    "symbol_period": "6mo",
+    "symbol_data_provider": {
+      "US": "yfinance",
+      "KRX": "pykrx"
+    },
+    "model_scores": {
+      "period": "3y",
+      "model_kind": "auto",
+      "data_provider": "yfinance",
+      "use_lstm": "1"
+    },
+    "recommend": {
+      "track": "BOTH",
+      "period": "3y",
+      "top": "5",
+      "synthetic": "0",
+      "data_provider": "yfinance",
+      "model_kind": "auto"
+    }
+  },
+  "signal_thresholds": {
+    "buy": 56,
+    "sell": 44,
+    "label": "BUY >= 56 · HOLD 45-55 · SELL <= 44"
+  },
+  "model_quality": {
+    "warning": "모델 품질 낮음: 검토 전용",
+    "min_auc": 0.5,
+    "min_accuracy": 0.5,
+    "min_oof_coverage": 0.7
+  }
+}
