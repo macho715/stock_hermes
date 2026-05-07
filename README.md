@@ -349,7 +349,8 @@ Expected current baseline from local docs and recent verification:
 | Check | Expected |
 |---|---|
 | Backend CLI help | Lists `env`, `benchmark`, `report`, `predict`, `recommend`, `ops-v1`, `dashboard-export`, `demo`, `journal`, `self-test` |
-| Backend tests | 19 tests pass |
+| Backend tests | 509 tests pass (2026-05-08), up from 340 tests |
+| Test coverage | TOTAL 89% (2026-05-08), up from 81% |
 | TensorFlow CPU/LSTM smoke | `.\run.ps1 tensorflow-check` prints `TF_VERSION=2.21.0`, CPU device, `LSTM_SMOKE=PASS` |
 | Dashboard build | Vite build succeeds; chunk-size warning may appear |
 
@@ -559,3 +560,50 @@ Observed result: the REC candidate readiness test passed, the dashboard regressi
 Browser evidence:
 
 - `stock-pred-v5/test-results/dashboard-rec-investment-grade-20260507.png`
+
+## 19. Test Coverage Boost - 2026-05-08
+
+테스트 스위트를 340 → **509 tests**, 총 커버리지 80.79% → **89%** 로 확장했습니다.
+CI 게이트(`fail_under=75`)를 유지하면서 3개 핵심 모듈 모두 ≥80% 개별 목표를 달성했습니다.
+
+### Coverage summary
+
+| Module | Before | After | Test file |
+|---|---|---|---|
+| `ensemble_model.py` | 49% | **83%** | `test_ensemble_model_extra.py` (50 tests) |
+| `kevpe_adapter.py` | 43% | **91%** | `test_kevpe_adapter.py` (57 tests) |
+| `main.py` | 51% | **98%** | `test_main_extra.py` (61 tests) |
+| `risk_rules.py` | — | **100%** | `test_risk_rules.py` |
+| `reports.py` | — | **100%** | `test_reports.py` |
+| `data_providers.py` | — | **99%** | `test_data_providers_extra.py` |
+| **TOTAL** | 80.79% | **89%** | 509 tests across 15+ files |
+
+### New test files added
+
+| File | Tests | Coverage target |
+|---|---|---|
+| `tests/test_ensemble_model_extra.py` | 50 | `ensemble_model.py` ML fit/predict paths, fallback chain, walk-forward CV |
+| `tests/test_kevpe_adapter.py` | 57 | `kevpe_adapter.py` unavailable/available branches, singleton, signal helpers |
+| `tests/test_main_extra.py` | 61 | `main.py` all `cmd_*` dispatchers, legacy arg normalization, `build_parser` |
+| `tests/test_risk_rules.py` | — | `risk_rules.py` Track-S/Track-L gate logic (100%) |
+| `tests/test_reports.py` | — | `reports.py` Markdown/JSON/CSV helpers (100%) |
+| `tests/test_data_providers_extra.py` | — | `data_providers.py` provider routing and fallback (99%) |
+
+### New documentation added
+
+| File | Purpose |
+|---|---|
+| `docs/CONTRIB.md` | Development workflow, available scripts, environment setup, testing procedures |
+| `docs/RUNBOOK.md` | Deployment procedures, monitoring, common issues, rollback |
+| `docs/PHASE1_GAP_ANALYSIS_2026-05-07.md` | Phase 1 gap analysis and next-phase planning |
+
+### Verification
+
+```powershell
+cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+.\.venv\Scripts\python.exe -m pytest -q --tb=no
+```
+
+Observed result: **509 passed**, 89% total coverage (CI gate `fail_under=75` in `pyproject.toml`).
+
+Commits: `09c8187` (340 tests, 80.79%), `d7a3022` (509 tests, 89%).
