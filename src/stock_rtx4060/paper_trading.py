@@ -62,6 +62,9 @@ class PaperTradingConfig:
     phase1_us_only: bool = True
     force_rerun: bool = False
     rerun_reason: str | None = None
+    min_buy_score: float = 56.0
+    max_open_positions: int = 10
+    max_daily_new_positions: int = 3
 
     @property
     def effective_run_date(self) -> str:
