@@ -60,6 +60,9 @@ stock_rtx4060_unified/
 │   ├── AGENTS.md               # Agent-facing project guidance
 │   ├── UIUX.md                 # UI/UX design notes
 │   ├── REPORTS_POLICY.md       # Report output policy
+│   ├── CONTRIB.md              # Development workflow, scripts, environment setup, testing procedures
+│   ├── RUNBOOK.md              # Deployment procedures, monitoring, common issues, rollback
+│   ├── PHASE1_GAP_ANALYSIS_2026-05-07.md  # Phase 1 gap analysis and next-phase planning
 │   └── plan*.md / SPEC*.md     # Feature plans and specs
 ├── .continue/checks/           # Flat Continue PR-quality check files
 │   ├── 01-financial-safety-boundary.md
