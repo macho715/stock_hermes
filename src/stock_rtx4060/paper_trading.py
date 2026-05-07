@@ -48,6 +48,9 @@ class PaperTradingConfig:
     min_model_auc: float = 0.55
     min_model_accuracy: float = 0.52
     min_oof_coverage: float = 0.80
+    min_buy_score: float = 56.0
+    max_open_positions: int | None = None
+    max_daily_new_positions: int | None = None
     max_missing_bar_ratio: float = 0.05
     stale_days: int = 10
     split_raw_move_threshold: float = 0.35
@@ -113,6 +116,7 @@ class PaperDecision:
         return {
             "schema_version": SCHEMA_VERSION,
             "run_id": run_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "ticker": self.ticker,
             "status": self.status,
             "reason": self.reason,
@@ -151,6 +155,8 @@ class PaperTradingEngine:
             return self._reject(signal, "hold_not_tradable")
         if normalized_signal != "BUY":
             return self._reject(signal, "signal_not_open_long")
+        if signal.score < self.config.min_buy_score:
+            return self._reject(signal, "buy_score_below_threshold")
         if _has_nonpositive_ohlcv(bars or []):
             return self._reject(signal, "ohlcv_invalid")
         if _has_split_uncertainty(bars or [], self.config):
@@ -180,6 +186,9 @@ class PaperTradingEngine:
         )
 
     def run(self, signals: Iterable[PaperTradingSignal], bars_by_ticker: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+        if self.config.force_rerun and not (self.config.rerun_reason or "").strip():
+            raise ValueError("rerun_reason is required when force_rerun=True")
+
         signal_list = list(signals)
         run_id = self._run_id(signal_list)
         output_root = self._output_root()
@@ -224,6 +233,7 @@ class PaperTradingEngine:
         fills: list[dict[str, Any]] = []
         signal_records: list[dict[str, Any]] = []
         open_tickers: set[str] = set()
+        new_positions_opened = 0
 
         for signal in signals:
             bars = bars_by_ticker.get(signal.ticker) or bars_by_ticker.get(signal.ticker.upper()) or []
@@ -234,6 +244,15 @@ class PaperTradingEngine:
                 continue
             if decision.ticker in open_tickers:
                 signal_records.append({**record, "status": "REJECTED", "reason": "duplicate_open_order"})
+                continue
+            if self.config.max_open_positions is not None and len(open_tickers) >= self.config.max_open_positions:
+                signal_records.append({**record, "status": "REJECTED", "reason": "max_open_positions_reached"})
+                continue
+            if (
+                self.config.max_daily_new_positions is not None
+                and new_positions_opened >= self.config.max_daily_new_positions
+            ):
+                signal_records.append({**record, "status": "REJECTED", "reason": "max_daily_new_positions_reached"})
                 continue
 
             fill_price = _fill_open_or_fallback(bars, decision) * (1.0 + self.config.slippage_pct)
@@ -302,6 +321,7 @@ class PaperTradingEngine:
             fills.append(fill)
             positions.append(position)
             open_tickers.add(decision.ticker)
+            new_positions_opened += 1
 
         equity = round(cash + sum(float(p["market_value"]) for p in positions), 2)
         equity_rows = [{"date": self.config.effective_run_date, "cash": cash, "equity": equity}]
