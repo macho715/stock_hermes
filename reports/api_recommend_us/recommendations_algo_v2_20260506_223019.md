@@ -1,0 +1,97 @@
+# Stock Recommendation Report — Algorithm v2
+
+Generated: 2026-05-06T18:30:19+00:00
+
+Boundary: `screening_output_only`; manual approval required; no broker order execution; not financial advice.
+
+Algorithm: leak-safe purged walk-forward CV, out-of-fold backtest signals, ATR-adjusted stop/target, fixed-risk position sizing.
+
+Universe: AAPL, MSFT, NVDA, TSLA, AMZN, GOOGL, META, SPY, QQQ
+Track: BOTH | Period: 3y | Top-N: 5
+Data provider: yfinance | Synthetic flag: False
+Audit log: reports\api_recommend_us\audit_log.jsonl
+
+| Rank | Ticker | Track | Verdict | Score | Prob | EV% | Entry | Stop | TP2 | R/R | Risk% | MaxPos% | Qty | Confirms | Evidence |
+|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 1 | AAPL | S | ELIGIBLE_RECOMMENDATION | 100.00 | 83.89% | 7.74 | 287.17 | 275.68 | 315.89 | 2.50 | 0.75% | 20.00% | 65.29 | 8/9 | data_source=yfinance; cv_gap=20; 모델 상승확률 83.89%; 단기/중기 추세 확인 |
+| 2 | AMZN | L | ACCUMULATE_RECOMMENDATION | 99.85 | 77.31% | 12.74 | 276.27 | 243.12 | 331.52 | 1.67 | 0.50% | 12.00% | 15.08 | 9/9 | data_source=yfinance; cv_gap=63; 장기 추세 구조 양호; 장기 MDD 한도 내 |
+| 3 | NVDA | L | ACCUMULATE_RECOMMENDATION | 99.57 | 96.02% | 18.73 | 207.03 | 182.19 | 248.44 | 1.67 | 0.50% | 12.00% | 20.13 | 8/9 | data_source=yfinance; cv_gap=63; 장기 추세 구조 양호; 52주 고점 대비 과열이 아닌 조정권 |
+| 4 | QQQ | S | ELIGIBLE_RECOMMENDATION | 98.47 | 92.90% | 9.01 | 693.61 | 665.87 | 762.97 | 2.50 | 0.75% | 20.00% | 27.03 | 8/9 | data_source=yfinance; cv_gap=20; 모델 상승확률 92.90%; 단기/중기 추세 확인 |
+| 5 | GOOGL | S | ELIGIBLE_RECOMMENDATION | 96.71 | 87.39% | 8.23 | 395.45 | 379.64 | 435.00 | 2.50 | 0.75% | 20.00% | 47.41 | 8/9 | data_source=yfinance; cv_gap=20; 모델 상승확률 87.39%; 단기/중기 추세 확인 |
+
+## Validation details
+
+### AAPL / Track-S / ELIGIBLE_RECOMMENDATION
+- Backtest: return=-1.28%, Sharpe=-0.443, Sortino=-0.337, MDD=3.25%
+- Backtest honesty: AMBER (pass=3, amber=2, fail=0)
+- Model: prob=83.89%, acc=63.87%, auc=0.647, oof_coverage=74.53%
+- Risk plan: stop=4.00%, tp2=10.00%, R/R=2.50, position_value=18750.00
+- DATA_ROWS: PASS — rows=752, min_rows=260
+- LIQUIDITY: PASS — avg_dollar_volume_20d=12310470905.93
+- MARKET_REGIME: PASS — regime_score=100.00, atr_pct=0.0232
+- MODEL_EDGE: PASS — prob=0.8389, acc=0.6387, auc=0.6470, models=xgb-cpu
+- OOF_COVERAGE: PASS — coverage=74.53%, gap=20
+- BACKTEST_SANITY: AMBER — return=-1.28%, sharpe=-0.443, mdd=3.25%
+- RISK_PLAN: PASS — stop_pct=4.00%, tp2_pct=10.00%, rr=2.50, risk_budget=0.75%
+- TRACK_SCORE: PASS — score=100.00, green_threshold=75.00
+- AUTOMATION_BOUNDARY: PASS — screening_output_only; broker_order_execution=False
+
+### AMZN / Track-L / ACCUMULATE_RECOMMENDATION
+- Backtest: return=1.13%, Sharpe=0.646, Sortino=0.615, MDD=0.83%
+- Backtest honesty: PASS (pass=5, amber=0, fail=0)
+- Model: prob=77.31%, acc=62.08%, auc=0.690, oof_coverage=75.00%
+- Risk plan: stop=12.00%, tp2=20.00%, R/R=1.67, position_value=4166.67
+- DATA_ROWS: PASS — rows=752, min_rows=260
+- LIQUIDITY: PASS — avg_dollar_volume_20d=12985396553.36
+- MARKET_REGIME: PASS — regime_score=100.00, atr_pct=0.0264
+- MODEL_EDGE: PASS — prob=0.7731, acc=0.6208, auc=0.6903, models=xgb-cpu
+- OOF_COVERAGE: PASS — coverage=75.00%, gap=63
+- BACKTEST_SANITY: PASS — return=1.13%, sharpe=0.646, mdd=0.83%
+- RISK_PLAN: PASS — stop_pct=12.00%, tp2_pct=20.00%, rr=1.67, risk_budget=0.50%
+- TRACK_SCORE: PASS — score=99.85, green_threshold=80.00
+- AUTOMATION_BOUNDARY: PASS — screening_output_only; broker_order_execution=False
+
+### NVDA / Track-L / ACCUMULATE_RECOMMENDATION
+- Backtest: return=0.27%, Sharpe=0.115, Sortino=0.091, MDD=1.85%
+- Backtest honesty: AMBER (pass=4, amber=1, fail=0)
+- Model: prob=96.02%, acc=33.03%, auc=0.499, oof_coverage=75.00%
+- Risk plan: stop=12.00%, tp2=20.00%, R/R=1.67, position_value=4166.67
+- DATA_ROWS: PASS — rows=752, min_rows=260
+- LIQUIDITY: PASS — avg_dollar_volume_20d=29311509327.10
+- MARKET_REGIME: PASS — regime_score=100.00, atr_pct=0.0314
+- MODEL_EDGE: AMBER — prob=0.9602, acc=0.3303, auc=0.4993, models=xgb-cpu
+- OOF_COVERAGE: PASS — coverage=75.00%, gap=63
+- BACKTEST_SANITY: PASS — return=0.27%, sharpe=0.115, mdd=1.85%
+- RISK_PLAN: PASS — stop_pct=12.00%, tp2_pct=20.00%, rr=1.67, risk_budget=0.50%
+- TRACK_SCORE: PASS — score=99.57, green_threshold=80.00
+- AUTOMATION_BOUNDARY: PASS — screening_output_only; broker_order_execution=False
+
+### QQQ / Track-S / ELIGIBLE_RECOMMENDATION
+- Backtest: return=-0.34%, Sharpe=-0.110, Sortino=-0.092, MDD=2.58%
+- Backtest honesty: AMBER (pass=4, amber=1, fail=0)
+- Model: prob=92.90%, acc=34.17%, auc=0.567, oof_coverage=74.53%
+- Risk plan: stop=4.00%, tp2=10.00%, R/R=2.50, position_value=18750.00
+- DATA_ROWS: PASS — rows=752, min_rows=260
+- LIQUIDITY: PASS — avg_dollar_volume_20d=25200805139.87
+- MARKET_REGIME: PASS — regime_score=100.00, atr_pct=0.0142
+- MODEL_EDGE: AMBER — prob=0.9290, acc=0.3417, auc=0.5672, models=xgb-cpu
+- OOF_COVERAGE: PASS — coverage=74.53%, gap=20
+- BACKTEST_SANITY: PASS — return=-0.34%, sharpe=-0.110, mdd=2.58%
+- RISK_PLAN: PASS — stop_pct=4.00%, tp2_pct=10.00%, rr=2.50, risk_budget=0.75%
+- TRACK_SCORE: PASS — score=98.47, green_threshold=75.00
+- AUTOMATION_BOUNDARY: PASS — screening_output_only; broker_order_execution=False
+
+### GOOGL / Track-S / ELIGIBLE_RECOMMENDATION
+- Backtest: return=1.54%, Sharpe=0.684, Sortino=0.577, MDD=0.99%
+- Backtest honesty: PASS (pass=5, amber=0, fail=0)
+- Model: prob=87.39%, acc=45.10%, auc=0.584, oof_coverage=74.53%
+- Risk plan: stop=4.00%, tp2=10.00%, R/R=2.50, position_value=18750.00
+- DATA_ROWS: PASS — rows=752, min_rows=260
+- LIQUIDITY: PASS — avg_dollar_volume_20d=9384071258.41
+- MARKET_REGIME: PASS — regime_score=100.00, atr_pct=0.0251
+- MODEL_EDGE: AMBER — prob=0.8739, acc=0.4510, auc=0.5840, models=xgb-cpu
+- OOF_COVERAGE: PASS — coverage=74.53%, gap=20
+- BACKTEST_SANITY: PASS — return=1.54%, sharpe=0.684, mdd=0.99%
+- RISK_PLAN: PASS — stop_pct=4.00%, tp2_pct=10.00%, rr=2.50, risk_budget=0.75%
+- TRACK_SCORE: PASS — score=96.71, green_threshold=75.00
+- AUTOMATION_BOUNDARY: PASS — screening_output_only; broker_order_execution=False

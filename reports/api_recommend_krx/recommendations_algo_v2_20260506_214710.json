@@ -1,0 +1,807 @@
+{
+  "generated_at_utc": "2026-05-06T17:47:10+00:00",
+  "config": {
+    "universe": [
+      "005930.KS",
+      "000660.KS",
+      "005380.KS",
+      "005490.KS",
+      "035420.KS",
+      "035720.KS",
+      "051910.KS",
+      "006400.KS",
+      "003670.KS"
+    ],
+    "track": "BOTH",
+    "period": "3y",
+    "horizon_s": 20,
+    "horizon_l": 63,
+    "top_n": 5,
+    "synthetic": false,
+    "min_rows": 260,
+    "min_avg_dollar_volume": 10000000.0,
+    "short_green_score": 75.0,
+    "short_amber_score": 65.0,
+    "long_green_score": 80.0,
+    "long_amber_score": 70.0,
+    "stop_loss_pct_s": 0.04,
+    "hard_stop_loss_pct_s": 0.05,
+    "take_profit_1_pct_s": 0.05,
+    "take_profit_2_pct_s": 0.1,
+    "stop_loss_pct_l": 0.12,
+    "max_stop_loss_pct_l": 0.18,
+    "target_return_pct_l": 0.2,
+    "risk_per_trade_pct_s": 0.0075,
+    "risk_per_trade_pct_l": 0.005,
+    "max_position_pct_s": 0.2,
+    "max_position_pct_l": 0.12,
+    "max_mdd_pct_s": 25.0,
+    "max_mdd_pct_l": 35.0,
+    "min_risk_reward": 2.0,
+    "model_kind": "auto",
+    "xgb_device": "cpu",
+    "xgb_estimators": 120,
+    "xgb_splits": 3,
+    "cv_gap": null,
+    "min_oof_coverage": 0.45,
+    "min_backtest_sharpe": -0.25,
+    "transaction_cost_buffer_pct": 0.5,
+    "capital": 100000.0,
+    "prefer_gpu": false,
+    "lite": true,
+    "output_dir": "reports/api_recommend_krx",
+    "data_provider": "yfinance",
+    "provider_config": null,
+    "kevpe_events": null,
+    "audit_command": "recommend"
+  },
+  "disclaimer": "screening_output_only; manual approval required; no broker order execution; not financial advice",
+  "algorithm_patch": "v2 leak-safe CV + ATR risk plan + fixed-risk sizing + OOF backtest",
+  "audit_log_path": "reports\\api_recommend_krx\\audit_log.jsonl",
+  "provider_summary": {
+    "status": "PASS",
+    "providers_used": [
+      "yfinance"
+    ],
+    "event_count": 1,
+    "row_count_min": 727,
+    "last_date_max": "2026-05-04",
+    "freshness_days_max": 2,
+    "fallbacks": []
+  },
+  "backtest_honesty_summary": {
+    "status": "FAIL",
+    "result_count": 5,
+    "passed": 3,
+    "amber": 2,
+    "failed": 4,
+    "generated_at_utc": "2026-05-06T17:47:10+00:00"
+  },
+  "errors": [
+    {
+      "ticker": "000660.KS",
+      "track": "L",
+      "verdict": "RED_DATA_OR_MODEL_ERROR",
+      "recommendation_rank_score": 0.0,
+      "candidate_label": "데이터/모델 오류로 추천 제외",
+      "screening_output_only": true,
+      "latest_close": 0.0,
+      "entry": 0.0,
+      "stop": 0.0,
+      "tp1": 0.0,
+      "tp2": 0.0,
+      "stop_pct": 0.0,
+      "tp2_pct": 0.0,
+      "risk_reward": 0.0,
+      "risk_budget_pct": 0.0,
+      "max_position_pct": 0.0,
+      "suggested_quantity": 0.0,
+      "suggested_position_value": 0.0,
+      "direction_prob": 0.0,
+      "expected_value_pct": 0.0,
+      "model_accuracy": 0.0,
+      "model_auc": 0.0,
+      "oof_coverage": 0.0,
+      "backtest_return_pct": 0.0,
+      "backtest_sharpe": 0.0,
+      "backtest_sortino": 0.0,
+      "backtest_mdd_pct": 0.0,
+      "profit_factor": 0.0,
+      "avg_dollar_volume_20d": 0.0,
+      "volume_ratio_20d": 0.0,
+      "market_regime_score": 0.0,
+      "return_20d_pct": 0.0,
+      "return_60d_pct": 0.0,
+      "drawdown_252d_pct": 0.0,
+      "confirmations_passed": 0,
+      "confirmations_total": 1,
+      "validations": [
+        {
+          "name": "ERROR",
+          "status": "FAIL",
+          "evidence": "000660.KS: yfinance provider failed: empty OHLCV frame"
+        }
+      ],
+      "reasons": [
+        "000660.KS: yfinance provider failed: empty OHLCV frame"
+      ],
+      "generated_at_utc": "2026-05-06T17:44:19+00:00",
+      "backtest_honesty": {
+        "status": "FAIL",
+        "checks": [
+          {
+            "name": "ERROR",
+            "status": "FAIL",
+            "value": null,
+            "threshold": null,
+            "reason": "000660.KS: yfinance provider failed: empty OHLCV frame"
+          }
+        ],
+        "passed": 0,
+        "amber": 0,
+        "failed": 1,
+        "generated_at_utc": "2026-05-06T17:44:19+00:00"
+      },
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null
+    },
+    {
+      "ticker": "000660.KS",
+      "track": "S",
+      "verdict": "RED_DATA_OR_MODEL_ERROR",
+      "recommendation_rank_score": 0.0,
+      "candidate_label": "데이터/모델 오류로 추천 제외",
+      "screening_output_only": true,
+      "latest_close": 0.0,
+      "entry": 0.0,
+      "stop": 0.0,
+      "tp1": 0.0,
+      "tp2": 0.0,
+      "stop_pct": 0.0,
+      "tp2_pct": 0.0,
+      "risk_reward": 0.0,
+      "risk_budget_pct": 0.0,
+      "max_position_pct": 0.0,
+      "suggested_quantity": 0.0,
+      "suggested_position_value": 0.0,
+      "direction_prob": 0.0,
+      "expected_value_pct": 0.0,
+      "model_accuracy": 0.0,
+      "model_auc": 0.0,
+      "oof_coverage": 0.0,
+      "backtest_return_pct": 0.0,
+      "backtest_sharpe": 0.0,
+      "backtest_sortino": 0.0,
+      "backtest_mdd_pct": 0.0,
+      "profit_factor": 0.0,
+      "avg_dollar_volume_20d": 0.0,
+      "volume_ratio_20d": 0.0,
+      "market_regime_score": 0.0,
+      "return_20d_pct": 0.0,
+      "return_60d_pct": 0.0,
+      "drawdown_252d_pct": 0.0,
+      "confirmations_passed": 0,
+      "confirmations_total": 1,
+      "validations": [
+        {
+          "name": "ERROR",
+          "status": "FAIL",
+          "evidence": "000660.KS: yfinance provider failed: empty OHLCV frame"
+        }
+      ],
+      "reasons": [
+        "000660.KS: yfinance provider failed: empty OHLCV frame"
+      ],
+      "generated_at_utc": "2026-05-06T17:44:19+00:00",
+      "backtest_honesty": {
+        "status": "FAIL",
+        "checks": [
+          {
+            "name": "ERROR",
+            "status": "FAIL",
+            "value": null,
+            "threshold": null,
+            "reason": "000660.KS: yfinance provider failed: empty OHLCV frame"
+          }
+        ],
+        "passed": 0,
+        "amber": 0,
+        "failed": 1,
+        "generated_at_utc": "2026-05-06T17:44:19+00:00"
+      },
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null
+    },
+    {
+      "ticker": "003670.KS",
+      "track": "L",
+      "verdict": "RED_DATA_OR_MODEL_ERROR",
+      "recommendation_rank_score": 0.0,
+      "candidate_label": "데이터/모델 오류로 추천 제외",
+      "screening_output_only": true,
+      "latest_close": 0.0,
+      "entry": 0.0,
+      "stop": 0.0,
+      "tp1": 0.0,
+      "tp2": 0.0,
+      "stop_pct": 0.0,
+      "tp2_pct": 0.0,
+      "risk_reward": 0.0,
+      "risk_budget_pct": 0.0,
+      "max_position_pct": 0.0,
+      "suggested_quantity": 0.0,
+      "suggested_position_value": 0.0,
+      "direction_prob": 0.0,
+      "expected_value_pct": 0.0,
+      "model_accuracy": 0.0,
+      "model_auc": 0.0,
+      "oof_coverage": 0.0,
+      "backtest_return_pct": 0.0,
+      "backtest_sharpe": 0.0,
+      "backtest_sortino": 0.0,
+      "backtest_mdd_pct": 0.0,
+      "profit_factor": 0.0,
+      "avg_dollar_volume_20d": 0.0,
+      "volume_ratio_20d": 0.0,
+      "market_regime_score": 0.0,
+      "return_20d_pct": 0.0,
+      "return_60d_pct": 0.0,
+      "drawdown_252d_pct": 0.0,
+      "confirmations_passed": 0,
+      "confirmations_total": 1,
+      "validations": [
+        {
+          "name": "ERROR",
+          "status": "FAIL",
+          "evidence": "target class가 하나뿐이라 분류 모델을 학습할 수 없습니다"
+        }
+      ],
+      "reasons": [
+        "target class가 하나뿐이라 분류 모델을 학습할 수 없습니다"
+      ],
+      "generated_at_utc": "2026-05-06T17:47:10+00:00",
+      "backtest_honesty": {
+        "status": "FAIL",
+        "checks": [
+          {
+            "name": "ERROR",
+            "status": "FAIL",
+            "value": null,
+            "threshold": null,
+            "reason": "target class가 하나뿐이라 분류 모델을 학습할 수 없습니다"
+          }
+        ],
+        "passed": 0,
+        "amber": 0,
+        "failed": 1,
+        "generated_at_utc": "2026-05-06T17:47:10+00:00"
+      },
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null
+    },
+    {
+      "ticker": "005380.KS",
+      "track": "L",
+      "verdict": "RED_DATA_OR_MODEL_ERROR",
+      "recommendation_rank_score": 0.0,
+      "candidate_label": "데이터/모델 오류로 추천 제외",
+      "screening_output_only": true,
+      "latest_close": 0.0,
+      "entry": 0.0,
+      "stop": 0.0,
+      "tp1": 0.0,
+      "tp2": 0.0,
+      "stop_pct": 0.0,
+      "tp2_pct": 0.0,
+      "risk_reward": 0.0,
+      "risk_budget_pct": 0.0,
+      "max_position_pct": 0.0,
+      "suggested_quantity": 0.0,
+      "suggested_position_value": 0.0,
+      "direction_prob": 0.0,
+      "expected_value_pct": 0.0,
+      "model_accuracy": 0.0,
+      "model_auc": 0.0,
+      "oof_coverage": 0.0,
+      "backtest_return_pct": 0.0,
+      "backtest_sharpe": 0.0,
+      "backtest_sortino": 0.0,
+      "backtest_mdd_pct": 0.0,
+      "profit_factor": 0.0,
+      "avg_dollar_volume_20d": 0.0,
+      "volume_ratio_20d": 0.0,
+      "market_regime_score": 0.0,
+      "return_20d_pct": 0.0,
+      "return_60d_pct": 0.0,
+      "drawdown_252d_pct": 0.0,
+      "confirmations_passed": 0,
+      "confirmations_total": 1,
+      "validations": [
+        {
+          "name": "ERROR",
+          "status": "FAIL",
+          "evidence": "005380.KS: yfinance provider failed: empty OHLCV frame"
+        }
+      ],
+      "reasons": [
+        "005380.KS: yfinance provider failed: empty OHLCV frame"
+      ],
+      "generated_at_utc": "2026-05-06T17:45:01+00:00",
+      "backtest_honesty": {
+        "status": "FAIL",
+        "checks": [
+          {
+            "name": "ERROR",
+            "status": "FAIL",
+            "value": null,
+            "threshold": null,
+            "reason": "005380.KS: yfinance provider failed: empty OHLCV frame"
+          }
+        ],
+        "passed": 0,
+        "amber": 0,
+        "failed": 1,
+        "generated_at_utc": "2026-05-06T17:45:01+00:00"
+      },
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null
+    }
+  ],
+  "results": [
+    {
+      "ticker": "003670.KS",
+      "track": "S",
+      "verdict": "ELIGIBLE_RECOMMENDATION",
+      "recommendation_rank_score": 95.02,
+      "candidate_label": "Track-S 추천 후보: 수동 승인 필요",
+      "screening_output_only": true,
+      "latest_close": 267000.0,
+      "entry": 267000.0,
+      "stop": 253650.0,
+      "tp1": 281685.0,
+      "tp2": 293700.0,
+      "stop_pct": 0.05,
+      "tp2_pct": 0.1,
+      "risk_reward": 2.0,
+      "risk_budget_pct": 0.0075,
+      "max_position_pct": 0.2,
+      "suggested_quantity": 0.0562,
+      "suggested_position_value": 15000.0,
+      "direction_prob": 0.9211,
+      "expected_value_pct": 8.817,
+      "model_accuracy": 0.3982,
+      "model_auc": 0.577,
+      "oof_coverage": 0.7467,
+      "backtest_return_pct": -2.34,
+      "backtest_sharpe": -0.8,
+      "backtest_sortino": -0.39,
+      "backtest_mdd_pct": 2.89,
+      "profit_factor": 0.563,
+      "avg_dollar_volume_20d": 90070256575.0,
+      "volume_ratio_20d": 1.58,
+      "market_regime_score": 95.0,
+      "return_20d_pct": 26.24,
+      "return_60d_pct": 22.91,
+      "drawdown_252d_pct": -2.02,
+      "confirmations_passed": 7,
+      "confirmations_total": 9,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=727, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=90070256575.00"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=95.00, atr_pct=0.0503"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "AMBER",
+          "evidence": "prob=0.9211, acc=0.3982, auc=0.5770, models=xgb-cpu"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=74.67%, gap=20"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "AMBER",
+          "evidence": "return=-2.34%, sharpe=-0.800, mdd=2.89%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=5.00%, tp2_pct=10.00%, rr=2.00, risk_budget=0.75%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "PASS",
+          "evidence": "score=95.02, green_threshold=75.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "reasons": [
+        "data_source=yfinance",
+        "cv_gap=20",
+        "모델 상승확률 92.11%",
+        "단기/중기 추세 확인",
+        "백테스트 MDD 2.89%",
+        "R/R 2.00 통과",
+        "기대값 8.82%",
+        "Track-S 추천 후보: 수동 승인 필요"
+      ],
+      "generated_at_utc": "2026-05-06T17:47:09+00:00",
+      "backtest_honesty": {
+        "status": "AMBER",
+        "checks": [
+          {
+            "name": "OOF_COVERAGE",
+            "status": "PASS",
+            "value": 0.7466960352422908,
+            "threshold": 0.45,
+            "reason": "oof_coverage=74.67%, threshold=45.00%"
+          },
+          {
+            "name": "SHARPE_FLOOR",
+            "status": "AMBER",
+            "value": -0.8,
+            "threshold": -0.25,
+            "reason": "sharpe_floor=-80.00%, threshold=-25.00%"
+          },
+          {
+            "name": "MAX_DRAWDOWN",
+            "status": "PASS",
+            "value": 2.89,
+            "threshold": 25.0,
+            "reason": "mdd=2.89%, max=25.00%"
+          },
+          {
+            "name": "TRANSACTION_COST_BUFFER",
+            "status": "AMBER",
+            "value": -2.34,
+            "threshold": 0.5,
+            "reason": "return=-2.34%, buffer=0.50%"
+          },
+          {
+            "name": "WALK_FORWARD_GAP",
+            "status": "PASS",
+            "value": 20,
+            "threshold": 20,
+            "reason": "gap=20, horizon=20"
+          }
+        ],
+        "passed": 3,
+        "amber": 2,
+        "failed": 0,
+        "generated_at_utc": "2026-05-06T17:47:09+00:00"
+      },
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null
+    },
+    {
+      "ticker": "000660.KS",
+      "track": "L",
+      "verdict": "RED_DATA_OR_MODEL_ERROR",
+      "recommendation_rank_score": 0.0,
+      "candidate_label": "데이터/모델 오류로 추천 제외",
+      "screening_output_only": true,
+      "latest_close": 0.0,
+      "entry": 0.0,
+      "stop": 0.0,
+      "tp1": 0.0,
+      "tp2": 0.0,
+      "stop_pct": 0.0,
+      "tp2_pct": 0.0,
+      "risk_reward": 0.0,
+      "risk_budget_pct": 0.0,
+      "max_position_pct": 0.0,
+      "suggested_quantity": 0.0,
+      "suggested_position_value": 0.0,
+      "direction_prob": 0.0,
+      "expected_value_pct": 0.0,
+      "model_accuracy": 0.0,
+      "model_auc": 0.0,
+      "oof_coverage": 0.0,
+      "backtest_return_pct": 0.0,
+      "backtest_sharpe": 0.0,
+      "backtest_sortino": 0.0,
+      "backtest_mdd_pct": 0.0,
+      "profit_factor": 0.0,
+      "avg_dollar_volume_20d": 0.0,
+      "volume_ratio_20d": 0.0,
+      "market_regime_score": 0.0,
+      "return_20d_pct": 0.0,
+      "return_60d_pct": 0.0,
+      "drawdown_252d_pct": 0.0,
+      "confirmations_passed": 0,
+      "confirmations_total": 1,
+      "validations": [
+        {
+          "name": "ERROR",
+          "status": "FAIL",
+          "evidence": "000660.KS: yfinance provider failed: empty OHLCV frame"
+        }
+      ],
+      "reasons": [
+        "000660.KS: yfinance provider failed: empty OHLCV frame"
+      ],
+      "generated_at_utc": "2026-05-06T17:44:19+00:00",
+      "backtest_honesty": {
+        "status": "FAIL",
+        "checks": [
+          {
+            "name": "ERROR",
+            "status": "FAIL",
+            "value": null,
+            "threshold": null,
+            "reason": "000660.KS: yfinance provider failed: empty OHLCV frame"
+          }
+        ],
+        "passed": 0,
+        "amber": 0,
+        "failed": 1,
+        "generated_at_utc": "2026-05-06T17:44:19+00:00"
+      },
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null
+    },
+    {
+      "ticker": "000660.KS",
+      "track": "S",
+      "verdict": "RED_DATA_OR_MODEL_ERROR",
+      "recommendation_rank_score": 0.0,
+      "candidate_label": "데이터/모델 오류로 추천 제외",
+      "screening_output_only": true,
+      "latest_close": 0.0,
+      "entry": 0.0,
+      "stop": 0.0,
+      "tp1": 0.0,
+      "tp2": 0.0,
+      "stop_pct": 0.0,
+      "tp2_pct": 0.0,
+      "risk_reward": 0.0,
+      "risk_budget_pct": 0.0,
+      "max_position_pct": 0.0,
+      "suggested_quantity": 0.0,
+      "suggested_position_value": 0.0,
+      "direction_prob": 0.0,
+      "expected_value_pct": 0.0,
+      "model_accuracy": 0.0,
+      "model_auc": 0.0,
+      "oof_coverage": 0.0,
+      "backtest_return_pct": 0.0,
+      "backtest_sharpe": 0.0,
+      "backtest_sortino": 0.0,
+      "backtest_mdd_pct": 0.0,
+      "profit_factor": 0.0,
+      "avg_dollar_volume_20d": 0.0,
+      "volume_ratio_20d": 0.0,
+      "market_regime_score": 0.0,
+      "return_20d_pct": 0.0,
+      "return_60d_pct": 0.0,
+      "drawdown_252d_pct": 0.0,
+      "confirmations_passed": 0,
+      "confirmations_total": 1,
+      "validations": [
+        {
+          "name": "ERROR",
+          "status": "FAIL",
+          "evidence": "000660.KS: yfinance provider failed: empty OHLCV frame"
+        }
+      ],
+      "reasons": [
+        "000660.KS: yfinance provider failed: empty OHLCV frame"
+      ],
+      "generated_at_utc": "2026-05-06T17:44:19+00:00",
+      "backtest_honesty": {
+        "status": "FAIL",
+        "checks": [
+          {
+            "name": "ERROR",
+            "status": "FAIL",
+            "value": null,
+            "threshold": null,
+            "reason": "000660.KS: yfinance provider failed: empty OHLCV frame"
+          }
+        ],
+        "passed": 0,
+        "amber": 0,
+        "failed": 1,
+        "generated_at_utc": "2026-05-06T17:44:19+00:00"
+      },
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null
+    },
+    {
+      "ticker": "003670.KS",
+      "track": "L",
+      "verdict": "RED_DATA_OR_MODEL_ERROR",
+      "recommendation_rank_score": 0.0,
+      "candidate_label": "데이터/모델 오류로 추천 제외",
+      "screening_output_only": true,
+      "latest_close": 0.0,
+      "entry": 0.0,
+      "stop": 0.0,
+      "tp1": 0.0,
+      "tp2": 0.0,
+      "stop_pct": 0.0,
+      "tp2_pct": 0.0,
+      "risk_reward": 0.0,
+      "risk_budget_pct": 0.0,
+      "max_position_pct": 0.0,
+      "suggested_quantity": 0.0,
+      "suggested_position_value": 0.0,
+      "direction_prob": 0.0,
+      "expected_value_pct": 0.0,
+      "model_accuracy": 0.0,
+      "model_auc": 0.0,
+      "oof_coverage": 0.0,
+      "backtest_return_pct": 0.0,
+      "backtest_sharpe": 0.0,
+      "backtest_sortino": 0.0,
+      "backtest_mdd_pct": 0.0,
+      "profit_factor": 0.0,
+      "avg_dollar_volume_20d": 0.0,
+      "volume_ratio_20d": 0.0,
+      "market_regime_score": 0.0,
+      "return_20d_pct": 0.0,
+      "return_60d_pct": 0.0,
+      "drawdown_252d_pct": 0.0,
+      "confirmations_passed": 0,
+      "confirmations_total": 1,
+      "validations": [
+        {
+          "name": "ERROR",
+          "status": "FAIL",
+          "evidence": "target class가 하나뿐이라 분류 모델을 학습할 수 없습니다"
+        }
+      ],
+      "reasons": [
+        "target class가 하나뿐이라 분류 모델을 학습할 수 없습니다"
+      ],
+      "generated_at_utc": "2026-05-06T17:47:10+00:00",
+      "backtest_honesty": {
+        "status": "FAIL",
+        "checks": [
+          {
+            "name": "ERROR",
+            "status": "FAIL",
+            "value": null,
+            "threshold": null,
+            "reason": "target class가 하나뿐이라 분류 모델을 학습할 수 없습니다"
+          }
+        ],
+        "passed": 0,
+        "amber": 0,
+        "failed": 1,
+        "generated_at_utc": "2026-05-06T17:47:10+00:00"
+      },
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null
+    },
+    {
+      "ticker": "005380.KS",
+      "track": "L",
+      "verdict": "RED_DATA_OR_MODEL_ERROR",
+      "recommendation_rank_score": 0.0,
+      "candidate_label": "데이터/모델 오류로 추천 제외",
+      "screening_output_only": true,
+      "latest_close": 0.0,
+      "entry": 0.0,
+      "stop": 0.0,
+      "tp1": 0.0,
+      "tp2": 0.0,
+      "stop_pct": 0.0,
+      "tp2_pct": 0.0,
+      "risk_reward": 0.0,
+      "risk_budget_pct": 0.0,
+      "max_position_pct": 0.0,
+      "suggested_quantity": 0.0,
+      "suggested_position_value": 0.0,
+      "direction_prob": 0.0,
+      "expected_value_pct": 0.0,
+      "model_accuracy": 0.0,
+      "model_auc": 0.0,
+      "oof_coverage": 0.0,
+      "backtest_return_pct": 0.0,
+      "backtest_sharpe": 0.0,
+      "backtest_sortino": 0.0,
+      "backtest_mdd_pct": 0.0,
+      "profit_factor": 0.0,
+      "avg_dollar_volume_20d": 0.0,
+      "volume_ratio_20d": 0.0,
+      "market_regime_score": 0.0,
+      "return_20d_pct": 0.0,
+      "return_60d_pct": 0.0,
+      "drawdown_252d_pct": 0.0,
+      "confirmations_passed": 0,
+      "confirmations_total": 1,
+      "validations": [
+        {
+          "name": "ERROR",
+          "status": "FAIL",
+          "evidence": "005380.KS: yfinance provider failed: empty OHLCV frame"
+        }
+      ],
+      "reasons": [
+        "005380.KS: yfinance provider failed: empty OHLCV frame"
+      ],
+      "generated_at_utc": "2026-05-06T17:45:01+00:00",
+      "backtest_honesty": {
+        "status": "FAIL",
+        "checks": [
+          {
+            "name": "ERROR",
+            "status": "FAIL",
+            "value": null,
+            "threshold": null,
+            "reason": "005380.KS: yfinance provider failed: empty OHLCV frame"
+          }
+        ],
+        "passed": 0,
+        "amber": 0,
+        "failed": 1,
+        "generated_at_utc": "2026-05-06T17:45:01+00:00"
+      },
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null
+    }
+  ]
+}

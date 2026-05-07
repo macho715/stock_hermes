@@ -1,0 +1,23 @@
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5151
+Press CTRL+C to quit
+127.0.0.1 - - [06/May/2026 22:29:16] "GET /api/universe?market=US HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:22] "GET /api/symbol?symbol=AAPL&period=6mo&data_provider=yfinance HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:23] "GET /api/symbol?symbol=AAPL&period=6mo&data_provider=yfinance HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:23] "GET /api/symbol?symbol=MSFT&period=6mo&data_provider=yfinance HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:23] "GET /api/symbol?symbol=NVDA&period=6mo&data_provider=yfinance HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:24] "GET /api/symbol?symbol=TSLA&period=6mo&data_provider=yfinance HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:24] "GET /api/symbol?symbol=AMZN&period=6mo&data_provider=yfinance HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:24] "GET /api/symbol?symbol=GOOGL&period=6mo&data_provider=yfinance HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:25] "GET /api/symbol?symbol=META&period=6mo&data_provider=yfinance HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:25] "GET /api/symbol?symbol=SPY&period=6mo&data_provider=yfinance HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:25] "GET /api/model-scores?symbol=AAPL&period=3y&model_kind=auto&data_provider=yfinance&use_lstm=1 HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:25] "GET /api/symbol?symbol=QQQ&period=6mo&data_provider=yfinance HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:31] "GET /api/health HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:36] "GET /api/paper-status HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:52] "GET /api/symbol?symbol=005930.KS&period=6mo&data_provider=pykrx HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:52] "GET /api/model-scores?symbol=005930.KS&period=3y&model_kind=auto&data_provider=yfinance&use_lstm=1 HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:29:59] "GET /api/recommend?universe=AAPL,MSFT,NVDA,TSLA,AMZN,GOOGL,META,SPY,QQQ&track=BOTH&period=3y&top=5&synthetic=0&data_provider=yfinance&model_kind=auto&output_dir=reports/api_recommend_us HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:30:06] "GET /api/symbol?symbol=005930.KS&period=6mo&data_provider=pykrx HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:30:07] "GET /api/model-scores?symbol=005930.KS&period=3y&model_kind=auto&data_provider=yfinance&use_lstm=1 HTTP/1.1" 200 -
+127.0.0.1 - - [06/May/2026 22:30:19] "GET /api/recommend?universe=AAPL,MSFT,NVDA,TSLA,AMZN,GOOGL,META,SPY,QQQ&track=BOTH&period=3y&top=5&synthetic=0&data_provider=yfinance&model_kind=auto&output_dir=reports/api_recommend_us HTTP/1.1" 200 -
