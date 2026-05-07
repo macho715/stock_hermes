@@ -566,6 +566,43 @@ Browser evidence:
 테스트 스위트를 340 → **509 tests**, 총 커버리지 80.79% → **89%** 로 확장했습니다.
 CI 게이트(`fail_under=75`)를 유지하면서 3개 핵심 모듈 모두 ≥80% 개별 목표를 달성했습니다.
 
+### Coverage graph
+
+```mermaid
+graph LR
+    subgraph TestSuite["tests/ — 509 tests total"]
+        T1["test_ensemble_model_extra.py\n50 tests"]
+        T2["test_kevpe_adapter.py\n57 tests"]
+        T3["test_main_extra.py\n61 tests"]
+        T4["test_risk_rules.py"]
+        T5["test_reports.py"]
+        T6["test_data_providers_extra.py"]
+        TC["test_core.py + 9 others"]
+    end
+
+    subgraph Modules["src/stock_rtx4060/ — coverage"]
+        M1["ensemble_model.py\n83% ✓"]
+        M2["kevpe_adapter.py\n91% ✓"]
+        M3["main.py\n98% ✓"]
+        M4["risk_rules.py\n100% ✓"]
+        M5["reports.py\n100% ✓"]
+        M6["data_providers.py\n99% ✓"]
+        MX["other modules"]
+    end
+
+    T1 -->|covers| M1
+    T2 -->|covers| M2
+    T3 -->|covers| M3
+    T4 -->|covers| M4
+    T5 -->|covers| M5
+    T6 -->|covers| M6
+    TC  -->|covers| MX
+
+    CI{{"CI gate\nfail_under=75"}}
+    M1 & M2 & M3 & M4 & M5 & M6 & MX --> CI
+    CI -->|"TOTAL 89% ✓"| PASS["✅ PASS"]
+```
+
 ### Coverage summary
 
 | Module | Before | After | Test file |
