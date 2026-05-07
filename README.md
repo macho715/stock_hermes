@@ -1,370 +1,561 @@
-# stock_rtx4060_unified
+# Stock Research Workspace
 
-`stock_rtx4060_unified` is a consolidated, deduplicated, report-only stock screening and backtesting CLI package.
+<!-- root-pinned: keep this file at C:\Users\jichu\Downloads\주식\README.md -->
 
-It keeps one active execution path:
+이 문서는 `C:\Users\jichu\Downloads\주식` 루트에 있는 주식 프로그램 전체를 처음 보는 사람이 한 번에 이해하도록 만든 시작 문서입니다.
 
-- root `main.py` wrapper
-- `run.ps1` Windows runner
-- `src/stock_rtx4060/` package
-- `tests/` regression tests
-- `docs/` consolidated documentation
-- `.continue/checks/` PR-quality gate checks
+하위 폴더 문서의 핵심 내용을 이 문서 안에 흡수했습니다. 하위 문서는 추가 근거와 세부 감사 기록으로 남아 있으며, 이 문서를 읽기 위해 하위 문서를 먼저 열 필요는 없습니다.
 
-The program does not submit broker orders. It does not provide personalized investment advice. Recommendation output is `screening_output_only`.
+## 1. One-page Summary
 
-## Current Status
-
-| Item | Status |
+| 질문 | 답 |
 |---|---|
-| Unified folder | `C:\Users\jichu\Downloads\주식\stock_rtx4060_unified` |
-| Original source folders | Deleted after approval A; audit copied to `reports/delete_audit_20260502_211154` |
-| Source files inventoried | 238 |
-| Files kept from source roots | 11 |
-| Excluded/merged/review-needed candidates | 227 |
-| Review-needed source files | 4 |
-| Operator self-test | `.\run.ps1 self-test` passed with the project `.venv` |
-| Ops v1 workflow | `.\run.ps1 ops-v1 ...` generates recommendation reports, daily brief, approval template, ZERO log, and summary JSON |
-| Phase 1 provider/audit upgrade | `recommend` and `ops-v1` support `--data-provider auto|synthetic|yfinance|openbb`, optional config, and audit JSONL |
-| Phase A provider validation | `provider_validation.py` adds point-in-time OHLCV checks and exports `provider_summary` to reports and dashboard snapshots |
-| Phase B backtest honesty | `backtest_honesty.py` adds evidence-only OOF, Sharpe, MDD, cost-buffer, and walk-forward gap checks |
-| Latest Phase A commit | `cb98a21 Add Phase A provider validation dashboard evidence` |
-| Latest remote verification | `origin/main` resolved to `cb98a210e6a391342971fb5a1e1aeb2a301917e5` after `git push origin main` |
-| Dashboard report bridge | `dashboard-export` converts recommendation JSON into `dashboard_snapshot.json` for `stock_pred_v5.jsx` file import |
-| Dashboard risk mitigation | `dashboard/` now owns the repo-tracked dashboard copy and browser smoke harness |
-| Default `python` environment | AMBER: use project `.venv`; do not rely on global Python 3.14 |
-| Recommended runtime path | Use `run.ps1`, which selects `.venv\Scripts\python.exe` first |
+| 이 프로그램은 무엇인가 | 주식 후보를 분석하고, 추천 후보 리포트와 대시보드 표시용 snapshot을 만드는 로컬 주식 연구 시스템 |
+| 실제 실행 중심은 어디인가 | `stock_rtx4060_unified/` Python 추천 엔진 |
+| 화면은 어디에 있는가 | `stock-pred-v5/` React/Vite 대시보드 |
+| 추천 결과는 어떻게 화면에 연결되는가 | `dashboard_snapshot.v1` 파일 또는 Flask API `/api/recommend` |
+| 데이터는 어디서 오는가 | synthetic, yfinance, optional OpenBB provider |
+| 감사 로그는 있는가 | provider 호출은 `audit_log.jsonl`로 남김 |
+| 주문 실행이 있는가 | 없음. broker 주문, auto-buy, account write는 시스템 경계 밖 |
+| Continue는 무엇인가 | `continue-main/`은 주식 runtime이 아니라 품질 게이트와 IDE/agent 참고 프로젝트 |
 
-## Continue Quality Gates
+## 2. System Diagram
 
-Continue is integrated as a PR-level quality gate, not as a stock recommendation engine.
+```mermaid
+flowchart LR
+    User[Operator] --> BackendCLI[run.ps1 / main.py]
+    User --> DashboardUI[stock-pred-v5 dashboard]
 
-Check files live directly under `.continue/checks/`:
+    subgraph Backend["stock_rtx4060_unified - Python backend"]
+        BackendCLI --> PackageCLI[src/stock_rtx4060/main.py]
+        PackageCLI --> Provider[data_providers.py]
+        Provider --> Synthetic[synthetic OHLCV]
+        Provider --> YFinance[yfinance]
+        Provider --> OpenBB[OpenBB optional]
+        Provider --> Audit[audit_log.jsonl]
+        PackageCLI --> Engine[recommendation_engine.py]
+        Engine --> Feature[feature_engine.py]
+        Feature --> Model[ensemble_model.py]
+        Model --> Backtest[backtester.py]
+        Backtest --> Risk[risk_rules.py]
+        Risk --> Reports[Markdown / JSON reports]
+        Engine --> Ops[ops_workflow.py]
+        Engine --> Bridge[dashboard_bridge.py]
+        Bridge --> Snapshot[dashboard_snapshot.v1]
+        API[api_server.py :5151] --> Engine
+        Preview[preview_server.py] --> API
+    end
 
-- financial safety boundary
-- backtest integrity
-- recommendation contract
-- secret and PII safety
-- GPU claim validation
-- report contract
-- architecture boundary
-- test and verification
+    subgraph Frontend["stock-pred-v5 - React/Vite frontend"]
+        Vite[vite.config.js :5173] --> App[src/StockPredV5.jsx]
+        App --> Signal[SIGNAL]
+        App --> Models[MODELS]
+        App --> BacktestTab[BACKTEST]
+        App --> RecTab[REC]
+        RecTab --> RecPanel[RecommendationPanel.jsx]
+        RecPanel --> RecCard[RecommendationCard.jsx]
+        RecCard --> Badge[RiskGateBadge.jsx]
+        PublicSnapshot[public/dashboard_snapshot.json] --> RecPanel
+    end
 
-See `docs/CONTINUE_MERGED_USAGE_GUIDE.md` for the current operating guide.
+    Snapshot -. FILE mode .-> PublicSnapshot
+    RecPanel -. API mode via /api proxy .-> API
+    Preview --> Vite
 
-## Commands
-
-```powershell
-python main.py --help
-.\run.ps1 self-test
-.\run.ps1 recommend --synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports/recommendations
-.\run.ps1 ops-v1 --synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports/ops_v1
-.\run.ps1 recommend --data-provider synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports/recommendations_phase1_smoke
-.\run.ps1 dashboard-export --recommendation-json reports/recommendations_phase1_smoke/recommendations_algo_v2_YYYYMMDD_HHMMSS.json --output reports/recommendations_phase1_smoke/dashboard_snapshot.json
+    subgraph Reference["continue-main - reference only"]
+        ContinueDocs[docs / checks / agents / MCP docs]
+    end
+    ContinueDocs -. quality gate reference .-> Backend
 ```
 
-## Verified Operator Path
+## 3. Root Folder Roles
 
-```powershell
-cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
-.\run.ps1 self-test
-```
+| Path | Role | Details included here |
+|---|---|---|
+| `stock_rtx4060_unified/` | Active recommendation backend | CLI, providers, audit, reports, ops-v1, dashboard bridge, Flask API |
+| `stock-pred-v5/` | Active dashboard frontend | React UI, Vite server, REC tab, FILE/API modes, build commands |
+| `continue-main/` | Reference monorepo | Continue IDE/CLI architecture, checks, agents, MCP docs, not stock runtime |
+| `docs/` | Root history and validation docs | Past move plans, root audits, Mermaid checks, setup notes |
+| `reports/` | Root-generated evidence | Benchmarks, validations, recommendation reports, runtime outputs |
+| `_consolidation_audit/` | Consolidation evidence | Historical copy/merge/exclusion evidence |
+| `_delete_audit/` | Delete audit evidence | Approved deletion audit records |
+| `archive/original_inputs/` | Original input archive | Original zip/input evidence |
 
-Observed result: `self-test: PASS`, backend `xgb-cpu`, final capital `102190.84`.
+## 4. Backend: `stock_rtx4060_unified`
 
-For tests, use the project `.venv`:
+`stock_rtx4060_unified` is a consolidated report-only stock screening and backtesting package. It keeps active source under `src/stock_rtx4060/`.
 
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-```
+### Backend entry points
 
-Observed result after Phase A provider validation coverage: 26 tests passed.
+| Entry | Actual file | Purpose |
+|---|---|---|
+| Windows wrapper | `stock_rtx4060_unified/run.ps1` | Chooses `.venv\Scripts\python.exe` first, then Python 3.12, Python 3.11, global `python` |
+| Root Python wrapper | `stock_rtx4060_unified/main.py` | Adds `src/` to import path and dispatches package CLI |
+| Package CLI | `stock_rtx4060_unified/src/stock_rtx4060/main.py` | Defines all CLI commands |
+| API server | `stock_rtx4060_unified/api_server.py` | Local Flask API on `127.0.0.1:5151` |
+| Preview server | `stock_rtx4060_unified/preview_server.py` | Starts Flask API and Vite dashboard together |
 
-Observed targeted Phase B result: 7 tests passed for `test_backtest_honesty.py`, dashboard bridge compatibility, and synthetic recommendation JSON evidence.
+### Backend commands
 
-Observed full Phase B regression result: 30 tests passed.
+| Command | What it does | Main outputs |
+|---|---|---|
+| `env` | Runtime/GPU environment status | `reports/runtime_status.json` |
+| `benchmark` | Synthetic CPU/GPU benchmark | benchmark Markdown/JSON |
+| `report` | Daily brief/risk reports from CSV or synthetic data | Markdown/JSON reports |
+| `predict` | Train/predict from CSV or yfinance | CLI JSON output |
+| `recommend` | Track-S/Track-L recommendation scan | recommendation Markdown/JSON and `audit_log.jsonl` |
+| `ops-v1` | Manual review workflow packet | recommendation, daily brief, approval template, ZERO log, summary JSON |
+| `dashboard-export` | Convert recommendation JSON to dashboard snapshot | `dashboard_snapshot.json` |
+| `demo` | Generate sample workspace data and reports | sample CSV and report files |
+| `journal` | Append manual decision journal row | journal CSV |
+| `self-test` | Internal smoke test | CLI PASS/diagnostic output |
 
-## Phase 1 Provider And Audit Upgrade
+### Backend modules
 
-The recommendation workflow now routes OHLCV loading through `src/stock_rtx4060/data_providers.py`.
-
-Supported provider values:
-
-| Provider | Meaning |
+| Module | Responsibility |
 |---|---|
-| `auto` | Use `config/data_providers.example.json` default when supplied; otherwise use `yfinance`. |
-| `synthetic` | Use deterministic local synthetic OHLCV data. |
-| `yfinance` | Use the existing direct yfinance path. |
-| `openbb` | Use optional OpenBB endpoint `obb.equity.price.historical(..., provider="yfinance")`. |
+| `feature_engine.py` | Builds technical indicator features such as moving averages, RSI/MACD/Bollinger-style indicators, and model inputs |
+| `ensemble_model.py` | Runs model path with XGBoost/LogisticRegression-style backends and walk-forward validation behavior documented in package docs |
+| `backtester.py` | Produces dry-run backtest evidence |
+| `risk_rules.py` | Applies Track-S/Track-L risk and verdict gate logic |
+| `recommendation_engine.py` | Orchestrates provider data, features, model evidence, backtest evidence, risk gates, ranking, and report writing |
+| `data_providers.py` | Routes OHLCV loading through `auto`, `synthetic`, `yfinance`, or `openbb` |
+| `audit_log.py` | Writes masked JSONL audit events |
+| `dashboard_bridge.py` | Builds `dashboard_snapshot.v1` from recommendation JSON |
+| `ops_workflow.py` | Writes daily brief, manual approval template, ZERO log, and workflow summary |
+| `mcp_adapter.py` | Phase 1 read/report-only adapter contract; does not start an MCP server |
+| `reports.py` | Shared Markdown/JSON/CSV report helpers |
 
-OpenBB is optional. Install it only when testing the OpenBB provider path:
+## 5. Data Provider And Audit Flow
 
-```powershell
-pip install -r requirements-openbb.txt
+```mermaid
+sequenceDiagram
+    participant User as Operator
+    participant CLI as recommend / ops-v1
+    participant Provider as data_providers.py
+    participant Audit as audit_log.py
+    participant Engine as RecommendationEngine
+    participant Report as Markdown/JSON output
+
+    User->>CLI: choose universe, track, provider, output-dir
+    CLI->>Provider: load OHLCV
+    Provider->>Audit: append provider attempt event
+    Provider-->>Engine: normalized OHLCV dataframe
+    Engine->>Engine: feature/model/backtest/risk evaluation
+    Engine-->>Report: recommendation report + audit path
 ```
 
-`recommend` and `ops-v1` write `audit_log.jsonl` under the selected recommendation output directory. The log records provider attempts, source, status, command, ticker, period, duration, endpoint when applicable, and masked error/config metadata.
+| Provider | Meaning | Dependency |
+|---|---|---|
+| `synthetic` | Deterministic local OHLCV for offline validation | No internet |
+| `yfinance` | Existing direct market data path | `yfinance>=0.2.66` |
+| `openbb` | Optional OpenBB historical equity endpoint using `provider="yfinance"` | `requirements-openbb.txt` |
+| `auto` | Config/default provider mode where CLI can override config | `config/data_providers.example.json` when supplied |
 
-`RecommendationEngine` caches OHLCV data within one CLI run, so Track-S and Track-L reuse the same ticker/provider load. The cache keeps the OpenBB audit log to one provider event for a single-ticker `track=BOTH` smoke run.
+The audit log records provider attempts, status, command, ticker, period, endpoint when applicable, duration/error metadata, and masked sensitive values.
 
-## Phase A Point-in-time Provider Validation
+## 6. Recommendation Contract
 
-`src/stock_rtx4060/provider_validation.py` validates normalized OHLCV frames after provider loading and before recommendation scoring uses the data.
+The backend is designed around report-only screening.
 
-The validation checks row count, first date, last date, future-dated rows, duplicate dates, required OHLCV columns, null critical values, and freshness evidence.
+| Track | Meaning | Review boundary |
+|---|---|---|
+| Track-S | Shorter-term candidate screening | Requires score/risk/model/backtest gates and manual review |
+| Track-L | Longer-term accumulation screening | Requires stronger score/evidence and manual thesis review |
 
-The result is additive:
+Verdict families:
 
-- provider audit events include compact provider validation metadata
-- recommendation JSON includes top-level `provider_summary`
-- `dashboard_snapshot.v1` includes `provider_summary`
-- older recommendation JSON without `provider_summary` still exports
+| Verdict family | Meaning |
+|---|---|
+| `ELIGIBLE_RECOMMENDATION` | Candidate passed the active screening gate but is still review-only |
+| `ACCUMULATE_RECOMMENDATION` | Candidate passed accumulation-style screening but is still review-only |
+| `AMBER_*` | Watchlist/review-only |
+| `RED_*` | Blocked or not recommended |
+| `ZERO_*` | Hard block, such as no data or failed risk plan |
 
-Smoke command:
+Safety fields and behaviors:
 
-```powershell
-.\run.ps1 recommend --synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports/phase_a_provider_v2_smoke
-.\run.ps1 dashboard-export --recommendation-json reports/phase_a_provider_v2_smoke/recommendations_algo_v2_YYYYMMDD_HHMMSS.json --output reports/phase_a_provider_v2_smoke/dashboard_snapshot.json --public-dir ..\stock-pred-v5\public
-```
+| Field or behavior | Required meaning |
+|---|---|
+| `screening_output_only=True` | The output is not a trade instruction |
+| `manual_approval_required=True` | Human review is required before action |
+| `broker_order_execution=False` | No broker order path is active |
+| ZERO log | Records blocked actions such as auto-buy or broker execution |
 
-## Phase B Backtest Honesty
+## 7. Dashboard: `stock-pred-v5`
 
-`src/stock_rtx4060/backtest_honesty.py` adds report-only evidence checks after the model and backtest have produced metrics.
+`stock-pred-v5` is a Vite/React dashboard for US/KRX market visualization and backend recommendation display.
 
-The checks cover:
+### Dashboard structure
 
-- OOF coverage
-- Sharpe floor
-- maximum drawdown
-- transaction-cost buffer
-- walk-forward gap evidence
+| Area | File | Role |
+|---|---|---|
+| React mount | `stock-pred-v5/src/main.jsx` | Mounts the app |
+| Main dashboard | `stock-pred-v5/src/StockPredV5.jsx` | Owns tabs, state, browser-side charts, REC tab placement |
+| REC panel | `stock-pred-v5/src/components/RecommendationPanel.jsx` | Loads FILE/API recommendation snapshots, filters, sorts |
+| Recommendation card | `stock-pred-v5/src/components/RecommendationCard.jsx` | Shows ticker, verdict, score, entry, stop, TP2, R/R, validation summary |
+| Risk badge | `stock-pred-v5/src/components/RiskGateBadge.jsx` | Maps verdict labels to visual badges |
+| Static sample | `stock-pred-v5/public/dashboard_snapshot.json` | FILE mode saved snapshot, not live market data |
+| Vite config | `stock-pred-v5/vite.config.js` | Runs on port `5173` and proxies `/api` to `127.0.0.1:5151` |
 
-The result is additive:
-
-- candidate JSON includes `backtest_honesty`
-- recommendation JSON includes top-level `backtest_honesty_summary`
-- `dashboard_snapshot.v1` includes `backtest_honesty_summary`
-- `audit_log.jsonl` includes a `backtest_honesty_summary` event
-- existing score functions and ranking keys are not changed
-
-Targeted test command:
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest tests\test_backtest_honesty.py tests\test_dashboard_bridge.py::test_build_dashboard_snapshot_preserves_report_only_contract tests\test_dashboard_bridge.py::test_dashboard_snapshot_accepts_older_payload_without_provider_summary tests\test_core.py::test_recommendation_engine_synthetic_run -q
-```
-
-Phase B is evidence-only. A Backtest Honesty PASS does not approve a trade and does not bypass risk gates.
-
-Observed Phase B smoke result: `reports\phase_b_backtest_honesty_smoke\dashboard_snapshot.json` contains `backtest_honesty_summary.status=AMBER`, candidate `backtest_honesty.status=AMBER`, and `screening_output_only=True`.
-
-MCP Phase 1 is a read/report-only adapter contract in `src/stock_rtx4060/mcp_adapter.py`. It does not start a local MCP server and does not expose broker, account, order, margin, options, or destructive filesystem capabilities.
-
-## Dashboard Report Bridge
-
-The file-based dashboard bridge keeps the CLI report-only boundary.
-
-Workflow:
-
-```powershell
-.\run.ps1 recommend --synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports/dashboard_bridge_smoke
-.\run.ps1 dashboard-export --recommendation-json reports/dashboard_bridge_smoke/recommendations_algo_v2_YYYYMMDD_HHMMSS.json --output reports/dashboard_bridge_smoke/dashboard_snapshot.json
-```
-
-`dashboard-export` reads the existing recommendation JSON and writes a `dashboard_snapshot.v1` file. The snapshot preserves `screening_output_only`, `audit_log_path`, `provider_summary`, verdicts, scores, risk-plan fields, validations, and reasons.
-
-The dashboard file `C:\Users\jichu\Downloads\주식\stock_pred_v5.jsx` now has a `BACKEND` import button and `BACKEND` tab for loading `dashboard_snapshot.json`. Browser-generated simulated model scores and backend report snapshots remain separate.
-
-The repo-owned dashboard copy is `dashboard/stock_pred_v5.jsx`.
-
-Browser verification:
-
-```powershell
-node dashboard\verify_bridge_smoke.mjs
-```
-
-Observed result: PASS. The command opened `dashboard/bridge_smoke.html`, rendered `dashboard_snapshot.json`, and wrote `reports/dashboard_browser_verification/dashboard_browser_verification.md`.
-
-Generated runtime reports are governed by `docs/REPORTS_POLICY.md`.
-
-## Ops v1 Manual Approval Workflow
-
-`ops-v1` runs the report-only operating workflow described in `docs/UIUX.md`.
-It produces candidate recommendations plus manual approval artifacts.
-
-```powershell
-.\run.ps1 ops-v1 --period 3y --top 5 --full --prefer-gpu --model-kind xgb --cv-gap 5 --output-dir reports/ops_v1
-```
-
-Generated files include:
-
-- recommendation Markdown and JSON
-- `audit_log.jsonl`
-- `ops_v1_daily_brief_*.md`
-- `approval_journal_template.csv`
-- `zero_log.md` and `zero_log.csv`
-- `ops_v1_summary_*.json`
-
-Safety boundary:
-
-- `screening_output_only=True`
-- `manual_approval_required=True`
-- `broker_order_execution=False`
-- auto-buy, broker order execution, and margin/options stay ZERO
-
-## Structure
-
-```text
-stock_rtx4060_unified/
-├── main.py
-├── run.ps1
-├── pyproject.toml
-├── requirements.txt
-├── requirements-gpu-wsl.txt
-├── .continue/checks/
-├── src/stock_rtx4060/
-├── tests/
-├── docs/
-├── examples/
-├── reports/
-├── workspaces/
-├── archive/original_inputs/
-├── review_needed/
-└── tools/
-```
-
-## Validation
-
-See `reports/validation_results.md` and `reports/consolidation_report.md` for the current execution evidence.
-
-TensorFlow validation paths are split by runtime:
-
-```powershell
-.\run.ps1 tensorflow-check
-.\run.ps1 tensorflow-gpu-wsl-check
-```
-
-- `tensorflow-check` uses Windows `.venv-tf312` and validates CPU TensorFlow/LSTM only.
-- `tensorflow-gpu-wsl-check` uses WSL Ubuntu and `/root/.venvs/stock-rtx4060-tf-gpu`.
-- aliases for the WSL GPU smoke are `tf-gpu-wsl` and `tf-gpu-smoke`.
-- the WSL GPU wrapper auto-builds `LD_LIBRARY_PATH` from `site-packages/nvidia/**/lib` before running TensorFlow.
-- current verified WSL GPU output: TensorFlow `2.21.0`, `TF_GPUS=["/physical_device:GPU:0"]`, `GPU_MATMUL=PASS`, `LSTM_SMOKE=PASS`.
-
-## Security Boundary
-
-- No broker API is present.
-- No `.env` secrets were copied into the unified executable path.
-- Audit logs mask obvious API keys, tokens, passwords, authorization values, account identifiers, and private URLs.
-- Market data and model output are treated as data, not instructions.
-- Recommendation reports are screening artifacts for manual review.
-
-## Latest OpenBB Cache Smoke
-
-```powershell
-.\run.ps1 recommend --data-provider openbb --provider-config config/data_providers.example.json --universe "AAPL" --top 1 --output-dir reports/recommendations_openbb_cache_smoke
-```
-
-Observed result: `reports/recommendations_openbb_cache_smoke/audit_log.jsonl` contains 1 successful `obb.equity.price.historical` provider event for AAPL.
-
----
-
-## System Overview
-
-stock_rtx4060_unified is a **report-only stock-candidate screening engine** for Track-S (short-term, 1–20 day horizon) and Track-L (long-term, weeks–months). It outputs ranked recommendation JSON/MD reports with GREEN/AMBER/RED/ZERO verdicts. **No broker execution, no auto buy/sell.**
-
-## Architecture
+### Dashboard data modes
 
 ```mermaid
 flowchart TD
-    subgraph Input["📥 Input"]
-        U[Universe Tickers] --> RE[RecommendationEngine]
-        P[Period / Horizon] --> RE
-    end
-    subgraph Core["⚙️ Core Pipeline"]
-        RE --> FE[feature_engine]
-        FE --> EM[ensemble_model]
-        EM --> BT[backtester]
-        BT --> RR[risk_rules]
-    end
-    subgraph Output["📤 Output"]
-        RR --> SNAP[dashboard_snapshot.v1]
-        RR --> REPORT[Markdown Report]
-        RR --> JSON[Recommendation JSON]
-    end
-    subgraph ApiServer["🌐 Optional API Server"]
-        RE --> FlaskAPI[Flask :5151]
-        FlaskAPI --> SNAP
-    end
+    Rec[REC tab] --> ModeChoice{Data mode}
+    ModeChoice --> FileMode[FILE mode]
+    ModeChoice --> ApiMode[API mode]
+    FileMode --> SnapshotFile[public/dashboard_snapshot.json<br/>or imported dashboard_snapshot.v1]
+    ApiMode --> ViteProxy[Vite /api proxy]
+    ViteProxy --> Flask[Flask API :5151]
+    Flask --> Engine[RecommendationEngine]
+    Engine --> Snapshot[dashboard_snapshot.v1]
+    SnapshotFile --> Cards[Recommendation cards]
+    Snapshot --> Cards
 ```
 
-## Features
+| Mode | How it works | When to use |
+|---|---|---|
+| FILE | Browser reads `dashboard_snapshot.json` | No backend server needed; static saved snapshot only |
+| API | Browser calls `/api/recommend`, Vite proxies to Flask `:5151` | Live local backend recommendation run with visible request defaults |
+| Preview | `preview_server.py` starts both API and Vite | One-command local preview |
 
-- Walk-forward ensemble (XGBoost + Logistic Regression) with leak-safe TimeSeriesSplit(gap=horizon)
-- 60+ technical indicators from feature_engine.py (EMA, RSI, MACD, Bollinger Bands, etc.)
-- 9 sequential risk gates: DATA_ROWS → LIQUIDITY → MARKET_REGIME → MODEL_EDGE → OOF_COVERAGE → BACKTEST_SANITY → RISK_PLAN → TRACK_SCORE → AUTOMATION_BOUNDARY
-- Track-S: GREEN requires score >= 75.00, stop < entry, RR >= 2.00, ATR risk plan
-- Track-L: GREEN requires score >= 80.00, multi-confirmation, manual thesis required
-- dashboard_bridge.py → dashboard_snapshot.v1 JSON schema
-- Flask API server (api_server.py) with CORS for stock-pred-v5 integration
-- `/api/model-scores` can return selected backend evidence for `model_kind=auto|xgb|logistic`; add `use_lstm=1` to request TensorFlow/LSTM evidence when the runtime environment supports it.
+## 8. API And Snapshot Contract
 
-## Cross-Project Role
+Flask API endpoints from `api_server.py`:
 
-| Downstream Project | Relationship | Interface |
-|--------------------|-------------|-----------|
-| stock-pred-v5 | REC tab data source | dashboard_snapshot.json via FILE mode or Flask API → /api/recommend |
-
-## Tech Stack
-
-| Layer | Technology | Version | Purpose |
-|-------|------------|---------|---------|
-| Runtime | Python | 3.11+ | CLI + engine |
-| ML | scikit-learn | >=1.1 | Logistic Regression ensemble |
-| ML | XGBoost | >=3.1 | Gradient boosting, CPU/GPU |
-| Data | pandas, numpy | latest | Data processing |
-| Data | yfinance | >=0.2.66 | OHLCV price data |
-| API | Flask + flask-cors | >=3.0 | REST API for stock-pred-v5 |
-| Optional | OpenBB | — | Extended data provider |
-| GPU | WSL2/CUDA | — | XGBoost GPU acceleration (RTX 4060) |
-
----
-
-## Dashboard API Real Data Update - 2026-05-06
-
-This append-only update records the current dashboard-facing API behavior after the 2026-05-06 stabilization pass.
-
-| Endpoint | Current documented behavior |
+| Endpoint | Purpose |
 |---|---|
-| `/api/symbol` | Returns dashboard chart OHLCV records. KRX `.KS` and `.KQ` symbols use `pykrx` first, then chart-only yfinance fallback if KRX providers are unavailable. |
-| `/api/model-scores` | Returns backend model evidence for a selected ticker. `model_kind=auto` can select XGBoost, and `use_lstm=1` requests TensorFlow/LSTM evidence when the runtime supports it. |
-| `/api/universe` | Provides backend-owned US/KRX selector symbols for the dashboard. |
-| `/api/recommend` | Runs report-only recommendation generation for REC API mode. |
+| `GET /api/health` | Health check |
+| `GET /api/recommend` | Runs recommendation engine and returns `dashboard_snapshot.v1` |
+| `GET /api/snapshot?path=X` | Converts an existing recommendation JSON into a snapshot response |
 
-Current verified dashboard proxy observation:
+`dashboard_bridge.py` requires these source result fields before building a dashboard snapshot:
 
-```text
-GET http://127.0.0.1:5174/api/symbol?symbol=005930.KS&period=6mo&data_provider=pykrx
-symbol=005930.KS
-source=PYKRX
-provider=pykrx
-row_count=729
-last_date=2026-05-06
-freshness_days=0
-```
+| Group | Fields |
+|---|---|
+| Identity | `ticker`, `track`, `verdict` |
+| Ranking/model | `recommendation_rank_score`, `direction_prob`, `expected_value_pct` |
+| Risk plan | `entry`, `stop`, `tp2`, `risk_reward` |
+| Safety/evidence | `screening_output_only`, `validations` |
 
-Relevant verification:
+Snapshot output includes rank, ticker, track, verdict, score, probability, expected value, entry, stop, TP1/TP2 where available, risk/reward, risk budget, max position, suggested quantity, model/backtest evidence, validation checks, reasons, source JSON path, and audit log path.
+
+## 9. Continue Reference Role
+
+`continue-main/` is not the stock program runtime. Its own architecture document describes:
+
+| Continue area | Meaning |
+|---|---|
+| `core/` | TypeScript core runtime, config, indexing, diff, vendor integrations |
+| `extensions/` | VS Code, JetBrains, and CLI surfaces |
+| `gui/` | React chat UI |
+| `binary/` | Rust/C++ autocomplete engine |
+| `docs/` | Mintlify documentation |
+| `.continue/` | agents, checks, prompts, and rules |
+
+In this stock workspace, Continue is useful as a reference for quality gates and future review automation. It is not imported by `stock_rtx4060_unified` at runtime and it does not run the recommendation engine.
+
+## 10. Setup And Run Commands
+
+Python backend:
 
 ```powershell
+cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\run.ps1 self-test
+```
+
+Optional OpenBB:
+
+```powershell
+cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+.\.venv\Scripts\python.exe -m pip install -r requirements-openbb.txt
+.\run.ps1 recommend --data-provider openbb --provider-config config/data_providers.example.json --universe "AAPL" --top 1 --output-dir reports\recommendations_openbb_cache_smoke
+```
+
+Recommendation and snapshot:
+
+```powershell
+cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+.\run.ps1 recommend --data-provider synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports\recommendations
+.\run.ps1 dashboard-export --recommendation-json reports\recommendations\recommendations_algo_v2_YYYYMMDD_HHMMSS.json --output reports\recommendations\dashboard_snapshot.json
+```
+
+Dashboard:
+
+```powershell
+cd C:\Users\jichu\Downloads\주식\stock-pred-v5
+npm install
+npm run dev
+npm run build
+```
+
+Integrated preview:
+
+```powershell
+cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+.\.venv\Scripts\python.exe preview_server.py
+```
+
+## 11. Outputs And Where They Go
+
+| Output | Location |
+|---|---|
+| Recommendation Markdown/JSON | `stock_rtx4060_unified/reports/recommendations*/` |
+| Provider audit log | `stock_rtx4060_unified/reports/**/audit_log.jsonl` |
+| Ops v1 daily brief | `stock_rtx4060_unified/reports/ops_v1*/ops_v1_daily_brief_*.md` |
+| Approval journal template | `stock_rtx4060_unified/reports/ops_v1*/approval_journal_template.csv` |
+| ZERO log | `stock_rtx4060_unified/reports/ops_v1*/zero_log.md` and `.csv` |
+| Dashboard snapshot | `dashboard_snapshot.json` from `dashboard-export` or API |
+| Dashboard build | `stock-pred-v5/dist/` |
+| Browser verification | `stock_rtx4060_unified/reports/dashboard_browser_verification/` |
+| Consolidation evidence | `_consolidation_audit/` |
+| Deletion audit evidence | `_delete_audit/` |
+
+## 12. Safety And Security
+
+| Boundary | Status |
+|---|---|
+| Broker API | Not part of active architecture |
+| Auto buy/sell | ZERO / out of scope |
+| Account write | Not present |
+| Margin/options | ZERO / out of scope |
+| Secrets in docs | Must not be printed |
+| Provider credentials | Must stay outside committed docs/reports |
+| Market/model output | Treated as data, not instructions |
+| Human approval | Required before any real-world action |
+
+## 13. Validation Commands
+
+Use these before claiming the workspace is healthy:
+
+```powershell
+cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+.\.venv\Scripts\python.exe main.py --help
+.\.venv\Scripts\python.exe -m pytest -q
+.\run.ps1 tensorflow-check
+```
+
+```powershell
+cd C:\Users\jichu\Downloads\주식\stock-pred-v5
+npm run build
+```
+
+Expected current baseline from local docs and recent verification:
+
+| Check | Expected |
+|---|---|
+| Backend CLI help | Lists `env`, `benchmark`, `report`, `predict`, `recommend`, `ops-v1`, `dashboard-export`, `demo`, `journal`, `self-test` |
+| Backend tests | 19 tests pass |
+| TensorFlow CPU/LSTM smoke | `.\run.ps1 tensorflow-check` prints `TF_VERSION=2.21.0`, CPU device, `LSTM_SMOKE=PASS` |
+| Dashboard build | Vite build succeeds; chunk-size warning may appear |
+
+## 14. Root Documents
+
+These three root documents intentionally overlap so each can be read on its own:
+
+| Document | Main purpose |
+|---|---|
+| `README.md` | First-read operational overview |
+| `SYSTEM_ARCHITECTURE.md` | Full component and data-flow architecture |
+| `SYSTEM_LAYOUT.md` | Folder-by-folder and file-by-file map |
+
+Latest document cross-check on 2026-05-03 read the documentation files under the four requested roots. Cache, build, virtual environment, and Git metadata folders were excluded from the scan.
+
+| Root scanned | Documents read | Why it matters to this README |
+|---|---:|---|
+| `stock_rtx4060_unified/` | 114 | Confirms the active Python backend, CLI commands, reports, audit logs, OpenBB plan, and dashboard bridge |
+| `stock-pred-v5/` | 29 | Confirms the active React/Vite dashboard, REC tab, FILE/API modes, snapshot sample, and build workflow |
+| `continue-main/` | 342 | Confirms Continue is a separate IDE/CLI/MCP reference project, not the stock runtime |
+| `docs/` | 32 | Confirms root-level historical plans, setup notes, layout notes, and architecture references |
+| Total | 517 | The root overview, architecture, and layout documents were cross-checked against this scan |
+
+## 15. Latest Dashboard Export Quick Start
+
+The dashboard now has two verified REC paths. API mode calls the local Flask recommendation API first and shows the request defaults on screen. FILE mode reads the saved `stock-pred-v5/public/dashboard_snapshot.json` snapshot and labels it as static, not live market data.
+
+```mermaid
+flowchart LR
+    Backend[stock_rtx4060_unified] --> Command[main.py dashboard-export]
+    Command --> Snapshot[dashboard_snapshot.json]
+    Command --> Audit[audit_log.jsonl]
+    Command --> Approval[approval_journal_template.csv]
+    Snapshot --> Public[stock-pred-v5/public]
+    Audit --> Public
+    Approval --> Public
+    Public --> Dashboard[stock-pred-v5 REC tab]
+    Dashboard --> Ops[Audit / Approval / Provider summary]
+    Dashboard --> Recs[recommendation cards]
+```
+
+Export backend files to the dashboard:
+
+```powershell
+cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+.\.venv\Scripts\python.exe main.py dashboard-export --recommendation-json .\reports\full_verify_ops_v1\recommendations\recommendations_algo_v2_20260503_151612.json --output .\reports\dashboard_public_export_smoke\dashboard_snapshot.json --public-dir ..\stock-pred-v5\public --approval-journal .\reports\full_verify_ops_v1\approval_journal_template.csv
+```
+
+Expected public files:
+
+| File | Meaning |
+|---|---|
+| `stock-pred-v5/public/dashboard_snapshot.json` | Recommendation snapshot used by the REC tab. |
+| `stock-pred-v5/public/audit_log.jsonl` | Audit events summarized by the REC tab. |
+| `stock-pred-v5/public/approval_journal_template.csv` | Approval queue data summarized by the REC tab. |
+
+Synthetic recommendation demo `.json` or `.md` files must not remain in `stock-pred-v5/public/`.
+Demo evidence belongs outside the runtime public asset path.
+
+Verify the dashboard view:
+
+```powershell
+cd C:\Users\jichu\Downloads\주식\stock-pred-v5
+npx playwright test tests/kevpe-dashboard.spec.js --reporter=line
+npm run build
+npm audit
+```
+
+The REC tab currently shows recommendation cards plus Audit / Approval / Provider summary panels. This dashboard is a review surface only. It does not send orders to a broker.
+
+## 16. Latest Phase B Backtest Honesty Quick Start
+
+Phase B adds an evidence layer that checks whether backtest results are strong enough to trust for manual review. It does not approve trades.
+
+```mermaid
+flowchart LR
+    Metrics[Backtest metrics] --> Honesty[Backtest Honesty Suite]
+    Honesty --> Candidate[results[].backtest_honesty]
+    Honesty --> Summary[backtest_honesty_summary]
+    Summary --> Snapshot[dashboard_snapshot.v1]
+    Snapshot --> Dashboard[REC tab review]
+```
+
+What changed:
+
+| Item | Meaning |
+|---|---|
+| `backtest_honesty.py` | Checks OOF coverage, Sharpe floor, max drawdown, transaction-cost buffer, and walk-forward gap. |
+| `results[].backtest_honesty` | Candidate-level evidence in recommendation JSON. |
+| `backtest_honesty_summary` | Run-level evidence in recommendation JSON and dashboard snapshot. |
+| `audit_log.jsonl` event | Adds event type `backtest_honesty_summary`. |
+| Ranking behavior | Existing score functions and ranking keys are not changed. |
+
+Run the latest verified Phase B smoke:
+
+```powershell
+cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+.\.venv\Scripts\python.exe -m pytest -q
+.\run.ps1 recommend --synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports\phase_b_backtest_honesty_smoke
+.\run.ps1 dashboard-export --recommendation-json reports\phase_b_backtest_honesty_smoke\recommendations_algo_v2_20260503_194454.json --output reports\phase_b_backtest_honesty_smoke\dashboard_snapshot.json
+```
+
+Observed result: 30 tests passed. The Phase B dashboard snapshot contains `backtest_honesty_summary.status=AMBER`, candidate `backtest_honesty.status=AMBER`, and `screening_output_only=True`.
+
+API note:
+
+| Question | Answer |
+|---|---|
+| Does this project use FastAPI? | No. |
+| Current backend API framework | Flask + flask-cors |
+| API file | `stock_rtx4060_unified/api_server.py` |
+| API port | `http://127.0.0.1:5151` |
+| Dashboard port | `http://127.0.0.1:5173` |
+
+## 17. Dashboard API Real Data Update - 2026-05-06
+
+This append-only update records the latest dashboard stabilization work.
+
+The dashboard is API-first for chart data, model evidence, universe loading, and REC API mode.
+Fallback lists are UI continuity data only.
+FILE mode is a static saved snapshot path.
+The system remains report-only and review-only.
+
+| Area | Current documented state |
+|---|---|
+| Runtime config | `stock-pred-v5/public/dashboard_config.json` owns fallback symbols, chart provider defaults, model-score defaults, REC defaults, signal thresholds, and model-quality thresholds |
+| Universe | `/api/universe` is primary; fallback symbols are used only when the universe API is unavailable |
+| Chart API | `/api/symbol` is the chart source; KRX `.KS` and `.KQ` symbols use `pykrx` first |
+| KRX chart observation | `005930.KS` returned `provider=pykrx`, `row_count=729`, `last_date=2026-05-06`, `freshness_days=0` through the active dashboard proxy |
+| Model evidence | `/api/model-scores` supports `model_kind=auto` and `use_lstm=1`; backend evidence can include XGBoost and LSTM scores |
+| REC mode | API mode shows request defaults; FILE mode remains static snapshot only |
+| Error wording | API/network fetch failure is separated from provider/insufficient-row failure |
+
+Evidence files:
+
+- `output/playwright/dashboard-api-fallback-boundary-2026-05-06.json`
+- `output/playwright/dashboard-hardcoding-removal-2026-05-06.json`
+- `output/playwright/xgboost-lstm-applied-2026-05-06.json`
+- `output/playwright/krx-chart-provider-fix-2026-05-06.json`
+- `docs/DASHBOARD_API_REALDATA_UPDATE_SUMMARY_2026-05-06.md`
+
+Latest relevant verification:
+
+```powershell
+cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
 .\.venv\Scripts\python.exe -m pytest tests\test_api_model_scores.py -q -p no:cacheprovider --basetemp C:\tmp\stock-pytest-symbol-fallback-green-20260506
 .\.venv\Scripts\python.exe -m py_compile api_server.py src\stock_rtx4060\data_providers.py
 ```
 
-Evidence files:
+```powershell
+cd C:\Users\jichu\Downloads\주식\stock-pred-v5
+npx playwright test tests/dashboard-api-fallback-boundary.spec.js tests/model-quality-warning.spec.js --reporter=line
+npm run build
+```
 
-- `..\output\playwright\xgboost-lstm-applied-2026-05-06.json`
-- `..\output\playwright\krx-chart-provider-fix-2026-05-06.json`
-- `..\docs\DASHBOARD_API_REALDATA_UPDATE_SUMMARY_2026-05-06.md`
+## 18. Dashboard Investment Readiness Grade - 2026-05-07
 
-Known limits:
+The dashboard now includes an investment-readiness grade for practical review. This is a review aid, not an automatic trading instruction.
 
-- Native Windows TensorFlow remains CPU-only unless a separate supported GPU path is verified.
-- The dashboard remains report-only. It does not place broker orders.
+### What the grade answers
+
+| Question | Dashboard answer |
+|---|---|
+| Is the data fresh enough? | Uses row count, latest date, freshness days, and provider summary. |
+| Is model evidence usable? | Uses AUC, accuracy, OOF coverage, and backend model evidence where available. |
+| Is backtest evidence acceptable? | Uses return and Sharpe-style evidence where available. |
+| Is the risk plan usable? | Uses entry, stop, target, and risk/reward structure. |
+| Is manual review still required? | Yes. The system remains `screening_output_only` and report-only. |
+
+### Where it appears
+
+| Screen | What changed |
+|---|---|
+| SIGNAL | Shows `실제 투자 반영 가능 등급` for the selected ticker. |
+| REC | Shows `INVESTMENT GRADE` inside each recommendation candidate card so candidates can be compared side by side. |
+
+### Grade labels
+
+| Grade | Meaning for the user |
+|---|---|
+| `반영 금지` | Do not use this candidate in an investment workflow. |
+| `검토 전용` | Keep it as review material only. More evidence or manual judgment is needed. |
+| `조건부 반영 가능` | It can be considered in a manual investment review, but it is still not a buy/sell order. |
+
+### Implementation files
+
+| File | Meaning |
+|---|---|
+| `stock-pred-v5/src/StockPredV5.jsx` | Builds the selected ticker readiness panel. |
+| `stock-pred-v5/src/components/RecommendationCard.jsx` | Builds each REC candidate card grade. |
+| `stock-pred-v5/src/components/RecommendationPanel.jsx` | Sends provider summary evidence into each card. |
+| `stock-pred-v5/tests/dashboard-api-fallback-boundary.spec.js` | Tests REC candidate card readiness display. |
+| `stock-pred-v5/tests/model-quality-warning.spec.js` | Tests SIGNAL readiness display. |
+| `COMPONENT_LAYOUT.md` | Documents the dashboard component placement for SIGNAL readiness and REC candidate readiness blocks. |
+
+### Latest verification
+
+```powershell
+cd C:\Users\jichu\Downloads\주식\stock-pred-v5
+npx playwright test tests/dashboard-api-fallback-boundary.spec.js -g "REC candidate cards show" --reporter=line
+npx playwright test tests/dashboard-api-fallback-boundary.spec.js tests/model-quality-warning.spec.js tests/kevpe-dashboard.spec.js --reporter=line
+npm run build
+```
+
+Observed result: the REC candidate readiness test passed, the dashboard regression group passed 16 tests, and the build completed with the existing chunk-size warning.
+
+Browser evidence:
+
+- `stock-pred-v5/test-results/dashboard-rec-investment-grade-20260507.png`
