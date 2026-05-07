@@ -2,6 +2,63 @@
 
 All notable changes for `stock_rtx4060_unified` are documented here.
 
+## 2026-05-08 — Test Coverage Boost: ensemble_model / kevpe_adapter / main (≥80%)
+
+### Added
+
+- **`tests/test_ensemble_model_extra.py`** (50 tests): Covers `_safe_auc`, `_xgboost_version_tuple`, `xgb_params_for_device`, `DirectionModel.fit` fallback chain (xgb → cpu-fallback → rf → logistic), `EnsemblePredictor` walk-forward CV, signal branches (`BUY_REVIEW`/`SELL_OR_AVOID`/`HOLD_NEUTRAL`), and LSTM blend paths via injected fake objects.
+- **`tests/test_kevpe_adapter.py`** (57 tests): Covers `KevpeAdapterResult`, all `_ensure_init` paths, `get_signal_for_ticker` branches, `_normalize_ohlcv_for_kevpe` (MultiIndex, 'Date' column), `_normalize_events` (int topics), `_signal_from_events` (RED/AMBER/GREEN), `_forward_return_after_event` (end≤start), `_extract_feature_from_windows`, `_build_historical_features`, `_build_historical_forward_returns`, singleton, and `kevpe_signal_to_supplement`.
+- **`tests/test_main_extra.py`** (61 tests): Covers all `cmd_*` functions via `argparse.Namespace` with mocked heavy deps, `normalize_legacy_args`, `load_ohlcv`, `_mean`, `main()` dispatch, and `build_parser`.
+- **`tests/test_risk_rules.py`** (new): `risk_rules.py` raised to 100% coverage.
+- **`tests/test_reports.py`** (new): `reports.py` raised to 100% coverage.
+- **`tests/test_data_providers_extra.py`** (new): `data_providers.py` raised to 99% coverage.
+- **`docs/CONTRIB.md`**: Generated contributing guide from `pyproject.toml` / `run.ps1` / `requirements*.txt`.
+- **`docs/RUNBOOK.md`**: Generated operations runbook for common workflows.
+- **`docs/PHASE1_GAP_ANALYSIS_2026-05-07.md`**: Phase 1 gap analysis document.
+
+### Changed
+
+- **`docs/SETUP.md`**: Updated test milestone from 340 tests (80.79%) to 509 tests (89%).
+- **`docs/SPEC.md`**: Added Clarifications Log entry for 2026-05-08 coverage milestone.
+
+### Verified
+
+- Full suite `pytest -q`: **509 tests passed** (0 failures)
+- `ensemble_model.py`: **83%** (target ≥80% ✓)
+- `kevpe_adapter.py`: **91%** (target ≥80% ✓)
+- `main.py`: **98%** (target ≥80% ✓)
+- Total coverage: **89%** (CI gate `fail_under=75` ✓)
+- Commits: `09c8187`, `14bcad6`, `d7a3022`, `7c5f277`
+
+---
+
+## 2026-05-07 — Phase 1 Paper Trading Quality Upgrade: Gap Fill + Formal Approval
+
+### Added
+
+- **`src/stock_rtx4060/paper_trading.py`** — 5 surgical fixes for identified gaps:
+  - GAP-01 (FR-007): BUY score < 56 gate in `evaluate_signal()` — score 55.x signals now rejected as `buy_score_below_threshold`.
+  - GAP-02 (FR-010): `timestamp` field added to `PaperDecision` dataclass and `to_record()` — all rejected-signal records now include ISO-8601 UTC timestamp.
+  - GAP-03 (A-011): `max_open_positions` (default 10) enforced in `_write_run()` — excess accepted signals rejected as `max_open_positions_reached`.
+  - GAP-04 (A-012): `max_daily_new_positions` (default 3) enforced in `_write_run()` — excess accepted signals rejected as `max_daily_new_positions_reached`.
+  - GAP-05 (FR-033): `force_rerun=True` without `rerun_reason` raises `ValueError` at `run()` entry.
+- **`tests/test_paper_trading.py`** — 5 new tests (TC-01 to TC-05):
+  - `test_paper_trading_rejects_buy_score_below_threshold`
+  - `test_paper_trading_rejected_signal_includes_timestamp`
+  - `test_paper_trading_max_open_positions_limit`
+  - `test_paper_trading_max_daily_new_positions_limit`
+  - `test_paper_trading_force_rerun_requires_reason`
+
+### Verified
+
+- `py_compile` on `paper_trading.py`: exit 0
+- `pytest tests/test_paper_trading.py -v`: 24 passed (19 original + 5 new)
+- Full suite `pytest -q`: 133 passed, 0 failures
+- Safety scan: no broker route, credential, live order, auto buy/auto sell code added
+- `paper_trading_only=True` present at 8 locations; `screening_output_only=True` boundary preserved
+
+---
+
 ## 2026-05-03 — Phase B Backtest Honesty Suite + Risk-adjusted Evidence
 
 ### Added

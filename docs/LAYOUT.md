@@ -39,13 +39,19 @@ stock_rtx4060_unified/
 │   ├── bridge_smoke.html
 │   └── verify_bridge_smoke.mjs
 ├── tests/
-│   ├── test_core.py             # Ops v1 workflow regression tests
-│   ├── test_backtest_honesty.py # Phase B backtest honesty tests
-│   ├── test_data_providers.py   # Provider routing tests
-│   ├── test_provider_validation.py # Provider validation tests
-│   ├── test_audit_log.py        # Audit masking tests
-│   ├── test_mcp_adapter.py      # MCP boundary tests
-│   └── test_dashboard_bridge.py # Dashboard bridge tests
+│   ├── test_core.py                  # Ops v1 workflow regression tests
+│   ├── test_backtest_honesty.py      # Phase B backtest honesty tests
+│   ├── test_data_providers.py        # Provider routing tests
+│   ├── test_data_providers_extra.py  # Extended data_providers coverage (99%)
+│   ├── test_provider_validation.py   # Provider validation tests
+│   ├── test_audit_log.py             # Audit masking tests
+│   ├── test_mcp_adapter.py           # MCP boundary tests
+│   ├── test_dashboard_bridge.py      # Dashboard bridge tests
+│   ├── test_reports.py               # reports.py coverage (100%)
+│   ├── test_risk_rules.py            # risk_rules.py coverage (100%)
+│   ├── test_ensemble_model_extra.py  # ensemble_model.py extended coverage (83%)
+│   ├── test_kevpe_adapter.py         # kevpe_adapter.py coverage (91%)
+│   └── test_main_extra.py            # main.py extended coverage (98%)
 ├── docs/
 │   ├── LAYOUT.md                # This file — source tree + conventions
 │   ├── SYSTEM_ARCHITECTURE.md   # Architecture overview
