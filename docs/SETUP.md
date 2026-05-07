@@ -30,11 +30,9 @@ Run tests through the project `.venv`:
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Observed result after Phase A provider validation coverage: 26 tests passed.
+Observed result (2026-05-07): **340 tests passed**, 80.79% coverage (≥75% CI gate).
 
-Observed targeted Phase B result: 7 tests passed for Backtest Honesty unit tests, dashboard bridge compatibility, and synthetic recommendation JSON evidence.
-
-Observed full Phase B regression result: 30 tests passed.
+Earlier milestones: Phase A = 26 tests, Phase B targeted = 7 tests, Phase B regression = 30 tests.
 
 ## Optional OpenBB Provider
 

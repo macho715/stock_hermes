@@ -214,6 +214,8 @@ Resolved choices:
 | 2026-05-02 | Existing report-only and no-broker boundary remains non-negotiable. | Current docs and source inspection |
 | 2026-05-02 | Phase 1 decisions approved: OpenBB optional, MCP adapter contract only, OpenBB equity historical OHLCV endpoint, provider selection by CLI and config. | User approval |
 | 2026-05-02 | OpenBB official docs confirm `obb.equity.price.historical` returns historical OHLCV data and supports `provider="yfinance"`. | OpenBB docs |
+| 2026-05-07 | SQLite OHLCV cache (`data_cache.py`) extracted to standalone module; CI gate added; `paper-run` subcommand added. | Commit e20fc5e |
+| 2026-05-07 | Test suite expanded to 340 tests, 80.79% coverage; `risk_rules.py`, `reports.py` at 100%; `data_providers.py` at 99%. | Commit 09c8187 + session work |
 
 ## Reviewer Checklist
 
@@ -239,6 +241,9 @@ Current implementation status:
 | MCP adapter contract | Implemented in `src/stock_rtx4060/mcp_adapter.py`; no server is started. |
 | CLI provider flags | Implemented for `recommend` and `ops-v1`. |
 | Optional OpenBB dependency | Documented in `requirements-openbb.txt`; base install remains OpenBB-free. |
-| Verification | `.venv` pytest passed with 19 tests; synthetic recommendation, Ops v1 smoke, OpenBB cache smoke, and dashboard bridge smoke generated audit logs or snapshot evidence. |
-| OHLCV cache | Implemented in `RecommendationEngine`; one ticker/provider load is reused across Track-S and Track-L during a single run. |
+| Verification | `.venv` pytest passed with 340 tests (80.79% coverage); synthetic recommendation, Ops v1 smoke, OpenBB cache smoke, and dashboard bridge smoke generated audit logs or snapshot evidence. |
+| OHLCV cache | Implemented in `src/stock_rtx4060/data_cache.py` (SQLite-backed); `_cache` singleton shared across providers; `USE_DATA_CACHE=0` env var disables it. |
 | Dashboard report bridge | Implemented in `src/stock_rtx4060/dashboard_bridge.py` with `dashboard-export`; see `docs/SPEC_DASHBOARD_BRIDGE_2026-05-03.md`. |
+| CI gate | `.github/workflows/ci.yml` runs `pytest --cov=stock_rtx4060` on push/PR; `fail_under=75` enforced in `pyproject.toml`. |
+| paper-run subcommand | Implemented in `src/stock_rtx4060/main.py`; bridges `RecommendationEngine` to `PaperTradingEngine` (no broker orders). |
+| Test suite | 340 tests across 15+ test files; `risk_rules.py` 100%, `reports.py` 100%, `data_providers.py` 99%, total 80.79%. |
