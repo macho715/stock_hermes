@@ -30,9 +30,9 @@ Run tests through the project `.venv`:
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Observed result (2026-05-07): **340 tests passed**, 80.79% coverage (≥75% CI gate).
+Observed result (2026-05-08): **509 tests passed**, 89% coverage (≥75% CI gate).
 
-Earlier milestones: Phase A = 26 tests, Phase B targeted = 7 tests, Phase B regression = 30 tests.
+Earlier milestones: Phase A = 26 tests, Phase B = 30 tests, 2026-05-07 = 340 tests (80.79%), 2026-05-08 = 509 tests (89%).
 
 ## Optional OpenBB Provider
 
@@ -119,7 +119,7 @@ Then convert the generated recommendation JSON into a dashboard snapshot:
 .\run.ps1 dashboard-export --recommendation-json reports/dashboard_bridge_smoke/recommendations_algo_v2_YYYYMMDD_HHMMSS.json --output reports/dashboard_bridge_smoke/dashboard_snapshot.json
 ```
 
-Open `C:\Users\jichu\Downloads\주식\stock_pred_v5.jsx` in the dashboard host, click `BACKEND`, and choose `dashboard_snapshot.json`.
+Open `stock-pred-v5/src/StockPredV5.jsx` in the dashboard host, click `BACKEND`, and choose `dashboard_snapshot.json`.
 
 The bridge is file-based. It does not start a local API server, MCP server, broker connection, or background service.
 

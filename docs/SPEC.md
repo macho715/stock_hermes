@@ -216,6 +216,7 @@ Resolved choices:
 | 2026-05-02 | OpenBB official docs confirm `obb.equity.price.historical` returns historical OHLCV data and supports `provider="yfinance"`. | OpenBB docs |
 | 2026-05-07 | SQLite OHLCV cache (`data_cache.py`) extracted to standalone module; CI gate added; `paper-run` subcommand added. | Commit e20fc5e |
 | 2026-05-07 | Test suite expanded to 340 tests, 80.79% coverage; `risk_rules.py`, `reports.py` at 100%; `data_providers.py` at 99%. | Commit 09c8187 + session work |
+| 2026-05-08 | Test suite expanded to 509 tests, 89% total coverage; `ensemble_model.py` 83%, `kevpe_adapter.py` 91%, `main.py` 98%. New files: `test_ensemble_model_extra.py`, `test_kevpe_adapter.py`, `test_main_extra.py`. | Commit d7a3022 |
 
 ## Reviewer Checklist
 
