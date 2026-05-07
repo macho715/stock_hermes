@@ -13,15 +13,16 @@ if str(SRC) not in sys.path:
 
 def _root_help() -> str:
     return (
-        "usage: main.py [-h] {env,benchmark,report,predict,recommend,ops-v1,dashboard-export,demo,journal,self-test} ...\n\n"
+        "usage: main.py [-h] {env,benchmark,report,predict,recommend,paper-run,ops-v1,dashboard-export,demo,journal,self-test} ...\n\n"
         "stock_rtx4060 unified investment OS\n\n"
         "positional arguments:\n"
-        "  {env,benchmark,report,predict,recommend,ops-v1,dashboard-export,demo,journal,self-test}\n"
+        "  {env,benchmark,report,predict,recommend,paper-run,ops-v1,dashboard-export,demo,journal,self-test}\n"
         "    env                 validate runtime/GPU environment\n"
         "    benchmark           run synthetic CPU/GPU benchmark\n"
         "    report              generate Daily Brief/Risk reports\n"
         "    predict             train/predict from CSV or yfinance\n"
         "    recommend           rank report-only Track-S/Track-L candidates\n"
+        "    paper-run           paper-only virtual trading — no broker orders (screening only)\n"
         "    ops-v1              run report-only Ops v1 workflow with manual approval artifacts\n"
         "    dashboard-export    convert recommendation JSON into a dashboard snapshot\n"
         "    demo                create sample data and reports\n"

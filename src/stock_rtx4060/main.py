@@ -18,6 +18,7 @@ from .ensemble_model import EnsemblePredictor, ModelConfig
 from .feature_engine import TechnicalIndicators, make_synthetic_ohlcv, normalize_ohlcv
 from .hw_profile import print_hw_summary, runtime_status, save_runtime_status
 from .ops_workflow import run_ops_v1_workflow
+from .paper_trading import PaperTradingConfig, PaperTradingEngine, PaperTradingSignal
 from .recommendation_engine import RecommendationConfig, RecommendationEngine, parse_universe
 from .reports import ReportWriter
 from .risk_rules import RiskConfig, evaluate_track_l_candidate, evaluate_track_s_candidate
@@ -75,6 +76,27 @@ def build_parser() -> argparse.ArgumentParser:
     recommend.add_argument("--xgb-device", choices=["cpu", "cuda"], default="cpu")
     recommend.add_argument("--cv-gap", type=int, help="gap between train/test folds for leak-safe walk-forward CV")
     recommend.add_argument("--output-dir", default="reports/recommendations")
+
+    paper = sub.add_parser("paper-run", help="paper-only virtual trading — no broker orders (screening only)")
+    paper.add_argument("--universe", help="comma-separated ticker list")
+    paper.add_argument("--track", choices=["S", "L", "BOTH"], default="BOTH")
+    paper.add_argument("--period", default="3y")
+    paper.add_argument("--top", type=int, default=5)
+    paper.add_argument("--synthetic", action="store_true", help="use deterministic synthetic OHLCV")
+    paper.add_argument("--data-provider", choices=["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"], default="auto")
+    paper.add_argument("--provider-config", help="optional JSON provider config")
+    paper.add_argument("--kevpe-events", help="optional KEVPE event JSON/CSV file")
+    paper.add_argument("--capital", type=float, default=100_000.0)
+    paper.add_argument("--prefer-gpu", action="store_true")
+    paper.add_argument("--full", action="store_true")
+    paper.add_argument("--model-kind", choices=["auto", "xgb", "logistic", "rf"], default="logistic")
+    paper.add_argument("--xgb-device", choices=["cpu", "cuda"], default="cpu")
+    paper.add_argument("--cv-gap", type=int)
+    paper.add_argument("--output-dir", default="reports/recommendations")
+    paper.add_argument("--output-root", default="reports/paper_trading/runs", help="root directory for paper trading run output")
+    paper.add_argument("--run-date", help="YYYY-MM-DD override for run_id; defaults to today")
+    paper.add_argument("--force-rerun", action="store_true", help="override existing run for same date/universe")
+    paper.add_argument("--rerun-reason", help="required when --force-rerun is set")
 
     ops = sub.add_parser("ops-v1", help="run report-only Ops v1 workflow with manual approval artifacts")
     ops.add_argument("--universe", help="comma-separated ticker list; defaults to built-in sample universe")
@@ -134,6 +156,8 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_predict(args)
             case "recommend":
                 return cmd_recommend(args)
+            case "paper-run":
+                return cmd_paper_run(args)
             case "ops-v1":
                 return cmd_ops_v1(args)
             case "dashboard-export":
@@ -243,6 +267,111 @@ def cmd_recommend(args: argparse.Namespace) -> int:
     print(f"saved: {paths['json']}")
     print(f"saved: {paths['audit']}")
     return 0 if results else 1
+
+
+def cmd_paper_run(args: argparse.Namespace) -> int:
+    """Bridge RecommendationEngine output to PaperTradingEngine.
+
+    Paper-only — no broker orders, no live account actions.
+    screening_output_only=True and paper_trading_only=True are preserved.
+    """
+    import datetime
+
+    model_kind = args.model_kind
+    xgb_device = "cuda" if args.prefer_gpu else args.xgb_device
+    if args.prefer_gpu and model_kind == "logistic":
+        model_kind = "xgb"
+
+    rec_config = RecommendationConfig(
+        universe=parse_universe(args.universe),
+        track=args.track,
+        period=args.period,
+        top_n=args.top,
+        synthetic=args.synthetic,
+        capital=args.capital,
+        prefer_gpu=args.prefer_gpu,
+        lite=not args.full,
+        model_kind=model_kind,
+        xgb_device=xgb_device,
+        cv_gap=args.cv_gap,
+        output_dir=args.output_dir,
+        data_provider=args.data_provider,
+        provider_config=args.provider_config,
+        kevpe_events=args.kevpe_events,
+    )
+    rec_engine = RecommendationEngine(rec_config)
+    results = rec_engine.run()
+
+    buy_verdicts = {"ELIGIBLE_RECOMMENDATION", "ACCUMULATE_RECOMMENDATION"}
+    signals = [
+        PaperTradingSignal(
+            ticker=r.ticker,
+            score=r.recommendation_rank_score,
+            signal="BUY" if r.verdict in buy_verdicts else "HOLD",
+            model_auc=r.model_auc,
+            model_accuracy=r.model_accuracy,
+            oof_coverage=r.oof_coverage,
+            warning=None,
+        )
+        for r in results
+    ]
+
+    tickers = [s.ticker for s in signals]
+    bars_by_ticker: dict[str, list[dict[str, Any]]] = {}
+    for ticker in tickers:
+        if args.synthetic:
+            df = make_synthetic_ohlcv(n=60)
+            bars_by_ticker[ticker] = [
+                {
+                    "date": idx.date().isoformat(),
+                    "open": float(row["Open"]),
+                    "high": float(row["High"]),
+                    "low": float(row["Low"]),
+                    "close": float(row["Close"]),
+                    "adjusted_close": float(row["Close"]),
+                    "volume": int(row["Volume"]),
+                }
+                for idx, row in df.iterrows()
+            ]
+        else:
+            try:
+                import yfinance as yf
+                hist = yf.download(ticker, period=args.period, auto_adjust=True, progress=False)
+                bars_by_ticker[ticker] = [
+                    {
+                        "date": idx.date().isoformat(),
+                        "open": float(row["Open"]),
+                        "high": float(row["High"]),
+                        "low": float(row["Low"]),
+                        "close": float(row["Close"]),
+                        "adjusted_close": float(row["Close"]),
+                        "volume": int(row["Volume"]),
+                    }
+                    for idx, row in hist.iterrows()
+                ]
+            except Exception:
+                bars_by_ticker[ticker] = []
+
+    run_date = args.run_date or datetime.date.today().isoformat()
+    paper_config = PaperTradingConfig(
+        output_root=args.output_root,
+        run_date=run_date,
+        force_rerun=args.force_rerun,
+        rerun_reason=args.rerun_reason,
+    )
+    paper_engine = PaperTradingEngine(paper_config)
+    status = paper_engine.run(signals, bars_by_ticker)
+
+    summary = {
+        "paper_trading_only": True,
+        "screening_output_only": True,
+        "run_id": status.get("run_id"),
+        "run_dir": str(status.get("run_dir", "")),
+        "positions": len(status.get("positions", [])),
+    }
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    print(f"saved: {status.get('run_dir')}")
+    return 0
 
 
 def cmd_ops_v1(args: argparse.Namespace) -> int:

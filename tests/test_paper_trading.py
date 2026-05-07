@@ -1,4 +1,6 @@
 import json
+import sys
+import pytest
 from pathlib import Path
 
 from stock_rtx4060.paper_trading import (
@@ -395,6 +397,7 @@ def test_paper_trading_promotion_drawdown_rules():
 
 
 def test_paper_status_api_is_read_only(tmp_path, monkeypatch):
+    pytest.importorskip("flask")
     config = PaperTradingConfig(output_root=tmp_path, run_date="2026-05-05")
     PaperTradingEngine(config).run([_signal()], {"AAPL": _bars(6)})
 
@@ -416,6 +419,7 @@ def test_paper_status_api_is_read_only(tmp_path, monkeypatch):
 
 
 def test_paper_status_api_includes_read_only_krx_pilot_status(tmp_path, monkeypatch):
+    pytest.importorskip("flask")
     us_root = tmp_path / "reports" / "paper_trading" / "runs"
     PaperTradingEngine(PaperTradingConfig(output_root=us_root, run_date="2026-05-05")).run([_signal()], {"AAPL": _bars(6)})
     PaperTradingEngine(PaperTradingConfig(output_root=us_root, run_date="2026-05-05", market="KRX", phase1_us_only=False)).run(
@@ -442,3 +446,84 @@ def test_paper_status_api_includes_read_only_krx_pilot_status(tmp_path, monkeypa
     assert payload["krx_pilot"]["positions"][0]["currency"] == "KRW"
     assert payload["krx_pilot"]["paper_only_label"] == "Paper trading only - no broker orders"
     assert before == after
+
+
+# TC-01: BUY score < 56 is rejected (FR-007)
+def test_paper_trading_rejects_buy_score_below_threshold(tmp_path):
+    engine = PaperTradingEngine(PaperTradingConfig(output_root=tmp_path))
+
+    decision = engine.evaluate_signal(_signal(score=55.9), _bars())
+
+    assert decision.status == "REJECTED"
+    assert decision.reason == "buy_score_below_threshold"
+    assert decision.paper_trading_only is True
+
+
+# TC-02: rejected-signal record includes timestamp (FR-010)
+def test_paper_trading_rejected_signal_includes_timestamp(tmp_path):
+    engine = PaperTradingEngine(PaperTradingConfig(output_root=tmp_path))
+
+    decision = engine.evaluate_signal(_signal(model_auc=0.49), _bars())
+    record = decision.to_record("run-test-001")
+
+    assert decision.status == "REJECTED"
+    assert "timestamp" in record
+    assert record["timestamp"]  # non-empty
+
+
+# TC-03: max open positions 10 is enforced (A-011)
+def test_paper_trading_max_open_positions_limit(tmp_path):
+    config = PaperTradingConfig(output_root=tmp_path, max_open_positions=2)
+    engine = PaperTradingEngine(config)
+
+    signals = [_signal(ticker=f"TK{i:02d}", score=67.0) for i in range(3)]
+    bars_by_ticker = {f"TK{i:02d}": _bars() for i in range(3)}
+
+    result = engine.run(signals, bars_by_ticker)
+    positions = result.get("positions", [])
+    signal_records = _read_jsonl(
+        next(tmp_path.rglob("signals.jsonl"))
+    )
+
+    assert len(positions) <= 2
+    rejected_reasons = [r["reason"] for r in signal_records if r["status"] == "REJECTED"]
+    assert "max_open_positions_reached" in rejected_reasons
+
+
+# TC-04: max daily new positions 3 is enforced (A-012)
+def test_paper_trading_max_daily_new_positions_limit(tmp_path):
+    config = PaperTradingConfig(output_root=tmp_path, max_daily_new_positions=2)
+    engine = PaperTradingEngine(config)
+
+    signals = [_signal(ticker=f"DN{i:02d}", score=67.0) for i in range(3)]
+    bars_by_ticker = {f"DN{i:02d}": _bars() for i in range(3)}
+
+    result = engine.run(signals, bars_by_ticker)
+    positions = result.get("positions", [])
+    signal_records = _read_jsonl(
+        next(tmp_path.rglob("signals.jsonl"))
+    )
+
+    assert len(positions) <= 2
+    rejected_reasons = [r["reason"] for r in signal_records if r["status"] == "REJECTED"]
+    assert "max_daily_new_positions_reached" in rejected_reasons
+
+
+# TC-05: force_rerun=True without rerun_reason raises ValueError (FR-033)
+def test_paper_trading_force_rerun_requires_reason(tmp_path):
+    config = PaperTradingConfig(output_root=tmp_path, force_rerun=True, rerun_reason=None)
+    engine = PaperTradingEngine(config)
+
+    with pytest.raises(ValueError, match="rerun_reason"):
+        engine.run([_signal()], {"AAPL": _bars()})
+
+
+# CLI integration test — paper-run subcommand
+def test_paper_run_cli_exits_zero_and_creates_output(tmp_path):
+    """paper-run --synthetic creates a run directory with paper_config.json."""
+    from stock_rtx4060.main import main
+
+    exit_code = main(["paper-run", "--synthetic", "--universe", "AAPL", "--output-root", str(tmp_path)])
+    assert exit_code == 0
+    configs = list(tmp_path.rglob("paper_config.json"))
+    assert len(configs) >= 1, "paper_config.json not created under output-root"
