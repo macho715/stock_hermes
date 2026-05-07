@@ -16,7 +16,8 @@ def test_resolve_provider_cli_overrides_config_and_synthetic_flag():
     assert resolve_provider("auto", synthetic=True, provider_config={"default_provider": "openbb"}) == "synthetic"
 
 
-def test_synthetic_provider_writes_audit_event(tmp_path):
+def test_synthetic_provider_writes_audit_event(tmp_path, monkeypatch):
+    monkeypatch.setenv("USE_DATA_CACHE", "0")
     logger = AuditLogger(tmp_path / "audit_log.jsonl")
     result = load_ohlcv_with_provider("SYNTH-A", "3y", synthetic=True, audit_logger=logger, command="recommend")
 
@@ -31,6 +32,7 @@ def test_synthetic_provider_writes_audit_event(tmp_path):
 
 
 def test_openbb_provider_normalizes_mocked_historical_response(tmp_path, monkeypatch):
+    monkeypatch.setenv("USE_DATA_CACHE", "0")
     frame = pd.DataFrame(
         {
             "date": pd.date_range("2026-01-01", periods=3),

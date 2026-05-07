@@ -13,8 +13,11 @@ import numpy as np
 import pandas as pd
 
 from .audit_log import AuditEvent, AuditLogger, mask_secret
+from .data_cache import DataCache
 from .feature_engine import normalize_ohlcv
 from .provider_validation import validate_provider_frame
+
+_cache = DataCache()
 
 DataProviderName = Literal["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"]
 
@@ -72,13 +75,23 @@ def load_ohlcv_with_provider(
 
     if selected == "synthetic":
         return _load_synthetic(ticker, period, requested, audit_logger, command, fallback_reason="synthetic flag enabled" if synthetic else None)
+
+    cached = _cache.get(ticker, period, selected)
+    if cached is not None:
+        return ProviderResult(frame=cached, provider_requested=requested, provider_used=selected, source=f"{selected}:cache")
+
     if selected == "pykrx":
-        return _load_pykrx(ticker, period, requested, audit_logger, command)
-    if selected == "fdr":
-        return _load_fdr(ticker, period, requested, audit_logger, command)
-    if selected == "openbb":
-        return _load_openbb(ticker, period, requested, config, audit_logger, command)
-    return _load_yfinance(ticker, period, requested, audit_logger, command)
+        result = _load_pykrx(ticker, period, requested, audit_logger, command)
+    elif selected == "fdr":
+        result = _load_fdr(ticker, period, requested, audit_logger, command)
+    elif selected == "openbb":
+        result = _load_openbb(ticker, period, requested, config, audit_logger, command)
+    else:
+        result = _load_yfinance(ticker, period, requested, audit_logger, command)
+
+    if result.frame is not None and not result.frame.empty:
+        _cache.set(ticker, period, selected, result.frame)
+    return result
 
 
 def _load_synthetic(

@@ -123,9 +123,8 @@ class JournalEntry:
 
 def _generate_id() -> str:
     """간단한 UUID-like ID 생성."""
-    import hashlib, time
-    raw = f"{time.time()}{id(time)}".encode()
-    return hashlib.sha256(raw).hexdigest()[:16]
+    import uuid
+    return uuid.uuid4().hex[:16]
 
 
 def _journal_path(output_dir: Path | str = JOURNAL_DIR) -> Path:
