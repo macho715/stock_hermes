@@ -25,7 +25,7 @@ from .backtest_honesty import evaluate_backtest_honesty, summarize_honesty
 from .data_providers import ProviderResult, load_ohlcv_with_provider
 from .kevpe_adapter import get_kevpe_adapter, kevpe_signal_to_supplement
 from .ensemble_model import DirectionModel, ModelConfig, _safe_auc
-from .feature_engine import TechnicalIndicators, feature_columns
+from .feature_engine import TechnicalIndicators, build_features, feature_columns
 
 Track = Literal["S", "L"]
 Verdict = Literal[
@@ -107,6 +107,7 @@ class RecommendationConfig:
     provider_config: str | None = None
     kevpe_events: str | None = None
     audit_command: str = "recommend"
+    factor_set: Literal["technical", "alpha101", "cross_sectional", "all"] = "technical"
 
     def __post_init__(self) -> None:
         if self.prefer_gpu:
@@ -724,7 +725,17 @@ class RecommendationEngine:
         if len(df) < min_required:
             raise RuntimeError(f"{ticker}: 데이터 부족 rows={len(df)}, required={min_required}")
 
-        feature_df = TechnicalIndicators(df).build_all(horizon=horizon)
+        if cfg.factor_set == "technical":
+            feature_df = TechnicalIndicators(df).build_all(horizon=horizon)
+        else:
+            from .factors import FactorRegistry  # noqa: WPS433 — lazy to keep startup cheap
+
+            reg = FactorRegistry()
+            if cfg.factor_set == "all":
+                factor_names = reg.list()
+            else:
+                factor_names = reg.list(category=cfg.factor_set)
+            feature_df = build_features(df, factors=factor_names, horizon=horizon)
         if feature_df.empty:
             raise RuntimeError(f"{ticker}: 피처 생성 결과가 비어 있습니다")
         model_stats = _fit_walk_forward_model(feature_df, horizon, cfg)

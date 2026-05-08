@@ -1,6 +1,7 @@
 numpy>=1.26,<2.0
 pandas>=2.2,<3.0
 polars>=1.5
+scipy>=1.13
 scikit-learn>=1.1,<2.0
 tabulate>=0.9
 yfinance>=0.2.66

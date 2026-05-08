@@ -1,0 +1,14 @@
+"""RD-Agent integration: discover & validate new factors automatically.
+
+This package exposes a small API surface intentionally — heavy lifting is
+delegated to the optional ``rdagent`` package (https://github.com/microsoft/RD-Agent).
+"""
+
+from .runner import run_factor_mining
+from .validator import ValidationResult, validate_discovered_factor
+
+__all__ = [
+    "run_factor_mining",
+    "validate_discovered_factor",
+    "ValidationResult",
+]
