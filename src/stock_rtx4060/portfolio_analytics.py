@@ -253,6 +253,22 @@ def analyze_portfolio(snapshot: PortfolioSnapshot, capital: float = 100_000.0) -
     return PortfolioAnalytics.from_snapshot(snapshot, capital=capital)
 
 
+def factor_exposure(
+    returns: "pd.Series",  # type: ignore[name-defined]  # forward-ref keeps pandas import lazy
+    factor_returns: "pd.DataFrame",  # type: ignore[name-defined]
+    window: int = 60,
+) -> "pd.DataFrame":  # type: ignore[name-defined]
+    """Thin wrapper around :func:`backtest.risk_attribution.factor_exposure_regression`.
+
+    Lives on :mod:`portfolio_analytics` so callers can pull factor exposures
+    next to the rest of the portfolio risk metrics without reaching into the
+    Phase-5 ``backtest`` package directly.
+    """
+    from .backtest.risk_attribution import factor_exposure_regression  # local import — lazy
+
+    return factor_exposure_regression(returns, factor_returns, window=window)
+
+
 def save_analytics_report(analytics: PortfolioAnalytics, output_dir: str | Path) -> tuple[Path, Path]:
     """분석 결과를 JSON + Markdown으로 저장."""
     output_dir = Path(output_dir)

@@ -34,6 +34,12 @@ class BacktestConfig:
     min_trade_value: float = 100.0
     sizing: Literal["kelly", "hrp", "mv_cvar", "risk_budgeting"] = "kelly"
     sizing_lookback: int = 252
+    # Phase-5 advanced statistics (off by default — preserves all existing tests).
+    compute_advanced_stats: bool = False
+    advanced_stats_n_trials: int = 1
+    advanced_stats_mc_paths: int = 1_000
+    advanced_stats_mc_block: int = 20
+    advanced_stats_seed: int | None = 7
 
     def __post_init__(self) -> None:
         if self.monthly_stop_pct is not None:
@@ -294,6 +300,7 @@ class Backtester:
         avg_pnl_pct = float(np.mean([t.pnl_pct for t in completed if t.pnl_pct is not None])) if completed else 0.0
 
         win_rate = round((len(wins) / len(completed) * 100.0) if completed else 0.0, 2)
+        deflated_sr, psr_vs_zero, mc_dd_p95 = self._maybe_advanced_stats(returns, sharpe)
         result = BacktestResult({
             "total_return_pct": round(total_return * 100.0, 2),
             "annualized_return_pct": round(((1.0 + total_return) ** (252 / max(1, len(prices_arr))) - 1.0) * 100.0, 2),
@@ -311,8 +318,62 @@ class Backtester:
             "monthly_stop_triggered": monthly_stop_ever,
             "portfolio_values": [round(float(x), 4) for x in equity_s.tolist()],
             "trades": [t.to_dict() for t in completed],
+            # Phase-5 advanced stats — None unless `compute_advanced_stats=True`.
+            "deflated_sharpe": deflated_sr,
+            "psr_vs_zero": psr_vs_zero,
+            "mc_drawdown_p95": mc_dd_p95,
         })
         return result
+
+    def _maybe_advanced_stats(
+        self, returns: pd.Series, sharpe: float
+    ) -> tuple[float | None, float | None, float | None]:
+        """Compute Phase-5 advanced statistics when enabled.
+
+        Returns ``(deflated_sharpe, psr_vs_zero, mc_drawdown_p95)`` — all
+        ``None`` when the feature flag is off, preserving the legacy schema.
+        """
+        cfg = self.config
+        if not getattr(cfg, "compute_advanced_stats", False):
+            return None, None, None
+        try:
+            from .backtest.mc_bootstrap import drawdown_bounds
+            from .backtest.stat_tests import deflated_sharpe, probabilistic_sharpe
+        except Exception:  # pragma: no cover - defensive
+            return None, None, None
+        clean = returns.replace([np.inf, -np.inf], np.nan).dropna()
+        n_obs = int(len(clean))
+        if n_obs < 5:
+            return None, None, None
+        # SR is annualized in `sharpe`; convert back to per-period for PSR/DSR.
+        sr_per_period = sharpe / sqrt(252.0) if sharpe else 0.0
+        try:
+            skew_val = float(clean.skew()) if n_obs >= 3 else 0.0
+            kurt_val = float(clean.kurt() + 3.0) if n_obs >= 4 else 3.0
+            psr = float(probabilistic_sharpe(sr_per_period, 0.0, n_obs=n_obs, skew=skew_val, kurt=kurt_val))
+            dsr = float(
+                deflated_sharpe(
+                    sr_per_period,
+                    n_trials=int(getattr(cfg, "advanced_stats_n_trials", 1)),
+                    skew=skew_val,
+                    kurt=kurt_val,
+                    n_obs=n_obs,
+                )
+            )
+        except Exception:  # pragma: no cover - defensive
+            psr = None
+            dsr = None
+        try:
+            bounds = drawdown_bounds(
+                clean,
+                block_size=int(getattr(cfg, "advanced_stats_mc_block", 20)),
+                n_paths=int(getattr(cfg, "advanced_stats_mc_paths", 1_000)),
+                seed=getattr(cfg, "advanced_stats_seed", None),
+            )
+            mc_p95 = float(bounds["p95_max_dd"])
+        except Exception:  # pragma: no cover - defensive
+            mc_p95 = None
+        return dsr, psr, mc_p95
 
     def _optimizer_position_pct(self, returns_arr: pd.Series, i: int, cfg: BacktestConfig) -> float:
         """Compute a single-asset position fraction using the portfolio optimiser.
