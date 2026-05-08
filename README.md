@@ -561,6 +561,157 @@ Browser evidence:
 
 - `stock-pred-v5/test-results/dashboard-rec-investment-grade-20260507.png`
 
+## 20. Hedge-Fund Grade Upgrade — Phase 0–8 (2026-05-08)
+
+This section documents the systematic upgrade from a research prototype to a production-ready hedge-fund-grade system. All phases are independently deployable and rollback-safe. Existing CLI verbs and `dashboard_snapshot.v1` schema are preserved throughout.
+
+### Phase Overview
+
+| Phase | Area | Key deliverables |
+|---|---|---|
+| P0 Foundation | Observability & CI | loguru JSONL, MLflow container, prometheus-client, mypy strict, `pytest --cov-fail-under=75`, CI artifact upload |
+| P1 PIT Data Lake | Point-in-time storage | `data_lake/` DuckDB+Parquet backend, `PITStore` ABC, bitemporal `as_of` queries, corp-action adjuster, KIS/Alpaca ingestors, universe snapshots |
+| P2 Factor Library | Factor zoo + RD-Agent | Alpha101/Alpha158 port, Barra cross-sectional factors, RD-Agent auto-mining, IC/IR/decay analytics |
+| P3 ML Upgrade | LightGBM + Optuna + MLflow | `PurgedKFold` (López de Prado §7), Optuna HPO, MLflow experiment tracking, SHAP explanations |
+| P4 Portfolio Opt | skfolio HRP/NCO/CVaR | `portfolio/optimizer.py`, Black-Litterman views from LLM advisory scores, turnover-penalty costs |
+| P5 Backtest | vectorbt + stat tests | `vbt_sweep.py`, block-bootstrap MC, Deflated Sharpe / PSR / MinTRL, Brinson factor attribution, stress scenarios |
+| P6 LLM Advisor | Hybrid advisory layer | `advisors/` (NewsSentiment, DevilsAdvocate, MacroRegime), LangGraph DAG, `advisory_score ∈ [-1,+1]`, full audit trail |
+| P7 Orchestration | Prefect 3 flows + alerts | `flows/daily_krx.py`, `flows/daily_us.py`, `flows/research_weekly.py`, Slack/Discord alert channels |
+| P8 Live Brokers | Alpaca/IBKR/KIS adapters | `broker/` adapters, `OrderRouter` SOR/TWAP/VWAP, kill-switch, compliance pre-gates, reconciliation |
+
+### Architecture Diagram (Full System)
+
+```mermaid
+flowchart LR
+    subgraph Sources
+        KIS[KIS OpenAPI]
+        ALP[Alpaca]
+        IB[IBKR ib_insync]
+        YF[yfinance/pykrx/FDR]
+        NEWS[RSS / SEC / NaverNews]
+    end
+    subgraph DataLake["P1: PIT Data Lake"]
+        ARC[(DuckDB+Parquet<br/>bitemporal)]
+        CA[corp_actions adjuster]
+        PIT[pit_resolver.as_of]
+        UNI[universe snapshots]
+    end
+    subgraph Research["P2-3: Research"]
+        FZ[factor_zoo<br/>Alpha101/158 + Barra]
+        RDA[RD-Agent auto mining]
+        ENS[ensemble LGBM/XGB/LR]
+        MLF[(MLflow registry)]
+        OPT[Optuna HPO]
+    end
+    subgraph Portfolio["P4-5: Portfolio + Risk"]
+        SKF[skfolio HRP/NCO/CVaR]
+        BT[backtester + vectorbt]
+        STR[stress 2008/2020/2022]
+    end
+    subgraph Advice["P6: LLM Advisor"]
+        NA[NewsSentiment]
+        DA[DevilsAdvocate]
+        MA[MacroRegime]
+        ADJ[advisory_score ∈ -1..+1]
+    end
+    subgraph Decision
+        RE[RecommendationEngine<br/>GREEN/AMBER/RED]
+    end
+    subgraph Exec["P7-8: Ops + Live"]
+        PRE[Prefect flows]
+        OR[OrderRouter kill-switch]
+    end
+    Sources --> DataLake --> Research --> Portfolio --> Decision
+    NEWS --> Advice --> Decision
+    Decision --> Exec
+    Exec --> ALP & IB & KIS
+```
+
+### Key Invariants (Preserved Across All Phases)
+
+| Invariant | Rule |
+|---|---|
+| CLI compatibility | `main.py {env,benchmark,report,recommend,paper,ops,backtest} --help` exits 0 |
+| `dashboard_snapshot.v1` schema | `schema_version` field always present; additive fields only |
+| `audit_log.jsonl` | Existing event names never removed; new audit goes to separate files |
+| `screening_output_only=True` | All `RecommendationResult` objects carry this flag |
+| `PaperBroker` default | `broker_bridge.PaperBroker` untouched; all `paper` CLI behavior preserved |
+| LLM advisory boundary | `advisory_score` can only downgrade GREEN→AMBER; never upgrades RED/AMBER |
+| PIT `as_of` guard | Lake miss with `as_of!=None` raises `RuntimeError` (no silent look-ahead) |
+| `numpy` bounds | `>=1.26,<3.0` — shap>=0.50 requires numpy>=2; never re-pin to `<2.0` |
+| Test coverage | `pytest --cov-fail-under=75` must pass; target ≥85% |
+
+### New Modules Added
+
+| Module path | Phase | Purpose |
+|---|---|---|
+| `src/stock_rtx4060/observability/` | P0 | loguru JSONL, prometheus_client, mlflow wrappers |
+| `src/stock_rtx4060/data_lake/` | P1 | PITStore ABC, DuckDB/ArcticDB backends, corp-action adjuster, ingestors |
+| `src/stock_rtx4060/factors/` | P2 | Alpha101/158, cross-sectional factors, factor zoo, RD-Agent runner |
+| `src/stock_rtx4060/ml/` | P3 | PurgedKFold CV, Optuna HPO, MLflow registry, SHAP explain |
+| `src/stock_rtx4060/portfolio/` | P4 | skfolio/CVXPY optimizer, BL views, transaction cost model |
+| `src/stock_rtx4060/backtest/` | P5 | vectorbt sweep, MC bootstrap, stat tests, risk attribution, stress |
+| `src/stock_rtx4060/advisors/` | P6 | NewsSentiment, DevilsAdvocate, MacroRegime, LangGraph orchestrator |
+| `src/stock_rtx4060/broker/` | P8 | Alpaca/IBKR/KIS adapters, OrderRouter, compliance, reconciliation |
+| `flows/daily_krx.py` | P7 | Prefect daily KRX flow (16:30 KST Mon–Fri) |
+| `flows/daily_us.py` | P7 | Prefect daily US flow (16:30 ET Mon–Fri) |
+| `flows/research_weekly.py` | P7 | Sat 02:00 UTC: RD-Agent + Optuna HPO + MLflow promotion gate |
+
+---
+
+## 21. Fitness and Compliance Checks
+
+Run these checks before claiming the workspace is production-ready. They verify correctness, safety, and schema compatibility across all phases.
+
+### Quick Health Check
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Syntax check all modules
+python -m compileall src/stock_rtx4060 flows tests
+
+# Full test suite with coverage
+PYTHONPATH=.:src pytest --cov=stock_rtx4060 --cov-fail-under=75 --tb=short -rfE -q
+
+# CLI invariants
+PYTHONPATH=.:src python main.py recommend --help
+PYTHONPATH=.:src python main.py backtest --help
+PYTHONPATH=.:src python main.py paper --help
+```
+
+### Fitness Gate Table
+
+| Gate | Command / Check | Pass condition |
+|---|---|---|
+| Syntax | `python -m compileall src/stock_rtx4060 flows tests` | Exit 0, no errors |
+| Tests | `pytest --cov-fail-under=75` | All pass, coverage ≥75% |
+| CLI help | `main.py {recommend,backtest,paper} --help` | Exit 0 |
+| Snapshot schema | `schema_version="dashboard_snapshot.v1"` in bridge output | Field present |
+| `screening_output_only` | All `RecommendationResult` objects | Always `True` |
+| numpy range | `requirements.txt` | `>=1.26,<3.0` |
+| shap version | `requirements.txt` | `>=0.50.0` |
+| PurgedKFold groups | `ml/cv.py` + `ensemble_model.py` + `ml/hpo.py` | `groups=` always passed |
+| PIT as_of guard | `data_providers.py` lake-miss path | `RuntimeError` raised when `as_of!=None` |
+| Audit log | No removed event names | Check `audit_log.jsonl` format |
+| Advisory boundary | `recommendation_engine.py` `_verdict()` | LLM cannot upgrade RED/AMBER |
+| Kill switch | `broker/order_router.py` `submit_order` | Checks `KILLED` file before every live order |
+| Dependency conflicts | `pip check` | No broken requirements |
+
+### Compliance Boundaries
+
+| Area | Requirement |
+|---|---|
+| Broker execution | Only when `--broker live-*` explicitly provided by the user |
+| Live order on cached run | Skipped when `status.get("reused") is True` |
+| API keys | Never committed; user provides via env vars or `~/.config/stock_1901/` |
+| MLflow promotion | Only when `best_value` improvement delta > 5% over production baseline |
+| LLM advisory | Costs logged per call; total budget enforced at 50k tokens in / 4k out per cycle |
+| PIT queries | `as_of` queries must hit the data lake; live provider fallthrough blocked |
+
+---
+
 ## 19. Test Coverage Boost - 2026-05-08
 
 테스트 스위트를 340 → **509 tests**, 총 커버리지 80.79% → **89%** 로 확장했습니다.

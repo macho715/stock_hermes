@@ -1314,6 +1314,221 @@ This append-only update records the final dashboard behavior and verification ev
 | Trading boundary | No broker, order, or account behavior was added or changed |
 | Dependencies | No dependency change was made |
 
+## 44. Hedge-Fund Upgrade — New Component Architecture (P0–P8, 2026-05-08)
+
+This section documents the new components added by the 8-phase hedge-fund-grade upgrade. All existing sections above remain valid; this section describes the new system layer.
+
+### 44.1 Full Architecture Overview (P0–P8)
+
+```mermaid
+flowchart LR
+    subgraph Sources
+        KIS[KIS OpenAPI]
+        ALP[Alpaca paper/live]
+        IB[IBKR ib_insync]
+        YF[yfinance/pykrx/FDR]
+        NEWS[RSS/SEC-EDGAR/NaverNews]
+    end
+    subgraph P1["P1: PIT Data Lake"]
+        DUC[(DuckDB+Parquet<br/>bitemporal)]
+        PIT[pit_resolver.as_of]
+        CA[corp_actions adjuster]
+        UNI[universe snapshots]
+    end
+    subgraph P2P3["P2-3: Research"]
+        FZ[factor_zoo Alpha101/158]
+        RDA[RD-Agent auto-mining]
+        ENS[LGBM/XGB/LR ensemble]
+        MLF[(MLflow registry)]
+        OPT[Optuna HPO]
+    end
+    subgraph P4P5["P4-5: Portfolio + Risk"]
+        SKF[skfolio HRP/NCO/CVaR]
+        BT[backtester + vectorbt sweep]
+        STR[stress 2008/2020/2022]
+    end
+    subgraph P6["P6: LLM Advisor"]
+        CL[claude-opus-4-7]
+        NA[NewsSentiment]
+        DA[DevilsAdvocate]
+        MA[MacroRegime]
+        ADJ[advisory_score -1..+1]
+    end
+    subgraph Decision
+        RE[RecommendationEngine<br/>GREEN / AMBER / RED]
+    end
+    subgraph P7P8["P7-8: Ops + Exec"]
+        PRE[Prefect daily/weekly flows]
+        OR[OrderRouter kill-switch]
+    end
+
+    Sources --> P1 --> P2P3 --> P4P5 --> Decision
+    NEWS --> P6 --> Decision
+    Decision --> P7P8
+    P7P8 --> ALP & IB & KIS
+    MLF -.audit.-> Decision
+```
+
+### 44.2 Prefect Flow Layout (P7)
+
+| Flow | File | Schedule | DAG steps |
+|---|---|---|---|
+| `daily_krx_flow` | `flows/daily_krx.py` | 16:30 KST Mon–Fri | ingest_kis → corp_actions → factor_compute → model_predict → optimize → recommend → snapshot → alert |
+| `daily_us_flow` | `flows/daily_us.py` | 16:30 ET Mon–Fri | ingest_alpaca → factor_compute → model_predict → optimize → recommend → snapshot → alert |
+| `research_weekly_flow` | `flows/research_weekly.py` | Sat 02:00 UTC | factor_mining → hpo → promotion_gate |
+
+```mermaid
+flowchart LR
+    Prefect[Prefect scheduler] --> KRX[daily_krx_flow<br/>16:30 KST]
+    Prefect --> US[daily_us_flow<br/>16:30 ET]
+    Prefect --> RW[research_weekly_flow<br/>Sat 02:00 UTC]
+
+    KRX --> Ingest[ingest_kis_task]
+    Ingest --> Factor[factor_compute_task]
+    Factor --> Predict[model_predict_task]
+    Predict --> Opt[portfolio_optimize_task]
+    Opt --> Rec[recommend_task]
+    Rec --> Snap[snapshot_dashboard_task]
+    Snap --> Alert[alert_task]
+
+    RW --> Mining[factor_mining_task]
+    Mining --> HPO[hpo_task]
+    HPO --> Gate[promotion_gate_task]
+    Gate -->|delta > 5%| MLflow[(MLflow Production)]
+```
+
+### 44.3 LLM Advisor Layer (P6)
+
+```mermaid
+flowchart LR
+    subgraph Advisors["advisors/orchestrator.py LangGraph DAG"]
+        NS[NewsSentimentAgent<br/>RSS/SEC/NaverNews]
+        DA[DevilsAdvocateAgent<br/>SHAP factor counter-arg]
+        MA[MacroRegimeAgent<br/>T10Y2Y/VIX/DXY]
+        WA[weighted_average<br/>advisory_score -1..+1]
+    end
+    NS --> WA
+    DA --> WA
+    MA --> WA
+    WA --> RE[RecommendationEngine]
+    WA --> AUD[audit_log/advisor.jsonl]
+
+    RE -->|score*0.85 + advisory*15| Final[final_score 0..100]
+    Final -->|threshold unchanged| Verdict[GREEN / AMBER / RED]
+```
+
+Boundary rule: `advisory_score` **never overrides** the deterministic gate. LLM can only downgrade GREEN→AMBER. RED stays RED.
+
+### 44.4 Broker Layer (P8)
+
+```mermaid
+flowchart TD
+    Paper[paper CLI --broker paper] --> PaperBroker[PaperBroker ← preserved]
+    CLI[--broker alpaca/ibkr/kis] --> Router[OrderRouter SOR]
+
+    Router --> Check{KILLED file?}
+    Check -->|yes| Block[reject all orders]
+    Check -->|no| Compliance[compliance.py pre-gate]
+    Compliance -->|pass| SOR{ticker suffix}
+    SOR -->|*.KS/*.KQ| KIS[KISAdapter]
+    SOR -->|US primary| Alpaca[AlpacaAdapter]
+    SOR -->|US fallback| IBKR[IBKRAdapter]
+
+    Router --> Reconcile[reconciliation.py 60s diff]
+    Reconcile -->|mismatch| Pause[pause new orders + alert]
+```
+
+| Adapter | File | Paper env | Live env |
+|---|---|---|---|
+| Alpaca | `broker/alpaca_adapter.py` | `paper=True` | `paper=False` |
+| IBKR | `broker/ibkr_adapter.py` | TWS port 7497 | TWS port 7496 |
+| KIS | `broker/kis_adapter.py` | mock mode | `~/.config/stock_1901/kis.toml` |
+
+### 44.5 PIT Data Lake (P1)
+
+```mermaid
+flowchart TD
+    LP[load_ohlcv_with_provider] --> LakeFirst{lake hit?}
+    LakeFirst -->|hit| PIT[pit_resolver.read<br/>as_of filter]
+    LakeFirst -->|miss + as_of is None| LiveFetch[live provider fallback]
+    LakeFirst -->|miss + as_of != None| Error[RuntimeError<br/>no look-ahead allowed]
+    LiveFetch --> WriteThrough[write_through to DuckDB]
+    WriteThrough --> PIT
+    PIT --> Result[ProviderResult]
+```
+
+### 44.6 Component Ownership Update (P0–P8)
+
+| Component | File | Added responsibility |
+|---|---|---|
+| `PITStore` / `DuckDBStore` | `data_lake/store.py` | Bitemporal OHLCV; `_ingested_at`-aware dedup |
+| `PurgedKFold` | `ml/cv.py` | Embargo-based CV; post-test purge loop |
+| `FactorRegistry` | `factors/factor_zoo.py` | 70+ factor catalog; `register/compute_all` |
+| `portfolio.optimize()` | `portfolio/optimizer.py` | skfolio HRP/NCO/CVaR/BL; PyPortfolioOpt fallback |
+| `AdvisoryOrchestrator` | `advisors/orchestrator.py` | LangGraph DAG; advisory score aggregation |
+| `OrderRouter` | `broker/order_router.py` | SOR + TWAP/VWAP; kill-switch; broker routing |
+| `daily_krx_flow` | `flows/daily_krx.py` | End-to-end KRX daily automation |
+| `research_weekly_flow` | `flows/research_weekly.py` | Research automation + MLflow promotion gate |
+
+### 44.7 Fitness and Compliance Checks
+
+Run these after any component change:
+
+```bash
+# Syntax
+python -m compileall src/stock_rtx4060 flows tests
+
+# Tests
+PYTHONPATH=.:src pytest --cov=stock_rtx4060 --cov-fail-under=75 --tb=short -q
+
+# CLI invariants
+PYTHONPATH=.:src python main.py recommend --help
+PYTHONPATH=.:src python main.py backtest --help
+PYTHONPATH=.:src python main.py paper --help
+
+# Dashboard snapshot schema still valid
+PYTHONPATH=.:src python -c "
+from stock_rtx4060.dashboard_bridge import build_dashboard_snapshot
+import json
+snap = build_dashboard_snapshot({'results': [], 'config': {}})
+assert snap['schema_version'] == 'dashboard_snapshot.v1'
+print('schema OK')
+"
+
+# Dependency conflicts
+pip check
+```
+
+| Gate | Pass condition |
+|---|---|
+| `compileall` | Exit 0 |
+| `pytest --cov-fail-under=75` | All pass, ≥75% coverage |
+| CLI help for all subcommands | Exit 0 |
+| `screening_output_only=True` | On every recommendation result |
+| `dashboard_snapshot.v1` | `schema_version` always present |
+| `numpy>=1.26,<3.0` | Never re-pinned to `<2.0` |
+| `shap>=0.50.0` | xgboost 3.x compat |
+| Advisory boundary | Score ∈ [-1,+1]; no GREEN/AMBER upgrade |
+| Kill switch | Checked before every live order |
+| PIT as_of guard | `RuntimeError` on lake-miss with `as_of!=None` |
+| PurgedKFold groups | `groups=` always passed to `cv.split()` |
+| Audit log | No existing event names removed |
+| `pip check` | No broken requirements |
+
+### 44.8 Change Impact Extension (P0–P8 additions)
+
+| If you change | Also check |
+|---|---|
+| `data_lake/store.py` | `pit_resolver.py`, `data_providers.py` PIT guard, `tests/test_data_lake_store.py` |
+| `ml/cv.py` PurgedKFold | `ensemble_model.py` groups array, `ml/hpo.py` groups array |
+| `portfolio/optimizer.py` | `backtester.py` sizing parameter, `portfolio/views.py` LLMViews |
+| `advisors/orchestrator.py` | `recommendation_engine.py` advisory blend, `advisors/audit.py` log format |
+| `broker/order_router.py` | Compliance gates, `main.py cmd_paper_run` reused guard, kill-switch path |
+| `flows/research_weekly.py` | `_current_production_score`, `_latest_candidate_version`, `tests/test_research_weekly_flow.py` |
+| `recommendation_engine.py` `_verdict()` | Advisory boundary rule; never allow LLM to upgrade verdict |
+
+---
+
 ## 44. Implementation Evidence Update - 2026-05-06
 
 This append-only update records the dashboard API real-data stabilization pass.

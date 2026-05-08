@@ -2,6 +2,108 @@
 
 All notable changes for `stock_rtx4060_unified` are documented here.
 
+## 2026-05-08 — Hedge-Fund Grade System Upgrade (Phase 0–8)
+
+### Summary
+
+Full 8-phase upgrade from research prototype to production-grade hedge-fund-style system. All phases are independently deployable; existing CLI verbs and `dashboard_snapshot.v1` schema preserved throughout.
+
+### Phase 0 — Foundation Hardening
+
+- **`src/stock_rtx4060/observability/`**: loguru JSONL structured logging, prometheus-client metrics, MLflow wrapper
+- **`.github/workflows/ci.yml`**: `pytest --tb=short -rfE -v` with artifact upload, GITHUB_STEP_SUMMARY failure dump, `pytest.log` artifact
+- **`requirements.txt` + `requirements.in`**: `numpy>=1.26,<3.0` (unblocks shap>=0.50 for xgboost 3.x), `shap>=0.50.0`, `scipy>=1.13`
+
+### Phase 1 — PIT-Correct Data Lake
+
+- **`src/stock_rtx4060/data_lake/store.py`**: `PITStore` ABC with `DuckDBStore` backend; `_ingested_at`-aware dedup (newest wins per bar); bitemporal `as_of` support
+- **`src/stock_rtx4060/data_lake/pit_resolver.py`**: `read(ticker, start, end, as_of)` — returns only rows ingested on or before `as_of`
+- **`src/stock_rtx4060/data_providers.py`**: PIT lake-first routing; `as_of` guard — lake miss with `as_of!=None` raises `RuntimeError` (no look-ahead)
+- **`src/stock_rtx4060/data_lake/ingest/`**: KIS, Alpaca, yfinance, pykrx ingestors with idempotent upsert
+- **Corp-action adjuster**: split/dividend adjustment with raw/adj dual exposure
+
+### Phase 2 — Factor Library + RD-Agent
+
+- **`src/stock_rtx4060/factors/`**: Alpha101 (12 formulas), Alpha158 (Qlib port), Barra cross-sectional (Size, Value, Momentum, Quality, Volatility, Liquidity), `FactorRegistry` singleton
+- **`src/stock_rtx4060/factors/analytics.py`**: IC, IR, factor decay, quintile PnL, rank-autocorr
+- **`src/stock_rtx4060/factors/rd_agent/`**: Microsoft RD-Agent runner + validator (|IC|>0.03, IR>0.3 gate)
+
+### Phase 3 — ML Upgrade + Experiment Tracking
+
+- **`src/stock_rtx4060/ml/cv.py`**: `PurgedKFold(n_splits, embargo_pct)` with post-test purge loop (López de Prado AFML §7)
+- **`src/stock_rtx4060/ml/hpo.py`**: Optuna study with `MedianPruner`; objective = mean OOS Brier across purged folds; `groups=` always passed
+- **`src/stock_rtx4060/ml/registry.py`**: MLflow `promote()`, `list_versions()` helpers
+- **`src/stock_rtx4060/ml/explain.py`**: SHAP `TreeExplainer` for XGBoost/LightGBM; returns `{ticker: {feature: shap}}`
+- **`src/stock_rtx4060/ensemble_model.py`**: LightGBM added; `PurgedKFold` swap; MLflow run logging; `groups=np.arange(len(X))+horizon` passed to `cv.split`
+
+### Phase 4 — Portfolio Optimization
+
+- **`src/stock_rtx4060/portfolio/optimizer.py`**: `optimize(returns, expected_returns, views, method)` — skfolio HRP/NCO/RB/CVaR/BL backend; PyPortfolioOpt fallback
+- **`src/stock_rtx4060/portfolio/views.py`**: `LLMViews` converts `advisory_score` to Black-Litterman P/Q/Ω
+- **`src/stock_rtx4060/portfolio/costs.py`**: `TransactionCosts(commission_bps, spread_bps, impact_lambda)`, turnover penalty
+- **`src/stock_rtx4060/backtester.py`**: `sizing="kelly"|"hrp"|"mv_cvar"|"risk_budgeting"` parameter
+
+### Phase 5 — Backtest / Risk Hardening
+
+- **`src/stock_rtx4060/backtest/vbt_sweep.py`**: vectorbt parameter grid (MA × stop × kelly), results logged to MLflow
+- **`src/stock_rtx4060/backtest/mc_bootstrap.py`**: `block_bootstrap(returns, block_size=20, n_paths=2000)` → MDD 95/99% quantiles
+- **`src/stock_rtx4060/backtest/stat_tests.py`**: Deflated Sharpe, PSR, MinTRL (López de Prado)
+- **`src/stock_rtx4060/backtest/stress.py`**: Pre-loaded scenarios: 2008-09/2009-03, 2020-02/04, 2022-01/10
+
+### Phase 6 — LLM Advisor Layer
+
+- **`src/stock_rtx4060/advisors/`**: `NewsSentimentAgent`, `DevilsAdvocateAgent`, `MacroRegimeAgent`; LangGraph `StateGraph` DAG
+- **`src/stock_rtx4060/advisors/claude_client.py`**: Anthropic `claude-opus-4-7`; 4 cache breakpoints; exponential backoff; 50k/4k token budget
+- **`src/stock_rtx4060/advisors/audit.py`**: All advisor calls logged to `audit_log/advisor.jsonl`
+- **`src/stock_rtx4060/recommendation_engine.py`**: `final_score = score*0.85 + advisory_score*15`; `_verdict()` hard rule — LLM cannot upgrade RED/AMBER
+- **Hard invariant**: `advisory_score` can only downgrade GREEN→AMBER, never the reverse
+
+### Phase 7 — Orchestration and Alerts
+
+- **`flows/daily_krx.py`**: Prefect 3, cron `30 16 * * 1-5` Asia/Seoul; DAG: ingest → factor → model → optimize → recommend → snapshot → alert
+- **`flows/daily_us.py`**: Same pattern for US, cron `30 16 * * 1-5` America/New_York
+- **`flows/research_weekly.py`**: Sat 02:00 UTC; RD-Agent + Optuna HPO + MLflow promotion gate (`_current_production_score` reads real `oos_brier`, `_latest_candidate_version` for correct version)
+- **`flows/utils.py`**: `@flow`, `@with_retries`, `slack_on_failure` wrappers
+- **`src/stock_rtx4060/alert_engine_channels/`**: Slack and Discord `AlertChannel` implementations
+
+### Phase 8 — Live Broker Layer
+
+- **`src/stock_rtx4060/broker/alpaca_adapter.py`**: `BrokerAdapter` ABC implementation; paper/live toggle
+- **`src/stock_rtx4060/broker/ibkr_adapter.py`**: `ib_insync.IB()` TWS/Gateway; reconciliation polling
+- **`src/stock_rtx4060/broker/kis_adapter.py`**: KIS OpenAPI REST + WebSocket; OAuth token cache
+- **`src/stock_rtx4060/broker/order_router.py`**: SOR (KS/KQ→KIS, US→Alpaca→IBKR); TWAP/VWAP; kill-switch (`KILLED` file); `broker=` kwarg for explicit routing
+- **`src/stock_rtx4060/broker/compliance.py`**: Single-ticker ≤10%, sector ≤25%, restricted list, wash-sale 30d
+- **`src/stock_rtx4060/broker_bridge.py`**: `PaperBroker` preserved; `get_broker(name)` factory added
+
+### Critical Bug Fixes
+
+- **numpy<2.0 blocked shap>=0.50**: Changed `numpy>=1.26,<2.0` → `numpy>=1.26,<3.0` to resolve pip conflict with xgboost 3.x
+- **Leap-day crash**: `end_dt.replace(year=year-1)` → `end_dt - timedelta(days=365)` in `flows/daily_krx.py` and `flows/daily_us.py`
+- **PurgedKFold post-test leak**: Added post-test purge loop in `ml/cv.py` (only pre-test rows were being purged)
+- **HPO groups missing**: `cv.split(X)` → `cv.split(X, groups=_groups)` in both `ensemble_model.py` and `ml/hpo.py`
+- **Promotion gate cold-start always**: `_current_production_score` now reads real `oos_brier` from MLflow Production run
+- **Hardcoded `version=1`**: `promote(version=1)` → `promote(version=_latest_candidate_version(model_name))`
+- **Duplicate live orders on cached runs**: `status.get("reused")` check skips live order submission
+- **Wrong broker routing with `--broker ibkr`**: Added `broker=` kwarg to `submit_order()` for explicit routing
+
+### Fitness and Compliance Checks
+
+| Gate | Pass condition |
+|---|---|
+| `python -m compileall src/stock_rtx4060 flows tests` | Exit 0 |
+| `pytest --cov-fail-under=75` | All pass, coverage ≥75% |
+| `main.py {recommend,backtest,paper} --help` | Exit 0 |
+| `dashboard_snapshot.v1` schema | `schema_version` field always present |
+| `screening_output_only=True` | All recommendation outputs |
+| `numpy>=1.26,<3.0` | Never re-pin to `<2.0` |
+| `shap>=0.50.0` | Required for xgboost 3.x |
+| PurgedKFold `groups=` | Always passed to `cv.split()` |
+| PIT `as_of` guard | `RuntimeError` on lake-miss when `as_of!=None` |
+| Advisory boundary | `advisory_score` cannot upgrade RED/AMBER |
+| Kill switch | Checked before every live order submission |
+
+---
+
 ## 2026-05-08 — Test Coverage Boost: ensemble_model / kevpe_adapter / main (≥80%)
 
 ### Added

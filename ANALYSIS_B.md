@@ -7,6 +7,99 @@
 
 ---
 
+## 8. Hedge-Fund Grade Upgrade Modules (P0–P8, added 2026-05-08)
+
+This project was upgraded from a research prototype to a production-grade system across 8 phases. The sections below describe the new modules and architecture.
+
+### 8.1 New Module Map
+
+| Module | Phase | Responsibility |
+|---|---|---|
+| `src/stock_rtx4060/observability/` | P0 | loguru JSONL structured logging, prometheus-client metrics, MLflow client wrappers |
+| `src/stock_rtx4060/data_lake/store.py` | P1 | `PITStore` ABC; `DuckDBStore` backend; `_ingested_at`-aware dedup (newest ingest wins per bar) |
+| `src/stock_rtx4060/data_lake/pit_resolver.py` | P1 | Bitemporal `read(ticker, start, end, as_of)` |
+| `src/stock_rtx4060/data_lake/corp_actions/` | P1 | Split/dividend adjuster; raw and adj dual exposure |
+| `src/stock_rtx4060/data_lake/ingest/` | P1 | KIS, Alpaca, yfinance, pykrx ingestors |
+| `src/stock_rtx4060/factors/base.py` | P2 | `Factor` ABC: `compute(panel, as_of)`, `name`, `lookback`, `category` |
+| `src/stock_rtx4060/factors/alpha101.py` | P2 | WorldQuant Alpha #1/3/6/12/41/54/101 |
+| `src/stock_rtx4060/factors/alpha158.py` | P2 | Qlib Alpha158 port |
+| `src/stock_rtx4060/factors/cross_sectional.py` | P2 | Barra-style Size/Value/Momentum/Quality/Volatility/Liquidity |
+| `src/stock_rtx4060/factors/factor_zoo.py` | P2 | `FactorRegistry` singleton; `register/compute_all` |
+| `src/stock_rtx4060/factors/analytics.py` | P2 | IC, IR, factor decay, quintile PnL, rank-autocorr |
+| `src/stock_rtx4060/factors/rd_agent/` | P2 | Microsoft RD-Agent runner + validator (IC/IR/decay gates) |
+| `src/stock_rtx4060/ml/cv.py` | P3 | `PurgedKFold(n_splits, embargo_pct)` — post-test purge loop |
+| `src/stock_rtx4060/ml/hpo.py` | P3 | Optuna study; objective = mean OOS Brier; `groups=` always passed |
+| `src/stock_rtx4060/ml/registry.py` | P3 | `promote()`, `list_versions()` MLflow wrappers |
+| `src/stock_rtx4060/ml/explain.py` | P3 | SHAP `TreeExplainer`; returns `{ticker: {feature: shap_value}}` |
+| `src/stock_rtx4060/portfolio/optimizer.py` | P4 | `optimize(returns, views, method)` — skfolio HRP/NCO/RB/CVaR/BL; PyPortfolioOpt fallback |
+| `src/stock_rtx4060/portfolio/views.py` | P4 | `LLMViews`: advisory score → Black-Litterman P/Q/Ω |
+| `src/stock_rtx4060/portfolio/costs.py` | P4 | `TransactionCosts`, `apply_turnover_penalty` |
+| `src/stock_rtx4060/backtest/vbt_sweep.py` | P5 | vectorbt parameter grid; results logged to MLflow |
+| `src/stock_rtx4060/backtest/mc_bootstrap.py` | P5 | Block bootstrap MC; MDD 95/99% quantiles |
+| `src/stock_rtx4060/backtest/stat_tests.py` | P5 | Deflated Sharpe, PSR, MinTRL (López de Prado) |
+| `src/stock_rtx4060/backtest/stress.py` | P5 | Pre-loaded scenarios: 2008/2020/2022 |
+| `src/stock_rtx4060/advisors/base.py` | P6 | `Advisor` protocol: `analyze(ticker, context) → AdvisoryOutput` |
+| `src/stock_rtx4060/advisors/claude_client.py` | P6 | Anthropic `claude-opus-4-7`; 4 cache breakpoints; 50k/4k token budget |
+| `src/stock_rtx4060/advisors/news_sentiment.py` | P6 | RSS (Reuters/Yonhap) + SEC-EDGAR + NaverNews; score ∈ [-1,+1] |
+| `src/stock_rtx4060/advisors/devils_advocate.py` | P6 | SHAP-based factor counter-argument; dampens overconfident GREEN candidates |
+| `src/stock_rtx4060/advisors/macro_regime.py` | P6 | T10Y2Y, VIX, DXY, KOSPI/SPY 200d → `{risk_on, neutral, risk_off}` |
+| `src/stock_rtx4060/advisors/orchestrator.py` | P6 | LangGraph DAG: News → DevilsAdvocate → Macro → weighted average |
+| `src/stock_rtx4060/advisors/audit.py` | P6 | All advisor calls logged to `audit_log/advisor.jsonl` |
+| `src/stock_rtx4060/broker/alpaca_adapter.py` | P8 | `BrokerAdapter` for Alpaca paper/live |
+| `src/stock_rtx4060/broker/ibkr_adapter.py` | P8 | `ib_insync.IB()` TWS/Gateway adapter |
+| `src/stock_rtx4060/broker/kis_adapter.py` | P8 | KIS OpenAPI REST + WebSocket; OAuth token cache |
+| `src/stock_rtx4060/broker/order_router.py` | P8 | SOR + TWAP/VWAP; kill-switch; explicit `broker=` kwarg |
+| `src/stock_rtx4060/broker/compliance.py` | P8 | Pre-order gates: position cap, sector cap, wash-sale, restricted list |
+| `src/stock_rtx4060/broker/reconciliation.py` | P8 | Broker vs `position_tracker` diff; auto-pause on mismatch |
+| `flows/daily_krx.py` | P7 | Prefect 3 KRX daily flow (16:30 KST) |
+| `flows/daily_us.py` | P7 | Prefect 3 US daily flow (16:30 ET) |
+| `flows/research_weekly.py` | P7 | Sat 02:00 UTC: RD-Agent + Optuna HPO + MLflow promotion gate |
+
+### 8.2 Invariants Added by the Upgrade
+
+| Invariant | Where enforced |
+|---|---|
+| PIT `as_of` guard | `data_providers.py` lake-miss path raises `RuntimeError` |
+| PurgedKFold `groups=` | `ensemble_model.py` + `ml/hpo.py` always pass `groups=np.arange(len(X))+horizon` |
+| Advisory boundary | `recommendation_engine.py` `_verdict()` — LLM cannot upgrade RED/AMBER |
+| Kill switch | `broker/order_router.py` checks `~/.cache/stock_1901/KILLED` before every live order |
+| Duplicate live order guard | `main.py cmd_paper_run` skips live order when `status.get("reused") is True` |
+| MLflow promotion delta | `research_weekly.py` requires >5% improvement over real `oos_brier` baseline |
+
+### 8.3 Fitness and Compliance Checks
+
+Run before pushing any change:
+
+```bash
+# Syntax
+python -m compileall src/stock_rtx4060 flows tests
+
+# Tests with coverage
+PYTHONPATH=.:src pytest --cov=stock_rtx4060 --cov-fail-under=75 --tb=short -q
+
+# CLI invariants
+PYTHONPATH=.:src python main.py recommend --help
+PYTHONPATH=.:src python main.py backtest --help
+PYTHONPATH=.:src python main.py paper --help
+
+# Dependency check
+pip check
+```
+
+| Gate | Pass condition |
+|---|---|
+| `compileall` | Exit 0 |
+| `pytest --cov-fail-under=75` | All pass, ≥75% coverage |
+| CLI help | Exit 0 for all subcommands |
+| `screening_output_only=True` | On every `RecommendationResult` |
+| `numpy>=1.26,<3.0` | Never re-pinned to `<2.0` |
+| `shap>=0.50.0` | xgboost 3.x compat |
+| Advisory boundary | LLM score ∈ [-1,+1]; cannot upgrade RED/AMBER |
+| `dashboard_snapshot.v1` | `schema_version` always present |
+| `pip check` | No broken requirements |
+
+---
+
 ## 1. Project Purpose
 
 `stock_rtx4060_unified` is a **local stock-candidate recommendation engine** for two-track screening:
