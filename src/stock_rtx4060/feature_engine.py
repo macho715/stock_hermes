@@ -387,3 +387,63 @@ def align_feature_columns(frame: pd.DataFrame, columns: Iterable[str]) -> pd.Dat
         if column not in result:
             result[column] = 0.0
     return result.loc[:, list(columns)].fillna(0.0)
+
+
+def build_features(
+    df: pd.DataFrame,
+    *,
+    factors: list[str] | None = None,
+    panel: pd.DataFrame | None = None,
+    horizon: int = 5,
+    include_targets: bool = True,
+) -> pd.DataFrame:
+    """Build a feature frame, optionally appending columns from the factor zoo.
+
+    When ``factors`` is ``None`` (default), this function is byte-for-byte
+    equivalent to ``TechnicalIndicators(df).build_all(horizon=horizon)`` — the
+    existing leak-safe feature pipeline is preserved unchanged.
+
+    When ``factors`` is a list of registered factor names, each factor is
+    computed (via the global :class:`FactorRegistry`) and appended as a new
+    column to the resulting frame.  Factors that fail or produce mismatched
+    indices are silently skipped to avoid breaking the pipeline.
+
+    Parameters
+    ----------
+    df:
+        Single-ticker OHLCV frame (``Open, High, Low, Close, Volume``).
+    factors:
+        Optional list of factor names to compute and append.
+    panel:
+        Optional wide MultiIndex ``(ticker, field)`` panel — passed through to
+        cross-sectional factors that need cross-section context.  When
+        omitted, ``df`` itself is used as the input panel.
+    horizon:
+        Forward return horizon for the legacy target columns.
+    include_targets:
+        Whether to keep ``target_direction`` / ``target_return`` in the output.
+    """
+    base = TechnicalIndicators(df).build_all(horizon=horizon, include_targets=include_targets)
+    if factors is None:
+        return base
+
+    # Lazy import to avoid a circular dependency at module load time.
+    from .factors import FactorRegistry  # noqa: WPS433
+
+    reg = FactorRegistry()
+    src_panel = panel if panel is not None else df
+    for name in factors:
+        try:
+            factor = reg.get(name)
+        except KeyError:
+            continue
+        try:
+            series = factor.compute(src_panel)
+        except Exception:
+            continue
+        if series is None or len(series) == 0:
+            continue
+        # Single-ticker context: align by date index.
+        if not isinstance(series.index, pd.MultiIndex):
+            base[name] = series.reindex(base.index)
+    return base
