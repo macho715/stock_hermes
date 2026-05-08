@@ -38,3 +38,7 @@ feedparser
 sec-edgar-downloader
 pandas_datareader
 jinja2
+# Phase 7 orchestration & alert channels (all optional)
+prefect>=3.0
+slack-sdk
+discord-webhook

@@ -1,0 +1,102 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "datasource", "uid": "grafana"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "PIT data-lake operational health — row counts, provenance log, corp actions volume.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "id": 1,
+      "title": "PIT lake row counts by ticker",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+      "fieldConfig": {
+        "defaults": {"unit": "short"},
+        "overrides": []
+      },
+      "options": {
+        "legend": {"showLegend": true, "displayMode": "table", "placement": "right"},
+        "tooltip": {"mode": "multi"}
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (ticker) (stock1901_data_lake_row_count)",
+          "legendFormat": "{{ticker}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Provenance log entries per hour",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "fieldConfig": {
+        "defaults": {"unit": "short"},
+        "overrides": []
+      },
+      "options": {
+        "legend": {"showLegend": true, "displayMode": "list"},
+        "tooltip": {"mode": "single"}
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(stock1901_data_lake_provenance_total[1h]))",
+          "legendFormat": "provenance/hour"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Corporate actions volume per day",
+      "type": "barchart",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "fieldConfig": {
+        "defaults": {"unit": "short"},
+        "overrides": []
+      },
+      "options": {
+        "stacking": {"mode": "normal", "group": "A"},
+        "legend": {"showLegend": true, "displayMode": "table"}
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (action_type) (increase(stock1901_corp_actions_total[1d]))",
+          "legendFormat": "{{action_type}}"
+        }
+      ]
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["stock_rtx4060", "data_lake"],
+  "templating": {"list": []},
+  "time": {"from": "now-7d", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "stock_rtx4060 — Data Lake",
+  "uid": "stock1901-data-lake",
+  "version": 1,
+  "weekStart": ""
+}
