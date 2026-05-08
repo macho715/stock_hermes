@@ -39,6 +39,8 @@ test-results/
 # Phase 0+ runtime artifacts
 mlruns/
 mlartifacts/
+mlflow.db
+mlflow.db-*
 /data_lake/
 .benchmarks/
 audit_log/
