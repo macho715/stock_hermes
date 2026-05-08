@@ -107,6 +107,10 @@ class RecommendationConfig:
     provider_config: str | None = None
     kevpe_events: str | None = None
     audit_command: str = "recommend"
+    # Optional MLflow Model Registry URI (e.g. "models:/direction_v1/Production").
+    # When set the engine attempts to load the registered model and use it in
+    # place of the in-process refit. Falls back silently to refit on failure.
+    model_uri: str | None = None
 
     def __post_init__(self) -> None:
         if self.prefer_gpu:
