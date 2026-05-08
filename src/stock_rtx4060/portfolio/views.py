@@ -17,8 +17,9 @@ nails the posterior toward the view; a confidence of ``0.0`` produces a wide
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -50,7 +51,7 @@ class LLMViews:
         return [v.ticker for v in self.items]
 
     @classmethod
-    def from_advisory_outputs(cls, outputs: "Iterable[AdvisoryOutput]") -> "LLMViews":
+    def from_advisory_outputs(cls, outputs: Iterable[AdvisoryOutput]) -> LLMViews:
         """Build an :class:`LLMViews` from advisor outputs.
 
         Each :class:`AdvisoryOutput` becomes a :class:`ViewItem` with the

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from .base import AdvisoryOutput
@@ -32,7 +32,7 @@ class MacroRegimeAgent:
     panel_fetcher: Any = None  # callable() -> dict, override in tests
 
     async def analyze(self, ticker: str, context: dict[str, Any]) -> AdvisoryOutput:
-        as_of = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        as_of = datetime.now(UTC).isoformat(timespec="seconds")
         panel = self._build_panel(context)
         if not panel:
             return AdvisoryOutput(

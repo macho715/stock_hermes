@@ -32,7 +32,9 @@ def _run(payload: str, ctx=None):
 
 
 def test_devils_advocate_negative_score_passes_through():
-    out = _run('{"score": -0.7, "confidence": 0.8, "rationale": "1) governance 2) margin 3) demand", "citations": ["10K"]}')
+    out = _run(
+        '{"score": -0.7, "confidence": 0.8, "rationale": "1) governance 2) margin 3) demand", "citations": ["10K"]}'
+    )
     assert out.score == -0.7
     assert out.confidence == 0.8
     assert "governance" in out.rationale

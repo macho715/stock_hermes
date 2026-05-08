@@ -8,7 +8,7 @@ floored to zero.  The agent never confirms a long thesis.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from .base import AdvisoryOutput
@@ -23,7 +23,7 @@ class DevilsAdvocateAgent:
     client: ClaudeClient = field(default_factory=ClaudeClient)
 
     async def analyze(self, ticker: str, context: dict[str, Any]) -> AdvisoryOutput:
-        as_of = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        as_of = datetime.now(UTC).isoformat(timespec="seconds")
         factors = dict(context.get("factors") or {})
         shap = dict(context.get("shap") or {})
         bull_summary = str(context.get("bull_summary") or "")

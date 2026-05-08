@@ -154,8 +154,7 @@ class ClaudeClient:
                 import anthropic  # type: ignore[import-not-found]
             except ImportError as exc:  # pragma: no cover - import guard
                 raise ImportError(
-                    "anthropic SDK is required for live calls. "
-                    "Install with: pip install 'anthropic>=0.40'"
+                    "anthropic SDK is required for live calls. " "Install with: pip install 'anthropic>=0.40'"
                 ) from exc
             self._sync_client = anthropic.Anthropic(api_key=self.api_key or os.getenv("ANTHROPIC_API_KEY"))
         return self._sync_client
@@ -166,8 +165,7 @@ class ClaudeClient:
                 import anthropic  # type: ignore[import-not-found]
             except ImportError as exc:  # pragma: no cover - import guard
                 raise ImportError(
-                    "anthropic SDK is required for live calls. "
-                    "Install with: pip install 'anthropic>=0.40'"
+                    "anthropic SDK is required for live calls. " "Install with: pip install 'anthropic>=0.40'"
                 ) from exc
             self._async_client = anthropic.AsyncAnthropic(api_key=self.api_key or os.getenv("ANTHROPIC_API_KEY"))
         return self._async_client

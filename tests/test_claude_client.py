@@ -21,7 +21,6 @@ from stock_rtx4060.advisors.claude_client import (
     compute_cost_usd,
 )
 
-
 # ─── fake message + client ────────────────────────────────────────────────
 
 
@@ -107,8 +106,12 @@ def test_compute_cost_usd_components():
 
 
 def test_compute_cost_usd_unknown_model_falls_back_to_opus():
-    a = compute_cost_usd(input_tokens=1000, cache_read_tokens=0, cache_creation_tokens=0, output_tokens=1000, model="unknown")
-    b = compute_cost_usd(input_tokens=1000, cache_read_tokens=0, cache_creation_tokens=0, output_tokens=1000, model=DEFAULT_MODEL)
+    a = compute_cost_usd(
+        input_tokens=1000, cache_read_tokens=0, cache_creation_tokens=0, output_tokens=1000, model="unknown"
+    )
+    b = compute_cost_usd(
+        input_tokens=1000, cache_read_tokens=0, cache_creation_tokens=0, output_tokens=1000, model=DEFAULT_MODEL
+    )
     assert a == pytest.approx(b)
 
 
@@ -223,9 +226,7 @@ def test_acall_async_round_trip():
     fake = _AsyncClient()
     client._async_client = fake
 
-    out = asyncio.run(
-        client.acall(system="sys", messages=[{"role": "user", "content": "x"}])
-    )
+    out = asyncio.run(client.acall(system="sys", messages=[{"role": "user", "content": "x"}]))
     assert out.text == "async"
     assert out.tokens_in == 1
     assert out.tokens_out == 2

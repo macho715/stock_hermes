@@ -14,9 +14,10 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Iterable
+from datetime import UTC, datetime
+from typing import Any
 
 from .base import AdvisoryOutput
 from .claude_client import ClaudeClient
@@ -52,7 +53,7 @@ class NewsSentimentAgent:
     fetch_fn: Any = None  # injection seam for tests — see _fetch_for_ticker
 
     async def analyze(self, ticker: str, context: dict[str, Any]) -> AdvisoryOutput:
-        as_of = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        as_of = datetime.now(UTC).isoformat(timespec="seconds")
         try:
             headlines = list(self._fetch_for_ticker(ticker, context))
         except Exception as exc:  # pragma: no cover - defensive
@@ -76,7 +77,9 @@ class NewsSentimentAgent:
 
         system_tpl = load_prompt("news_system")
         user_tpl = load_prompt("news_user")
-        rendered_user = render(user_tpl, {"ticker": ticker, "as_of": as_of, "headlines": [h.__dict__ for h in headlines]})
+        rendered_user = render(
+            user_tpl, {"ticker": ticker, "as_of": as_of, "headlines": [h.__dict__ for h in headlines]}
+        )
 
         result = await self.client.acall(
             system=system_tpl,

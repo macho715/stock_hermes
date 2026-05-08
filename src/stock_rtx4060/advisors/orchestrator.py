@@ -76,7 +76,9 @@ class Orchestrator:
         devils_out = await self.devils.analyze(ticker, devils_ctx)
         return [news_out, devils_out, macro_out]
 
-    async def _langgraph_run(self, ticker: str, ctx: dict[str, Any]) -> list[AdvisoryOutput]:  # pragma: no cover - optional
+    async def _langgraph_run(
+        self, ticker: str, ctx: dict[str, Any]
+    ) -> list[AdvisoryOutput]:  # pragma: no cover - optional
         try:
             from langgraph.graph import END, StateGraph  # type: ignore[import-not-found]
         except ImportError:
