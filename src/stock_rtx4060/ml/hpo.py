@@ -80,6 +80,7 @@ def run_hpo(
     model: ModelKind = "xgboost",
     n_trials: int = 50,
     cv: PurgedKFold | None = None,
+    horizon: int = 5,
     experiment: str = "direction_v1",
     study_name: str | None = None,
     storage: str | None = None,
@@ -110,7 +111,8 @@ def run_hpo(
             raise ValueError(f"unsupported model {model!r}")
 
         scores: list[float] = []
-        for fold_idx, (tr, te) in enumerate(cv.split(X)):
+        _groups = np.arange(len(X)) + horizon
+        for fold_idx, (tr, te) in enumerate(cv.split(X, groups=_groups)):
             est = _clone(estimator)
             est.fit(X_arr[tr], y_arr[tr])
             try:

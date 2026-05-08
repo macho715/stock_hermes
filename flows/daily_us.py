@@ -175,7 +175,7 @@ def daily_us_flow(*, dry_run: bool = False, as_of: str | None = None) -> dict[st
         results["model"] = model_predict_task(universe)
         results["portfolio"] = portfolio_optimize_task(universe)
         results["recommend"] = recommend_task(universe, dry_run=dry_run)
-        results["dashboard"] = snapshot_dashboard_task({"results": []})
+        results["dashboard"] = snapshot_dashboard_task(results["recommend"])
         results["alert"] = alert_task(results["recommend"], dry_run=dry_run)
     except Exception as exc:  # noqa: BLE001
         slack_on_failure(f"daily_us_flow failed: {exc}")

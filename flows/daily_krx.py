@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .utils import flow, get_run_logger, slack_on_failure, task, with_retries
@@ -44,8 +44,9 @@ def ingest_kis_task(universe: list[str], *, as_of: str | None = None) -> dict[st
     """Ingest daily KRX bars via KIS Open API for each ticker in ``universe``."""
     from stock_rtx4060.data_lake.ingest.kis_ingestor import ingest_kis
 
-    end = as_of or datetime.now(timezone.utc).strftime("%Y%m%d")
-    start = (datetime.now(timezone.utc).replace(year=datetime.now(timezone.utc).year - 1)).strftime("%Y%m%d")
+    end_dt = datetime.strptime(as_of, "%Y%m%d").replace(tzinfo=timezone.utc) if as_of else datetime.now(timezone.utc)
+    end = end_dt.strftime("%Y%m%d")
+    start = (end_dt - timedelta(days=365)).strftime("%Y%m%d")
     counts: dict[str, int] = {}
     for ticker in universe:
         try:
@@ -204,7 +205,7 @@ def daily_krx_flow(*, dry_run: bool = False, as_of: str | None = None) -> dict[s
         results["model"] = model_predict_task(universe)
         results["portfolio"] = portfolio_optimize_task(universe)
         results["recommend"] = recommend_task(universe, dry_run=dry_run)
-        results["dashboard"] = snapshot_dashboard_task({"results": []})
+        results["dashboard"] = snapshot_dashboard_task(results["recommend"])
         results["alert"] = alert_task(results["recommend"], dry_run=dry_run)
     except Exception as exc:  # noqa: BLE001 - notify and re-raise so Prefect marks failed
         slack_on_failure(f"daily_krx_flow failed: {exc}")
