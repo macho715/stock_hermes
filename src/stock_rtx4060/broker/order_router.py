@@ -191,6 +191,7 @@ class OrderRouter:
         order_type: str = OrderType.MARKET,
         limit_price: float | None = None,
         stop_price: float | None = None,
+        broker: str | None = None,
     ) -> OrderResult:
         """Route and submit an order.
 
@@ -206,6 +207,10 @@ class OrderRouter:
             One of ``"MARKET"``, ``"LIMIT"``, ``"STOP"``, ``"STOP_LIMIT"``.
         limit_price : float, optional
         stop_price : float, optional
+        broker : {"alpaca", "ibkr", "kis"}, optional
+            If supplied, force routing to this adapter instead of using the
+            ticker-suffix-based default (US -> Alpaca, *.KS/*.KQ -> KIS).
+            This is used by the CLI when the user passes ``--broker``.
 
         Raises
         ------
@@ -222,7 +227,18 @@ class OrderRouter:
             limit_price=limit_price,
             stop_price=stop_price,
         )
-        adapter = self._route(ticker)
+        if broker is not None:
+            broker_lc = broker.lower()
+            if broker_lc == "alpaca":
+                adapter = self._get_alpaca()
+            elif broker_lc == "ibkr":
+                adapter = self._get_ibkr()
+            elif broker_lc == "kis":
+                adapter = self._get_kis()
+            else:
+                raise ValueError(f"unknown broker {broker!r}; expected alpaca|ibkr|kis")
+        else:
+            adapter = self._route(ticker)
         logger.info(
             "OrderRouter: routing %s %d %s → %s",
             side, qty, ticker, adapter.broker_name,

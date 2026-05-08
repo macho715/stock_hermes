@@ -374,35 +374,47 @@ def cmd_paper_run(args: argparse.Namespace) -> int:
 
     broker_name = getattr(args, "broker", "paper")
     if broker_name != "paper":
-        # Route accepted signals through the live OrderRouter instead of
-        # silently consuming them in the paper engine.
-        try:
-            from .broker.order_router import OrderRouter, KillSwitchError
-            from .broker_bridge import build_order_from_recommendation, OrderSide
+        # Skip live submission entirely when the paper engine returned a
+        # previously cached run (no new decisions); otherwise re-running
+        # paper-run on the same date/universe would resubmit duplicate live
+        # orders.  Force-rerun is the intended escape hatch.
+        if status.get("reused"):
+            print(
+                "INFO: paper engine returned a cached run — skipping live order routing. "
+                "Use --force-rerun with --rerun-reason to regenerate decisions.",
+                file=sys.stderr,
+            )
+        else:
+            # Route accepted signals through the live OrderRouter instead of
+            # silently consuming them in the paper engine.
+            try:
+                from .broker.order_router import OrderRouter, KillSwitchError
+                from .broker_bridge import build_order_from_recommendation, OrderSide
 
-            router = OrderRouter(paper_fallback=True)
-            accepted = [p for p in status.get("positions", [])]
-            for pos in accepted:
-                ticker = pos.get("ticker", "")
-                shares = int(pos.get("shares", 0))
-                avg_price = float(pos.get("avg_price", 0.0))
-                if ticker and shares > 0:
-                    try:
-                        router.submit_order(
-                            ticker=ticker,
-                            qty=shares,
-                            side="BUY",
-                            order_type="LIMIT",
-                            limit_price=avg_price,
-                        )
-                    except KillSwitchError as exc:
-                        print(f"KILL SWITCH active — aborting live order routing: {exc}", file=sys.stderr)
-                        break
-                    except Exception as exc:  # noqa: BLE001
-                        print(f"WARNING: order routing failed for {ticker}: {exc}", file=sys.stderr)
-            router.close()
-        except ImportError as exc:
-            print(f"WARNING: live broker not available ({exc}), paper mode used", file=sys.stderr)
+                router = OrderRouter(paper_fallback=True)
+                accepted = [p for p in status.get("positions", [])]
+                for pos in accepted:
+                    ticker = pos.get("ticker", "")
+                    shares = int(pos.get("shares", 0))
+                    avg_price = float(pos.get("avg_price", 0.0))
+                    if ticker and shares > 0:
+                        try:
+                            router.submit_order(
+                                ticker=ticker,
+                                qty=shares,
+                                side="BUY",
+                                order_type="LIMIT",
+                                limit_price=avg_price,
+                                broker=broker_name,
+                            )
+                        except KillSwitchError as exc:
+                            print(f"KILL SWITCH active — aborting live order routing: {exc}", file=sys.stderr)
+                            break
+                        except Exception as exc:  # noqa: BLE001
+                            print(f"WARNING: order routing failed for {ticker}: {exc}", file=sys.stderr)
+                router.close()
+            except ImportError as exc:
+                print(f"WARNING: live broker not available ({exc}), paper mode used", file=sys.stderr)
 
     summary = {
         "paper_trading_only": broker_name == "paper",
