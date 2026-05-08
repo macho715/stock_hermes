@@ -1,0 +1,8 @@
+# Phase-4 portfolio optimisation pin file.
+# All three libraries below are *optional*: the pure-Python HRP fallback in
+# stock_rtx4060.portfolio.optimizer works without any of them.  When installed,
+# they enable the skfolio and PyPortfolioOpt back-ends with their richer
+# constraint sets and CVXPY-backed solvers.
+skfolio>=0.4
+cvxpy>=1.5
+PyPortfolioOpt>=1.5

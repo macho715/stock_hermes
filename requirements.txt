@@ -11,3 +11,7 @@ xgboost>=3.1.0
 # API server (Option B: HTTP integration with stock-pred-v5 dashboard)
 flask>=3.0
 flask-cors>=4.0
+# Phase 4: Portfolio optimisation (all optional — pure-Python HRP fallback works without them)
+skfolio>=0.4
+cvxpy>=1.5
+PyPortfolioOpt>=1.5

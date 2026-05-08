@@ -207,6 +207,9 @@ class RecommendationResult:
     kevpe_ci: list[float] | None = None
     kevpe_confidence: str | None = None
     kevpe_reason: str | None = None
+    # Phase-4 portfolio target weight (optional — 0.0 means "no portfolio guidance"
+    # so the dashboard_snapshot.v1 schema remains backward-compatible).
+    target_weight: float = 0.0
 
     def to_dict(self) -> dict:
         data = asdict(self)

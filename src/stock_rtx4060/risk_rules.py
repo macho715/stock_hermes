@@ -74,12 +74,32 @@ class CandidateVerdict:
         return result
 
 
-def position_size_by_risk(entry: float, stop: float, track_capital: float, risk_per_trade_pct: float) -> tuple[int, float, float]:
+def position_size_by_risk(
+    entry: float,
+    stop: float,
+    track_capital: float,
+    risk_per_trade_pct: float,
+    *,
+    optimizer_weight: float | None = None,
+) -> tuple[int, float, float]:
+    """Compute (quantity, position_value, open_risk) for a single name.
+
+    When ``optimizer_weight`` is ``None`` the function uses the original
+    risk-budget sizing rule.  When supplied, the position value is taken as
+    ``optimizer_weight * track_capital`` (still respecting the Track-S/Track-L
+    capital cap) and quantity is back-calculated from the entry price.  The
+    open-risk figure is always ``quantity * (entry - stop)``.
+    """
     if entry <= 0 or stop <= 0 or stop >= entry:
         return 0, 0.0, 0.0
-    risk_budget = track_capital * risk_per_trade_pct
     risk_per_share = entry - stop
-    quantity = max(0, floor(risk_budget / risk_per_share))
+    if optimizer_weight is not None:
+        weight = max(0.0, min(float(optimizer_weight), 1.0))
+        target_value = track_capital * weight
+        quantity = max(0, floor(target_value / entry))
+    else:
+        risk_budget = track_capital * risk_per_trade_pct
+        quantity = max(0, floor(risk_budget / risk_per_share))
     position_value = quantity * entry
     open_risk = quantity * risk_per_share
     return quantity, position_value, open_risk
