@@ -338,7 +338,7 @@ class PaperTradingEngine:
         _write_jsonl(run_dir / "positions.jsonl", positions)
         _write_equity_curve(run_dir / "equity_curve.csv", equity_rows)
         _write_daily_report(run_dir / "daily_report.md", run_id, signal_records, positions, drawdown, benchmark_gate)
-        return _with_run_identity(load_paper_status(self._output_root()), run_id, run_dir)
+        return _with_run_identity(load_paper_status(self._output_root()), run_id, run_dir, reused=False)
 
     def _run_id(self, signals: list[PaperTradingSignal]) -> str:
         tickers = ",".join(sorted(signal.ticker.upper() for signal in signals)) or "empty"
@@ -500,11 +500,12 @@ def rebuild_daily_report(run_dir: Path | str) -> Path:
     return report
 
 
-def _with_run_identity(status: dict[str, Any], run_id: str, run_dir: Path) -> dict[str, Any]:
+def _with_run_identity(status: dict[str, Any], run_id: str, run_dir: Path, *, reused: bool = True) -> dict[str, Any]:
     return {
         **status,
         "run_id": run_id,
         "run_dir": str(run_dir),
+        "reused": reused,
     }
 
 

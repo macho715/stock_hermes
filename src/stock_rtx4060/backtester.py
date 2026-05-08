@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from math import sqrt
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -32,6 +32,14 @@ class BacktestConfig:
     take_profit_pct: float = 0.10
     allow_fractional_shares: bool = True
     min_trade_value: float = 100.0
+    sizing: Literal["kelly", "hrp", "mv_cvar", "risk_budgeting"] = "kelly"
+    sizing_lookback: int = 252
+    # Phase-5 advanced statistics (off by default — preserves all existing tests).
+    compute_advanced_stats: bool = False
+    advanced_stats_n_trials: int = 1
+    advanced_stats_mc_paths: int = 1_000
+    advanced_stats_mc_block: int = 20
+    advanced_stats_seed: int | None = 7
 
     def __post_init__(self) -> None:
         if self.monthly_stop_pct is not None:
@@ -149,6 +157,8 @@ class Backtester:
         original_index = price_s.index
         prices_arr = price_s.reset_index(drop=True)
         signals_arr = signal_s.reset_index(drop=True).clip(0.0, 1.0)
+        # Pre-compute single-asset returns for rolling-window optimiser sizing.
+        returns_arr = price_s.pct_change().fillna(0.0).reset_index(drop=True)
 
         cash = float(cfg.initial_capital)
         quantity = 0.0
@@ -224,7 +234,10 @@ class Backtester:
             # Entry after exits and monthly stop gate.
             if quantity == 0 and not monthly_stopped and signal >= cfg.threshold_buy:
                 buy_fill = price * (1.0 + cfg.slippage)
-                kelly_pct = max(cfg.min_position_pct, min(self.kelly.kelly_pct(), cfg.max_position_pct))
+                if cfg.sizing == "kelly":
+                    kelly_pct = max(cfg.min_position_pct, min(self.kelly.kelly_pct(), cfg.max_position_pct))
+                else:
+                    kelly_pct = self._optimizer_position_pct(returns_arr, i, cfg)
                 max_by_cap = cash * kelly_pct / (buy_fill * (1.0 + cfg.transaction_cost))
                 max_by_position = cfg.initial_capital * cfg.max_position_pct / buy_fill
                 stop_distance = max(buy_fill * cfg.stop_loss_pct, 1e-12)
@@ -287,6 +300,7 @@ class Backtester:
         avg_pnl_pct = float(np.mean([t.pnl_pct for t in completed if t.pnl_pct is not None])) if completed else 0.0
 
         win_rate = round((len(wins) / len(completed) * 100.0) if completed else 0.0, 2)
+        deflated_sr, psr_vs_zero, mc_dd_p95 = self._maybe_advanced_stats(returns, sharpe)
         result = BacktestResult({
             "total_return_pct": round(total_return * 100.0, 2),
             "annualized_return_pct": round(((1.0 + total_return) ** (252 / max(1, len(prices_arr))) - 1.0) * 100.0, 2),
@@ -304,8 +318,103 @@ class Backtester:
             "monthly_stop_triggered": monthly_stop_ever,
             "portfolio_values": [round(float(x), 4) for x in equity_s.tolist()],
             "trades": [t.to_dict() for t in completed],
+            # Phase-5 advanced stats — None unless `compute_advanced_stats=True`.
+            "deflated_sharpe": deflated_sr,
+            "psr_vs_zero": psr_vs_zero,
+            "mc_drawdown_p95": mc_dd_p95,
         })
         return result
+
+    def _maybe_advanced_stats(
+        self, returns: pd.Series, sharpe: float
+    ) -> tuple[float | None, float | None, float | None]:
+        """Compute Phase-5 advanced statistics when enabled.
+
+        Returns ``(deflated_sharpe, psr_vs_zero, mc_drawdown_p95)`` — all
+        ``None`` when the feature flag is off, preserving the legacy schema.
+        """
+        cfg = self.config
+        if not getattr(cfg, "compute_advanced_stats", False):
+            return None, None, None
+        try:
+            from .backtest.mc_bootstrap import drawdown_bounds
+            from .backtest.stat_tests import deflated_sharpe, probabilistic_sharpe
+        except Exception:  # pragma: no cover - defensive
+            return None, None, None
+        clean = returns.replace([np.inf, -np.inf], np.nan).dropna()
+        n_obs = int(len(clean))
+        if n_obs < 5:
+            return None, None, None
+        # SR is annualized in `sharpe`; convert back to per-period for PSR/DSR.
+        sr_per_period = sharpe / sqrt(252.0) if sharpe else 0.0
+        try:
+            skew_val = float(clean.skew()) if n_obs >= 3 else 0.0
+            kurt_val = float(clean.kurt() + 3.0) if n_obs >= 4 else 3.0
+            psr = float(probabilistic_sharpe(sr_per_period, 0.0, n_obs=n_obs, skew=skew_val, kurt=kurt_val))
+            dsr = float(
+                deflated_sharpe(
+                    sr_per_period,
+                    n_trials=int(getattr(cfg, "advanced_stats_n_trials", 1)),
+                    skew=skew_val,
+                    kurt=kurt_val,
+                    n_obs=n_obs,
+                )
+            )
+        except Exception:  # pragma: no cover - defensive
+            psr = None
+            dsr = None
+        try:
+            bounds = drawdown_bounds(
+                clean,
+                block_size=int(getattr(cfg, "advanced_stats_mc_block", 20)),
+                n_paths=int(getattr(cfg, "advanced_stats_mc_paths", 1_000)),
+                seed=getattr(cfg, "advanced_stats_seed", None),
+            )
+            mc_p95 = float(bounds["p95_max_dd"])
+        except Exception:  # pragma: no cover - defensive
+            mc_p95 = None
+        return dsr, psr, mc_p95
+
+    def _optimizer_position_pct(self, returns_arr: pd.Series, i: int, cfg: BacktestConfig) -> float:
+        """Compute a single-asset position fraction using the portfolio optimiser.
+
+        For a single-name backtester the optimiser is degenerate (one ticker), so
+        we use a synthetic two-asset universe (the asset itself and a flat
+        cash-like leg) to obtain a meaningful target weight, then bound it by
+        ``[min_position_pct, max_position_pct]``.  On any failure we fall back
+        to fractional-Kelly sizing — preserving the existing behaviour.
+        """
+        try:
+            from .portfolio.optimizer import optimize  # local import — optional dep
+        except Exception:
+            return max(cfg.min_position_pct, min(self.kelly.kelly_pct(), cfg.max_position_pct))
+
+        lookback = max(20, int(cfg.sizing_lookback))
+        start = max(0, i - lookback)
+        window = returns_arr.iloc[start:i]
+        if len(window) < 20:
+            return max(cfg.min_position_pct, min(self.kelly.kelly_pct(), cfg.max_position_pct))
+
+        # Build a 2-asset frame: the asset's returns and a constant 0% "cash" leg.
+        # The optimiser allocates risk between the two; the asset weight becomes
+        # our target position fraction.
+        df = pd.DataFrame({"asset": window.values, "cash": np.zeros(len(window))})
+        # Add tiny noise to cash to avoid singular covariance.
+        df["cash"] = 1e-8 * np.random.default_rng(0).standard_normal(len(window))
+        try:
+            weights = optimize(
+                df,
+                method=cfg.sizing,
+                max_weight=cfg.max_position_pct,
+                min_weight=0.0,
+                seed=42,
+            )
+        except Exception:
+            return max(cfg.min_position_pct, min(self.kelly.kelly_pct(), cfg.max_position_pct))
+        if weights is None or weights.empty or "asset" not in weights.index:
+            return max(cfg.min_position_pct, min(self.kelly.kelly_pct(), cfg.max_position_pct))
+        target = float(weights.loc["asset"])
+        return max(cfg.min_position_pct, min(target, cfg.max_position_pct))
 
     @staticmethod
     def _month_key(value: Any) -> str:

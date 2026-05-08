@@ -2,10 +2,14 @@
 addopts = "-q"
 testpaths = ["tests"]
 pythonpath = [".", "src"]
+markers = [
+    "benchmark: pytest-benchmark micro-benchmarks",
+    "slow: integration / live-network tests",
+]
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -13,7 +17,7 @@ ignore = ["E501"]
 
 [tool.black]
 line-length = 120
-target-version = ["py311"]
+target-version = ["py312"]
 
 [tool.coverage.run]
 source = ["src/stock_rtx4060"]
@@ -37,3 +41,13 @@ exclude_lines = [
     "if __name__ == .__main__.",
     "raise NotImplementedError",
 ]
+
+[tool.mypy]
+python_version = "3.12"
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+strict_equality = true
+ignore_missing_imports = true
+files = ["src/stock_rtx4060"]

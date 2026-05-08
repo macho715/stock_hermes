@@ -1,0 +1,22 @@
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git curl build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir uv
+
+WORKDIR /app
+
+COPY requirements.in requirements-dev.in ./
+RUN uv pip compile --system --output-file requirements.txt requirements.in \
+    && uv pip compile --system --output-file requirements-dev.txt requirements-dev.in \
+    && uv pip sync --system requirements-dev.txt
+
+COPY . .
+
+CMD ["python", "main.py"]

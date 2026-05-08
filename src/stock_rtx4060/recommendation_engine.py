@@ -25,7 +25,7 @@ from .backtest_honesty import evaluate_backtest_honesty, summarize_honesty
 from .data_providers import ProviderResult, load_ohlcv_with_provider
 from .kevpe_adapter import get_kevpe_adapter, kevpe_signal_to_supplement
 from .ensemble_model import DirectionModel, ModelConfig, _safe_auc
-from .feature_engine import TechnicalIndicators, feature_columns
+from .feature_engine import TechnicalIndicators, build_features, feature_columns
 
 Track = Literal["S", "L"]
 Verdict = Literal[
@@ -107,6 +107,19 @@ class RecommendationConfig:
     provider_config: str | None = None
     kevpe_events: str | None = None
     audit_command: str = "recommend"
+    factor_set: Literal["technical", "alpha101", "cross_sectional", "all"] = "technical"
+    # Optional MLflow Model Registry URI (e.g. "models:/direction_v1/Production").
+    # When set the engine attempts to load the registered model and use it in
+    # place of the in-process refit. Falls back silently to refit on failure.
+    model_uri: str | None = None
+    # Phase 6 — LLM advisor blend.  ``advisor_run`` toggles whether the
+    # orchestrator is invoked; ``advisor_blend_weight`` is the share of
+    # the advisor score in the final blend (``0`` = no LLM influence,
+    # the legacy behaviour).  The weight applies *only* to the score; it
+    # does NOT influence the GREEN/AMBER/RED gate decision (see
+    # :func:`_verdict` and the safety contract test).
+    advisor_run: bool = False
+    advisor_blend_weight: float = 0.0
 
     def __post_init__(self) -> None:
         if self.prefer_gpu:
@@ -207,6 +220,16 @@ class RecommendationResult:
     kevpe_ci: list[float] | None = None
     kevpe_confidence: str | None = None
     kevpe_reason: str | None = None
+    # Phase-4 portfolio target weight (optional — 0.0 means "no portfolio guidance"
+    # so the dashboard_snapshot.v1 schema remains backward-compatible).
+    target_weight: float = 0.0
+    # Phase-6 LLM advisor overlay (optional — None means "advisor not run").
+    # ``advisor_score`` is the blended advisory score in ``[-1, +1]``; the
+    # rationale is the orchestrator's combined narrative truncated to a
+    # dashboard-friendly length.  Verdicts are NEVER upgraded by these
+    # fields — see ``_verdict`` and the safety contract test.
+    advisor_score: float | None = None
+    advisor_rationale: str | None = None
 
     def to_dict(self) -> dict:
         data = asdict(self)
@@ -639,6 +662,98 @@ def _validation_checks(track: Track, df: pd.DataFrame, snap: dict, model_stats: 
     return checks
 
 
+# ────────────────────────────────────────────────────────────────────────
+# Phase 6 advisor safety contract
+# ────────────────────────────────────────────────────────────────────────
+# ``_verdict`` consumes ONLY the deterministic score.  The advisor blend
+# may LOWER the displayed score (and therefore downgrade the verdict via
+# the threshold check below), but it can never RAISE it: when the LLM
+# wants to push a candidate from AMBER to GREEN the blended score is
+# discarded and the deterministic verdict stands.  See
+# ``tests/test_advisor_no_gate_override.py`` for the canonical safety
+# assertion.
+
+# Severity ordering for the advisor floor — lower is worse.
+_VERDICT_SEVERITY: dict[str, int] = {
+    "RED_DATA_OR_MODEL_ERROR": 0,
+    "RED_DATA_INSUFFICIENT": 0,
+    "ZERO_RISK_PLAN_FAILED": 0,
+    "RED_NOT_RECOMMENDED": 1,
+    "AMBER_REVIEW_ONLY": 2,
+    "AMBER_WATCHLIST": 2,
+    "ELIGIBLE_RECOMMENDATION": 3,
+    "ACCUMULATE_RECOMMENDATION": 3,
+}
+
+
+def _worst_verdict(
+    a: tuple[Verdict, str], b: tuple[Verdict, str]
+) -> tuple[Verdict, str]:
+    """Return whichever of ``a``/``b`` has the *worse* (lower) severity."""
+    sev_a = _VERDICT_SEVERITY.get(a[0], 0)
+    sev_b = _VERDICT_SEVERITY.get(b[0], 0)
+    return a if sev_a <= sev_b else b
+
+
+def _apply_advisor_blend(
+    *,
+    ticker: str,
+    deterministic_score: float,
+    cfg: RecommendationConfig,
+    snap: dict,
+    plan: "RiskPlan",
+    model_stats: dict,
+) -> tuple[float, str | None, float]:
+    """Run the LLM advisor for ``ticker`` and return ``(advisor_score, rationale, blended_score)``.
+
+    The blended score is::
+
+        final_score = score * (1 - w) + (50 + advisory_score * 50) * w
+
+    clamped to ``[0, 100]`` exactly as the upgrade plan specifies.
+
+    A failure inside the orchestrator must NOT propagate — the caller
+    catches exceptions and falls back to the deterministic path.
+    """
+    from .advisors.audit import log_advisor_call
+    from .advisors.orchestrator import Orchestrator
+
+    orchestrator = Orchestrator()
+    context = {
+        "factors": {
+            "latest": snap.get("latest"),
+            "sma20": snap.get("sma20"),
+            "sma50": snap.get("sma50"),
+            "atr_pct": snap.get("atr_pct"),
+            "market_regime_score": snap.get("market_regime_score"),
+            "direction_prob": model_stats.get("latest_prob"),
+        },
+        "shap": {},
+        "bull_summary": (
+            f"{ticker} score={deterministic_score:.2f} prob={model_stats.get('latest_prob', 0):.3f}"
+        ),
+    }
+    result = orchestrator.analyze(ticker, context)
+    for output in result.outputs:
+        try:
+            log_advisor_call(output)
+        except Exception:  # pragma: no cover - audit best-effort
+            pass
+
+    advisory_score = float(result.advisory_score)
+    advisor_rationale = "; ".join(
+        f"[{out.agent}] {out.rationale}" for out in result.outputs if out.rationale
+    )[:240] or None
+
+    weight = float(cfg.advisor_blend_weight)
+    weight = max(0.0, min(1.0, weight))
+    deterministic = float(deterministic_score)
+    advisory_pct = 50.0 + advisory_score * 50.0
+    blended = deterministic * (1.0 - weight) + advisory_pct * weight
+    blended = max(0.0, min(100.0, blended))
+    return advisory_score, advisor_rationale, float(blended)
+
+
 def _verdict(track: Track, score: float, checks: list[ValidationCheck], cfg: RecommendationConfig) -> tuple[Verdict, str]:
     fail_names = {c.name for c in checks if c.status == "FAIL"}
     pass_count = sum(1 for c in checks if c.status == "PASS")
@@ -721,7 +836,17 @@ class RecommendationEngine:
         if len(df) < min_required:
             raise RuntimeError(f"{ticker}: 데이터 부족 rows={len(df)}, required={min_required}")
 
-        feature_df = TechnicalIndicators(df).build_all(horizon=horizon)
+        if cfg.factor_set == "technical":
+            feature_df = TechnicalIndicators(df).build_all(horizon=horizon)
+        else:
+            from .factors import FactorRegistry  # noqa: WPS433 — lazy to keep startup cheap
+
+            reg = FactorRegistry()
+            if cfg.factor_set == "all":
+                factor_names = reg.list()
+            else:
+                factor_names = reg.list(category=cfg.factor_set)
+            feature_df = build_features(df, factors=factor_names, horizon=horizon)
         if feature_df.empty:
             raise RuntimeError(f"{ticker}: 피처 생성 결과가 비어 있습니다")
         model_stats = _fit_walk_forward_model(feature_df, horizon, cfg)
@@ -759,10 +884,45 @@ class RecommendationEngine:
             cv_gap=int(model_stats["gap"]),
             horizon=horizon,
         )
+        # Deterministic verdict — ALWAYS computed from the unblended score.
+        # The LLM advisor is forbidden from upgrading this; it can only
+        # downgrade via the blended-score recheck below.
         verdict, label = _verdict(track, score, checks, cfg)
+
+        # ── Phase-6 LLM advisor blend (optional, never overrides gate up) ──
+        advisor_score: float | None = None
+        advisor_rationale: str | None = None
+        final_score = score
+        if cfg.advisor_run and cfg.advisor_blend_weight > 0.0:
+            try:
+                advisor_score, advisor_rationale, final_score = _apply_advisor_blend(
+                    ticker=ticker,
+                    deterministic_score=score,
+                    cfg=cfg,
+                    snap=snap,
+                    plan=plan,
+                    model_stats=model_stats,
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                # An advisor failure must NEVER break the deterministic
+                # path — log and fall back to the unblended score.
+                import logging as _logging
+
+                _logging.getLogger(__name__).warning(
+                    "advisor blend failed for %s: %s", ticker, exc
+                )
+                final_score = score
+
+            blended_verdict, blended_label = _verdict(track, final_score, checks, cfg)
+            # Safety contract: take the WORSE of the two verdicts.  This
+            # guarantees the LLM can damp/downgrade but never upgrade.
+            verdict, label = _worst_verdict((verdict, label), (blended_verdict, blended_label))
+
         pass_count = sum(1 for check in checks if check.status == "PASS")
         ev = _expected_value_pct(model_stats["latest_prob"], plan)
         reasons = [f"data_source={data_source}", f"cv_gap={model_stats['gap']}"] + reasons + [label]
+        if advisor_score is not None:
+            reasons.append(f"advisor_score={advisor_score:+.3f}")
 
         # ── KEVPE risk overlay (supplementary only — never overrides Risk Gate) ──
         kevpe_result = get_kevpe_adapter().get_signal_for_ticker(df, self._events_for_ticker(ticker), as_of=pd.Timestamp.now().normalize())
@@ -772,7 +932,7 @@ class RecommendationEngine:
             ticker=ticker,
             track=track,
             verdict=verdict,
-            recommendation_rank_score=round(score, 2),
+            recommendation_rank_score=round(final_score, 2),
             candidate_label=label,
             screening_output_only=True,
             latest_close=round(float(snap["latest"]), 4),
@@ -817,6 +977,8 @@ class RecommendationEngine:
             kevpe_ci=kevpe_supp.get("kevpe_ci"),
             kevpe_confidence=kevpe_supp.get("kevpe_confidence"),
             kevpe_reason=kevpe_supp.get("kevpe_reason"),
+            advisor_score=advisor_score,
+            advisor_rationale=advisor_rationale,
         )
 
     def _events_for_ticker(self, ticker: str) -> list[dict]:

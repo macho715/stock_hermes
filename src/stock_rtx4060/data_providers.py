@@ -68,6 +68,8 @@ def load_ohlcv_with_provider(
     provider_config: dict[str, Any] | None = None,
     audit_logger: AuditLogger | None = None,
     command: str = "recommend",
+    as_of: str | None = None,
+    data_lake_first: bool | None = None,
 ) -> ProviderResult:
     config = provider_config if provider_config is not None else load_provider_config(provider_config_path)
     requested = str(data_provider or "auto").lower()
@@ -75,6 +77,22 @@ def load_ohlcv_with_provider(
 
     if selected == "synthetic":
         return _load_synthetic(ticker, period, requested, audit_logger, command, fallback_reason="synthetic flag enabled" if synthetic else None)
+
+    if data_lake_first is None:
+        import os as _os
+        data_lake_first = _os.environ.get("USE_DATA_LAKE", "0").lower() in ("1", "true", "yes")
+
+    if data_lake_first or as_of is not None:
+        lake_result = _try_data_lake(ticker, period, requested, selected, as_of, audit_logger, command)
+        if lake_result is not None:
+            return lake_result
+        if as_of is not None:
+            # Prevent look-ahead bias: never fall through to a live provider when an
+            # as_of timestamp was specified.  The caller must ingest data first.
+            raise RuntimeError(
+                f"Data lake miss for as_of query: ticker={ticker!r} as_of={as_of!r}. "
+                "Ingest historical data before issuing point-in-time queries."
+            )
 
     cached = _cache.get(ticker, period, selected)
     if cached is not None:
@@ -91,7 +109,54 @@ def load_ohlcv_with_provider(
 
     if result.frame is not None and not result.frame.empty:
         _cache.set(ticker, period, selected, result.frame)
+        if data_lake_first:
+            _write_through_to_lake(ticker, result.frame, source=selected)
     return result
+
+
+def _try_data_lake(
+    ticker: str,
+    period: str,
+    requested: str,
+    selected: str,
+    as_of: str | None,
+    audit_logger: AuditLogger | None,
+    command: str,
+) -> ProviderResult | None:
+    """Read from PIT lake first. Returns None on miss so caller can fall back."""
+    try:
+        from .data_lake import pit_resolver
+    except Exception:
+        return None
+    try:
+        df = pit_resolver.read(ticker, as_of=as_of)
+    except Exception:
+        return None
+    if df is None or df.empty:
+        return None
+    cols = [c for c in ("Open", "High", "Low", "Close", "Volume") if c in df.columns]
+    if len(cols) < 5:
+        return None
+    metadata: dict[str, Any] = {"data_lake_hit": True, "as_of": as_of, "rows": int(len(df))}
+    return ProviderResult(
+        frame=df[cols].copy(),
+        provider_requested=requested,
+        provider_used=f"{selected}+lake",
+        source="data_lake",
+        metadata=metadata,
+    )
+
+
+def _write_through_to_lake(ticker: str, frame: Any, *, source: str) -> None:
+    try:
+        from .data_lake.store import get_default_store
+    except Exception:
+        return
+    try:
+        store = get_default_store()
+        store.write(ticker, frame, source=source)
+    except Exception:
+        pass
 
 
 def _load_synthetic(

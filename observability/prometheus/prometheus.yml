@@ -1,0 +1,39 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Recommendation engine /metrics endpoint (port 9100)
+  - job_name: stock_rtx4060
+    static_configs:
+      - targets: ["host.docker.internal:9100"]
+        labels:
+          service: recommendation_engine
+
+  # Same port but the dedicated job name keeps Grafana queries scoped.
+  - job_name: recommendation_engine
+    static_configs:
+      - targets: ["host.docker.internal:9100"]
+        labels:
+          service: recommendation_engine
+
+  # Prefect server self-metrics (port 4200)
+  - job_name: prefect
+    static_configs:
+      - targets: ["prefect-server:4200"]
+        labels:
+          service: prefect
+
+  - job_name: prefect-server
+    metrics_path: /api/health
+    static_configs:
+      - targets: ["prefect-server:4200"]
+        labels:
+          service: prefect_server
+
+  # MLflow tracking server health (best-effort scrape)
+  - job_name: mlflow
+    static_configs:
+      - targets: ["mlflow:5000"]
+        labels:
+          service: mlflow

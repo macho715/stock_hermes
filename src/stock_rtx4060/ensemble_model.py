@@ -26,8 +26,9 @@ from sklearn.preprocessing import StandardScaler
 
 from .feature_engine import TARGET_COLUMNS, feature_columns
 
-ModelKind = Literal["auto", "xgb", "logistic", "rf"]
+ModelKind = Literal["auto", "xgb", "logistic", "rf", "lightgbm"]
 DeviceKind = Literal["cpu", "cuda"]
+CVKind = Literal["timeseries", "purged"]
 
 
 def _safe_auc(y_true: pd.Series | np.ndarray, prob: np.ndarray) -> float:
@@ -83,6 +84,8 @@ class ModelConfig:
     xgb_weight: float = 0.70
     lstm_weight: float = 0.30
     random_state: int = 42
+    cv_kind: CVKind = "timeseries"
+    embargo_pct: float = 0.01
     xgb_params: dict[str, Any] = field(
         default_factory=lambda: {
             "n_estimators": 240,
@@ -153,6 +156,12 @@ class DirectionModel:
         params = xgb_params_for_device(self.config.xgb_params, device=device)
         return XGBClassifier(**params)
 
+    def _make_lightgbm(self):
+        from .ml.lightgbm_model import make_lightgbm
+
+        device = "cuda" if self.config.xgb_device == "cuda" else "cpu"
+        return make_lightgbm(device=device, random_state=self.config.random_state)
+
     def fit(self, X: pd.DataFrame, y: pd.Series) -> "DirectionModel":
         if y.nunique() < 2:
             raise RuntimeError("target class가 하나뿐이라 분류 모델을 학습할 수 없습니다")
@@ -164,6 +173,12 @@ class DirectionModel:
             self.model = self._make_rf()
             self.model.fit(clean_X, y.astype(int))
             self.kind_used = "rf"
+            return self
+
+        if kind == "lightgbm":
+            self.model = self._make_lightgbm()
+            self.model.fit(clean_X, y.astype(int))
+            self.kind_used = "lightgbm"
             return self
 
         if kind in {"auto", "xgb"}:
@@ -305,9 +320,13 @@ class EnsemblePredictor:
         self.oof_probabilities_: pd.Series | None = None
         self.cv_results_: list[dict[str, Any]] = []
 
-    def _splitter(self, n_samples: int) -> TimeSeriesSplit:
+    def _splitter(self, n_samples: int) -> Any:
         n_splits = min(self.config.n_splits, max(2, n_samples // 80))
         gap = min(max(0, self.config.gap or 0), max(0, n_samples // (n_splits + 1) - 1))
+        if self.config.cv_kind == "purged":
+            from .ml.cv import PurgedKFold
+
+            return PurgedKFold(n_splits=n_splits, embargo_pct=self.config.embargo_pct)
         return TimeSeriesSplit(n_splits=n_splits, gap=gap)
 
     def fit(self, feature_df: pd.DataFrame) -> list[dict[str, Any]]:
@@ -324,7 +343,68 @@ class EnsemblePredictor:
         cv_results: list[dict[str, Any]] = []
         splitter = self._splitter(len(X))
 
-        for fold, (train_idx, test_idx) in enumerate(splitter.split(X), start=1):
+        # MLflow run (no-op when mlflow unavailable). We open a single run
+        # around the whole walk-forward CV so all fold metrics share context.
+        try:
+            from .observability import MLflowSession, log_metrics, log_params
+
+            _mlflow_ctx = MLflowSession("ensemble_train", run_name="walk_forward")
+        except Exception:  # pragma: no cover - observability is optional
+            from contextlib import nullcontext
+
+            _mlflow_ctx = nullcontext()
+            log_metrics = lambda *_a, **_k: None  # noqa: E731
+            log_params = lambda *_a, **_k: None  # noqa: E731
+
+        with _mlflow_ctx:
+            try:
+                log_params(
+                    {
+                        "model_kind": self.config.model_kind,
+                        "n_splits": self.config.n_splits,
+                        "gap": self.config.gap,
+                        "cv_kind": self.config.cv_kind,
+                        "embargo_pct": self.config.embargo_pct,
+                    }
+                )
+            except Exception:  # pragma: no cover
+                pass
+            cv_results = self._fit_folds(
+                X, y, oof, splitter, feature_df, log_metrics=log_metrics
+            )
+            try:
+                aucs = [r["auc"] for r in cv_results]
+                if aucs:
+                    log_metrics(
+                        {
+                            "best_fold_auc": float(max(aucs)),
+                            "mean_oos_auc": float(np.mean(aucs)),
+                        }
+                    )
+                imp = self.main_model.feature_importance().head(20)
+                if not imp.empty:
+                    log_metrics({f"fi_{k}": float(v) for k, v in imp.items()})
+            except Exception:  # pragma: no cover
+                pass
+        # Tail of fit (full-data refit etc.) is performed inside _fit_folds.
+        return cv_results
+
+    def _fit_folds(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        oof: pd.Series,
+        splitter: Any,
+        feature_df: pd.DataFrame,
+        *,
+        log_metrics,
+    ) -> list[dict[str, Any]]:
+        cv_results: list[dict[str, Any]] = []
+        # Pass label end-times as groups so PurgedKFold can purge overlapping
+        # training rows.  We approximate the horizon from config (default 5 bars).
+        horizon = int(getattr(self.config, "horizon", 5))
+        _groups = np.arange(len(X)) + horizon
+        for fold, (train_idx, test_idx) in enumerate(splitter.split(X, groups=_groups), start=1):
             X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
             y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
             model = DirectionModel(self.config).fit(X_tr, y_tr)
@@ -424,6 +504,24 @@ class EnsemblePredictor:
         offset = len(result) - len(lstm_prob)
         result[offset:] = self.config.xgb_weight * main_prob[offset:] + self.config.lstm_weight * lstm_prob
         return result
+
+    def predict_proba_with_shap(self, X: pd.DataFrame) -> tuple[np.ndarray, dict[str, float]]:
+        """Return ``(probabilities, mean_abs_shap_per_feature)``.
+
+        When SHAP is not installed, the second element is an empty dict.
+        """
+        prob = self.predict_proba(X)
+        try:
+            from .ml.explain import explain
+
+            X_aligned = X.reindex(columns=self.feature_cols).fillna(0.0)
+            shap_df = explain(self.main_model.model, X_aligned)
+            mean_abs = shap_df.abs().mean().to_dict()
+            return prob, {str(k): float(v) for k, v in mean_abs.items()}
+        except ImportError:
+            return prob, {}
+        except Exception:
+            return prob, {}
 
     def predict_latest(self, feature_df: pd.DataFrame) -> dict[str, Any]:
         X = feature_df.reindex(columns=self.feature_cols).fillna(0.0)
