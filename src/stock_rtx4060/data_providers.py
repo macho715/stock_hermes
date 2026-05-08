@@ -86,6 +86,13 @@ def load_ohlcv_with_provider(
         lake_result = _try_data_lake(ticker, period, requested, selected, as_of, audit_logger, command)
         if lake_result is not None:
             return lake_result
+        if as_of is not None:
+            # Prevent look-ahead bias: never fall through to a live provider when an
+            # as_of timestamp was specified.  The caller must ingest data first.
+            raise RuntimeError(
+                f"Data lake miss for as_of query: ticker={ticker!r} as_of={as_of!r}. "
+                "Ingest historical data before issuing point-in-time queries."
+            )
 
     cached = _cache.get(ticker, period, selected)
     if cached is not None:

@@ -400,7 +400,11 @@ class EnsemblePredictor:
         log_metrics,
     ) -> list[dict[str, Any]]:
         cv_results: list[dict[str, Any]] = []
-        for fold, (train_idx, test_idx) in enumerate(splitter.split(X), start=1):
+        # Pass label end-times as groups so PurgedKFold can purge overlapping
+        # training rows.  We approximate the horizon from config (default 5 bars).
+        horizon = int(getattr(self.config, "horizon", 5))
+        _groups = np.arange(len(X)) + horizon
+        for fold, (train_idx, test_idx) in enumerate(splitter.split(X, groups=_groups), start=1):
             X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
             y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
             model = DirectionModel(self.config).fit(X_tr, y_tr)

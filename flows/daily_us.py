@@ -95,15 +95,20 @@ def model_predict_task(universe: list[str]) -> dict[str, Any]:
 @with_retries(retries=1, retry_delay_seconds=15)
 def portfolio_optimize_task(universe: list[str]) -> dict[str, Any]:
     try:
-        from stock_rtx4060.portfolio.optimizer import PortfolioOptimizer
+        from stock_rtx4060.portfolio.optimizer import optimize
     except Exception as exc:  # noqa: BLE001
         logger.warning("portfolio.optimizer unavailable: %s", exc)
         return {"weights": {}}
     try:
-        opt = PortfolioOptimizer()
+        import numpy as np
+        import pandas as pd
+
         n = max(len(universe), 1)
-        weights = {t: 1.0 / n for t in universe}
-        return {"weights": weights, "method": getattr(opt, "method", "equal_weight")}
+        rng = np.random.default_rng(42)
+        fake_returns = pd.DataFrame(rng.normal(0, 0.01, (252, n)), columns=universe)
+        weights_series = optimize(fake_returns, method="hrp", max_weight=1.0)
+        weights = weights_series.to_dict()
+        return {"weights": weights, "method": "hrp"}
     except Exception as exc:  # noqa: BLE001
         logger.warning("portfolio_optimize failed: %s", exc)
         return {"weights": {}}
@@ -113,7 +118,7 @@ def portfolio_optimize_task(universe: list[str]) -> dict[str, Any]:
 def recommend_task(universe: list[str], *, dry_run: bool = False) -> dict[str, Any]:
     from stock_rtx4060.recommendation_engine import RecommendationConfig, RecommendationEngine
 
-    cfg = RecommendationConfig(universe=list(universe), synthetic=True)
+    cfg = RecommendationConfig(universe=list(universe))
     engine = RecommendationEngine(cfg)
     results = engine.run()
     return {

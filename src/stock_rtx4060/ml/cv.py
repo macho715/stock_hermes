@@ -130,6 +130,17 @@ class PurgedKFold:
                 if end_times[i] >= t_lo:
                     train_mask[i] = False
 
+            # Post-test purge: remove post-test training rows whose *position*
+            # still falls within the label horizon of the test fold.  A row at
+            # position p (p > test_stop) leaks backward if p ≤ max(end_times
+            # for the test fold) — i.e. the test fold's labels extend into the
+            # post-test training region.
+            if test_start < test_stop:
+                t_hi_labels = float(np.max(end_times[test_start:test_stop]))
+                for i in range(test_stop, n_samples):
+                    if positions[i] <= t_hi_labels:
+                        train_mask[i] = False
+
             train_idx = positions[train_mask]
             yield train_idx, test_idx
 
