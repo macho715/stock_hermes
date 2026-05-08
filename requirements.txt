@@ -24,3 +24,9 @@ httpx>=0.27
 skfolio>=0.4
 cvxpy>=1.5
 PyPortfolioOpt>=1.5
+# Phase 3 ML upgrade (all optional — engine uses existing XGBoost path when missing)
+optuna>=4.0
+shap>=0.46
+lightgbm>=4.5
+# Phase 2 factor library helper
+scipy>=1.13
