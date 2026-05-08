@@ -7,3 +7,5 @@ black>=24.8
 mypy>=1.11
 pre-commit>=3.8
 types-requests
+# Phase 6 — mock anthropic HTTP for advisor tests.
+respx>=0.21

@@ -197,6 +197,16 @@ def _find_nearby_file(source_path: Path, file_name: str) -> Path | None:
     return None
 
 
+def _truncate_advisor_rationale(value: Any) -> str | None:
+    """Clip the LLM rationale to 240 chars for dashboard display."""
+    if value is None:
+        return None
+    text = str(value)
+    if len(text) <= 240:
+        return text
+    return text[:237] + "..."
+
+
 def _normalize_result(result: Any, *, rank: int) -> dict[str, Any]:
     if not isinstance(result, dict):
         raise DashboardBridgeError(f"result #{rank} must be an object")
@@ -250,4 +260,9 @@ def _normalize_result(result: Any, *, rank: int) -> dict[str, Any]:
         "kevpe_ci": result.get("kevpe_ci"),
         "kevpe_confidence": result.get("kevpe_confidence"),
         "kevpe_reason": result.get("kevpe_reason"),
+        # Phase-6 advisor overlay (optional — None when advisor not run).
+        # Schema stays at v1 — these fields default to None for backward
+        # compatibility.
+        "advisor_score": result.get("advisor_score"),
+        "advisor_rationale": _truncate_advisor_rationale(result.get("advisor_rationale")),
     }

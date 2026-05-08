@@ -30,3 +30,11 @@ lightgbm>=4.5
 vectorbt>=0.26
 arch>=7.0
 statsmodels>=0.14
+# Phase 6 LLM advisor layer (all optional — engine has a deterministic
+# fallback when these are missing).
+anthropic>=0.40
+langgraph>=0.2
+feedparser
+sec-edgar-downloader
+pandas_datareader
+jinja2
