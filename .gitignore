@@ -45,6 +45,7 @@ mlflow.db-*
 .benchmarks/
 audit_log/
 reports/recommendations/audit_log.jsonl
+recommendation_reports/
 
 # Claude Code harness state (worktrees, hooks, local config)
 .claude/
