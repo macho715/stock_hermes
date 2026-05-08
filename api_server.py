@@ -158,6 +158,7 @@ def api_symbol():
     symbol = request.args.get("symbol", "").strip().upper()
     period = request.args.get("period", "6mo")
     requested_provider = request.args.get("data_provider")
+    use_synthetic = request.args.get("synthetic", "0") == "1"
     data_provider = (requested_provider or ("pykrx" if symbol.endswith((".KS", ".KQ")) else "yfinance")).lower()
     if not symbol:
         return jsonify({"error": "symbol param required"}), 400
@@ -167,12 +168,14 @@ def api_symbol():
             provider_result = load_ohlcv_with_provider(
                 symbol,
                 period,
-                synthetic=False,
+                synthetic=use_synthetic,
                 data_provider=data_provider,
                 audit_logger=None,
                 command="symbol_chart",
             )
         except Exception as provider_exc:
+            if use_synthetic:
+                raise
             if symbol.endswith((".KS", ".KQ")) and data_provider in {"pykrx", "fdr"}:
                 fallback_reason = str(provider_exc)
                 provider_result = load_ohlcv_with_provider(
@@ -184,7 +187,16 @@ def api_symbol():
                     command="symbol_chart",
                 )
             else:
-                raise
+                # Auto-fallback to synthetic on network failure
+                fallback_reason = str(provider_exc)
+                provider_result = load_ohlcv_with_provider(
+                    symbol,
+                    period,
+                    synthetic=True,
+                    data_provider="synthetic",
+                    audit_logger=None,
+                    command="symbol_chart",
+                )
         records = _frame_to_ohlcv_records(provider_result.frame)
         if len(records) < 30:
             return jsonify(
