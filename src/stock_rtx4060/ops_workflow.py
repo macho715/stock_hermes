@@ -6,11 +6,32 @@ import json
 from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 import pandas as pd
 
 from .recommendation_engine import RecommendationConfig, RecommendationEngine, RecommendationResult
+
+# Optional Prefect flow decorator — when prefect is missing, fall back to a
+# transparent no-op so the CLI keeps working.  The decorator MUST preserve the
+# wrapped callable's signature (CLI verb ``ops-v1`` invokes it directly).
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def _flow_decorator(*, name: str | None = None) -> Callable[[F], F]:
+    try:
+        from prefect import flow as _prefect_flow  # type: ignore[import-not-found]
+    except Exception:  # noqa: BLE001 - optional dependency
+        def _identity(fn: F) -> F:
+            return fn
+
+        return _identity
+
+    def _decorator(fn: F) -> F:
+        return _prefect_flow(name=name)(fn)  # type: ignore[no-any-return]
+
+    return _decorator
+
 
 ZERO_RULES = [
     {"code": "AUTO_BUY", "reason": "manual approval is required before any account action", "decision": "ZERO"},
@@ -22,6 +43,7 @@ ZERO_RULES = [
 ]
 
 
+@_flow_decorator(name="ops_v1_flow")
 def run_ops_v1_workflow(config: RecommendationConfig, output_dir: str | Path = "reports/ops_v1") -> dict[str, str]:
     """Run candidate screening and create manual approval artifacts.
 

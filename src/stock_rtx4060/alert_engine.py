@@ -198,6 +198,59 @@ class AlertConfig:
         Path(path).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+_REGISTERED_CHANNELS: dict[str, AlertChannel] = {}
+
+
+def register_channel(name: str, channel: AlertChannel) -> None:
+    """Register ``channel`` under ``name`` for engine auto-attach.
+
+    Channels registered here are appended to every newly constructed
+    :class:`AlertEngine`. Calling with the same name overwrites the prior
+    registration. Pass ``channel=None`` is not supported — drop the channel
+    via :func:`unregister_channel` instead.
+    """
+    if not isinstance(name, str) or not name:
+        raise ValueError("channel name must be a non-empty string")
+    _REGISTERED_CHANNELS[name] = channel
+
+
+def unregister_channel(name: str) -> None:
+    """Remove ``name`` from the registry; no-op when missing."""
+    _REGISTERED_CHANNELS.pop(name, None)
+
+
+def registered_channels() -> dict[str, AlertChannel]:
+    """Return a shallow copy of the channel registry (for inspection/tests)."""
+    return dict(_REGISTERED_CHANNELS)
+
+
+def _autoregister_env_channels() -> None:
+    """Best-effort auto-registration from STOCK1901_* env vars.
+
+    Runs on module import. Failures are swallowed — alerting must never
+    break the import graph.
+    """
+    slack_url = os.environ.get("STOCK1901_SLACK_WEBHOOK_URL")
+    discord_url = os.environ.get("STOCK1901_DISCORD_WEBHOOK_URL")
+    if slack_url:
+        try:
+            from .alert_engine_channels.slack import SlackWebhookChannel
+
+            register_channel("slack_env", SlackWebhookChannel(slack_url))
+        except Exception as exc:  # noqa: BLE001 - keep import-time safe
+            logger.warning("Slack channel auto-register failed: %s", exc)
+    if discord_url:
+        try:
+            from .alert_engine_channels.discord import DiscordWebhookChannel
+
+            register_channel("discord_env", DiscordWebhookChannel(discord_url))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Discord channel auto-register failed: %s", exc)
+
+
+_autoregister_env_channels()
+
+
 class AlertEngine:
     """알림 엔진 — Position Tracker 상태 감시 및 알림 발송."""
 
@@ -208,6 +261,10 @@ class AlertEngine:
             self.channels.append(LarkWebhookChannel(self.config.lark_webhook_url))
         if self.config.telegram_bot_token and self.config.telegram_chat_id:
             self.channels.append(TelegramChannel(self.config.telegram_bot_token, self.config.telegram_chat_id))
+        # Pull in any channels registered via env-var auto-registration or
+        # explicit register_channel(...) calls (e.g. Slack/Discord).
+        for ch in _REGISTERED_CHANNELS.values():
+            self.channels.append(ch)
         self._previous_positions: dict[str, TrackedPosition] = {}
         self._peak_portfolio_value: float = 0.0
         self._alert_history: list[Alert] = []
@@ -387,6 +444,30 @@ def create_default_config(output_path: str | Path | None = None) -> AlertConfig:
     if output_path:
         config.to_file(output_path)
     return config
+
+
+def dispatch(alerts: list[Alert] | Alert, *, config: AlertConfig | None = None) -> dict[str, Any]:
+    """Send one or many alerts via every registered channel.
+
+    Helper used by Prefect flows (Phase 7). Builds an ephemeral
+    :class:`AlertEngine`, walks each alert through ``_emit``, and returns a
+    summary dict. Failures in individual channels are logged but never raised.
+    """
+    if isinstance(alerts, Alert):
+        alerts = [alerts]
+    engine = AlertEngine(config)
+    sent = 0
+    for alert in alerts:
+        try:
+            engine._emit(alert)
+            sent += 1
+        except Exception as exc:  # noqa: BLE001 - dispatch must be resilient
+            logger.warning("dispatch failed for alert %s: %s", alert.alert_type, exc)
+    return {
+        "dispatched": sent,
+        "total": len(alerts),
+        "channel_count": len(engine.channels),
+    }
 
 
 if __name__ == "__main__":

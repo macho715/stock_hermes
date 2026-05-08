@@ -59,6 +59,24 @@ services:
       - prefect_data:/root/.prefect
     command: prefect server start --host 0.0.0.0
 
+  # Prefect agent / worker — polls the default work pool and executes flows
+  # deployed by `prefect deploy`. Mounts the repository so `flows/` is
+  # importable at runtime.
+  prefect-agent:
+    image: prefecthq/prefect:3-latest
+    container_name: stock1901_prefect_agent
+    depends_on:
+      - prefect-server
+    environment:
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PYTHONPATH: /opt/stock1901:/opt/stock1901/src
+    volumes:
+      - ./:/opt/stock1901:ro
+    working_dir: /opt/stock1901
+    command: >
+      bash -lc "prefect work-pool create --type process default-pool || true &&
+      prefect worker start --pool default-pool"
+
 volumes:
   prometheus_data:
   grafana_data:

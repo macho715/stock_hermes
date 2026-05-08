@@ -26,3 +26,7 @@ PyPortfolioOpt>=1.5
 optuna>=4.0
 shap>=0.46
 lightgbm>=4.5
+# Phase 7 orchestration & alert channels (all optional)
+prefect>=3.0
+slack-sdk
+discord-webhook
