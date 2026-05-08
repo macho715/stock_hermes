@@ -67,13 +67,17 @@ def hpo_task(universe: list[str], *, n_trials: int = 10) -> dict[str, Any]:
     }
 
 
-def _current_production_score(model_name: str) -> float | None:
-    """Best-effort lookup of the production model's last reported score.
+_PRODUCTION_METRIC_NAME = "oos_brier"
 
-    Returns ``None`` when MLflow isn't available or the model is unregistered.
-    Real implementation would read a tracked metric (e.g. the run that
-    produced the current Production version); for now we return None which
-    forces the gate to promote whenever a new candidate beats NaN.
+
+def _current_production_score(model_name: str) -> float | None:
+    """Best-effort lookup of the Production model's last reported score.
+
+    Returns the most recent ``oos_brier`` value on the run that produced the
+    current Production version, or ``None`` when MLflow / the model / the
+    metric is unavailable.  Without this real lookup the gate would always
+    cold-start (delta = inf) and promote any candidate, defeating the
+    threshold check.
     """
     try:
         from stock_rtx4060.ml.registry import list_versions
@@ -82,8 +86,38 @@ def _current_production_score(model_name: str) -> float | None:
     versions = list_versions(model_name)
     if not versions:
         return None
-    # No metric attached to the version object — caller treats None as "no baseline".
-    return None
+    # Prefer the version explicitly tagged Production; fall back to highest
+    # version number if no stage info (alias-based MLflow registries).
+    prod = next((v for v in versions if str(v.get("stage", "")).lower() == "production"), None)
+    if prod is None:
+        return None
+    run_id = prod.get("run_id")
+    if not run_id:
+        return None
+    try:
+        import mlflow  # type: ignore[import-not-found]
+        from mlflow.tracking import MlflowClient  # type: ignore[import-not-found]
+
+        client = MlflowClient()
+        run = client.get_run(run_id)
+        metric = run.data.metrics.get(_PRODUCTION_METRIC_NAME)
+        if metric is None:
+            return None
+        return float(metric)
+    except Exception:  # noqa: BLE001 - registry not configured / metric absent
+        return None
+
+
+def _latest_candidate_version(model_name: str) -> int | None:
+    """Return the highest registered version of ``model_name`` (or None)."""
+    try:
+        from stock_rtx4060.ml.registry import list_versions
+    except Exception:  # noqa: BLE001
+        return None
+    versions = list_versions(model_name)
+    if not versions:
+        return None
+    return max(int(v.get("version", 0) or 0) for v in versions) or None
 
 
 @with_retries(retries=1, retry_delay_seconds=30)
@@ -119,14 +153,29 @@ def promotion_gate_task(
             delta = (baseline - new_value) / abs(baseline)
 
     if delta > threshold:
+        candidate_version = _latest_candidate_version(model_name)
+        if candidate_version is None:
+            return {
+                "promoted": False,
+                "reason": "no_candidate_version",
+                "delta": delta,
+                "best_value": new_value,
+                "baseline": baseline,
+            }
         try:
             from stock_rtx4060.ml.registry import promote
 
-            # Real flow would register the freshly-trained run first; the
-            # version arg below is a placeholder for the latest version found
-            # via list_versions. Tests monkeypatch the promote symbol.
-            promote(name=model_name, version=1, stage="Production")
-            return {"promoted": True, "delta": delta, "best_value": new_value, "baseline": baseline}
+            # Promote the latest registered version (produced by the
+            # immediately-preceding HPO + register_model step in the real
+            # flow).  Tests monkeypatch the promote symbol.
+            promote(name=model_name, version=candidate_version, stage="Production")
+            return {
+                "promoted": True,
+                "delta": delta,
+                "best_value": new_value,
+                "baseline": baseline,
+                "version": candidate_version,
+            }
         except Exception as exc:  # noqa: BLE001 - promotion failure must not crash flow
             logger.warning("promote() failed: %s", exc)
             return {"promoted": False, "reason": f"promote_error:{exc}", "delta": delta}

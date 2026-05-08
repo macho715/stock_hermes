@@ -61,11 +61,22 @@ def test_promotion_gate_promotes_when_no_baseline(monkeypatch):
         promote_calls.append((name, version, stage))
 
     monkeypatch.setattr(research_weekly, "_current_production_score", lambda _: None)
+    monkeypatch.setattr(research_weekly, "_latest_candidate_version", lambda _: 1)
     monkeypatch.setattr("stock_rtx4060.ml.registry.promote", _fake_promote)
 
     out = research_weekly.promotion_gate_task({"skipped": False, "best_value": 0.18})
     assert out["promoted"] is True
     assert promote_calls == [("direction_v1", 1, "Production")]
+    assert out["version"] == 1
+
+
+def test_promotion_gate_skips_when_no_candidate_version(monkeypatch):
+    """No registered version -> cannot promote even with cold-start."""
+    monkeypatch.setattr(research_weekly, "_current_production_score", lambda _: None)
+    monkeypatch.setattr(research_weekly, "_latest_candidate_version", lambda _: None)
+    out = research_weekly.promotion_gate_task({"skipped": False, "best_value": 0.18})
+    assert out["promoted"] is False
+    assert out["reason"] == "no_candidate_version"
 
 
 def test_promotion_gate_does_not_promote_when_delta_below_threshold(monkeypatch):
@@ -86,6 +97,7 @@ def test_promotion_gate_does_not_promote_when_delta_below_threshold(monkeypatch)
 def test_promotion_gate_promotes_when_delta_exceeds_threshold(monkeypatch):
     # baseline=0.20, new=0.18 → delta = 0.10 (10%) > 5% threshold
     monkeypatch.setattr(research_weekly, "_current_production_score", lambda _: 0.20)
+    monkeypatch.setattr(research_weekly, "_latest_candidate_version", lambda _: 7)
     promote_calls: list[dict] = []
     monkeypatch.setattr(
         "stock_rtx4060.ml.registry.promote",
@@ -97,10 +109,12 @@ def test_promotion_gate_promotes_when_delta_exceeds_threshold(monkeypatch):
     assert out["delta"] == pytest.approx(0.10)
     assert len(promote_calls) == 1
     assert promote_calls[0]["stage"] == "Production"
+    assert promote_calls[0]["version"] == 7  # uses latest, not hardcoded 1
 
 
 def test_promotion_gate_swallows_promote_errors(monkeypatch):
     monkeypatch.setattr(research_weekly, "_current_production_score", lambda _: 0.20)
+    monkeypatch.setattr(research_weekly, "_latest_candidate_version", lambda _: 1)
 
     def _boom(**_):
         raise RuntimeError("mlflow down")
