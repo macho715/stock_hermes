@@ -61,6 +61,16 @@ def build_dashboard_snapshot(payload: dict[str, Any], *, source_json_path: str |
 
     snapshot_results = [_normalize_result(item, rank=index + 1) for index, item in enumerate(results)]
 
+    # Phase-5: optional `meta` block with risk attribution.  Absent unless the
+    # caller supplied a `meta` field on the payload.  The schema stays
+    # `dashboard_snapshot.v1` since this is purely additive.
+    meta_block = payload.get("meta") if isinstance(payload.get("meta"), dict) else None
+    if meta_block is not None:
+        meta_block = {
+            **meta_block,
+            "risk_attribution": meta_block.get("risk_attribution"),
+        }
+
     return {
         "schema_version": "dashboard_snapshot.v1",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -88,6 +98,7 @@ def build_dashboard_snapshot(payload: dict[str, Any], *, source_json_path: str |
         },
         "result_count": len(snapshot_results),
         "results": snapshot_results,
+        "meta": meta_block,
     }
 
 

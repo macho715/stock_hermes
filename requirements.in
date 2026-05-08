@@ -26,3 +26,7 @@ PyPortfolioOpt>=1.5
 optuna>=4.0
 shap>=0.46
 lightgbm>=4.5
+# Phase 5 backtest hardening (all optional — pure-NumPy fallbacks ship in-repo)
+vectorbt>=0.26
+arch>=7.0
+statsmodels>=0.14
