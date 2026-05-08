@@ -17,11 +17,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "src"
+DIST = ROOT / "root_folder_snapshot" / "stock-pred-v5" / "dist"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
@@ -32,17 +33,12 @@ from stock_rtx4060.recommendation_engine import RecommendationConfig, Recommenda
 from stock_rtx4060.dashboard_bridge import build_dashboard_snapshot
 from stock_rtx4060.paper_trading import load_paper_status
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=str(DIST), static_url_path="")
 CORS(
     app,
     resources={
         r"/api/*": {
-            "origins": [
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "http://localhost:5174",
-                "http://127.0.0.1:5174",
-            ]
+            "origins": ["*"]
         }
     },
 )
@@ -158,6 +154,7 @@ def api_symbol():
     symbol = request.args.get("symbol", "").strip().upper()
     period = request.args.get("period", "6mo")
     requested_provider = request.args.get("data_provider")
+    use_synthetic = request.args.get("synthetic", "0") == "1"
     data_provider = (requested_provider or ("pykrx" if symbol.endswith((".KS", ".KQ")) else "yfinance")).lower()
     if not symbol:
         return jsonify({"error": "symbol param required"}), 400
@@ -167,24 +164,45 @@ def api_symbol():
             provider_result = load_ohlcv_with_provider(
                 symbol,
                 period,
-                synthetic=False,
+                synthetic=use_synthetic,
                 data_provider=data_provider,
                 audit_logger=None,
                 command="symbol_chart",
             )
         except Exception as provider_exc:
+            if use_synthetic:
+                raise
+            fallback_reason = str(provider_exc)
             if symbol.endswith((".KS", ".KQ")) and data_provider in {"pykrx", "fdr"}:
-                fallback_reason = str(provider_exc)
+                try:
+                    provider_result = load_ohlcv_with_provider(
+                        symbol,
+                        period,
+                        synthetic=False,
+                        data_provider="yfinance",
+                        audit_logger=None,
+                        command="symbol_chart",
+                    )
+                except Exception:
+                    # Both pykrx and yfinance failed — use synthetic
+                    provider_result = load_ohlcv_with_provider(
+                        symbol,
+                        period,
+                        synthetic=True,
+                        data_provider="synthetic",
+                        audit_logger=None,
+                        command="symbol_chart",
+                    )
+            else:
+                # Auto-fallback to synthetic on network failure
                 provider_result = load_ohlcv_with_provider(
                     symbol,
                     period,
-                    synthetic=False,
-                    data_provider="yfinance",
+                    synthetic=True,
+                    data_provider="synthetic",
                     audit_logger=None,
                     command="symbol_chart",
                 )
-            else:
-                raise
         records = _frame_to_ohlcv_records(provider_result.frame)
         if len(records) < 30:
             return jsonify(
@@ -426,15 +444,29 @@ def api_paper_status():
         return jsonify({"error": str(exc), "type": type(exc).__name__}), 500
 
 
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_dashboard(path: str):
+    """Serve the built Vite dashboard static files."""
+    if DIST.exists():
+        target = DIST / path
+        if path and target.exists() and target.is_file():
+            return send_from_directory(str(DIST), path)
+        return send_from_directory(str(DIST), "index.html")
+    return jsonify({"error": "Dashboard not built. Run: npm run build in root_folder_snapshot/stock-pred-v5"}), 404
+
+
 def main(port: int = 5151):
     parser = argparse.ArgumentParser(description="stock_rtx4060 unified API server")
     parser.add_argument("--port", type=int, default=port)
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", default="0.0.0.0")
     args = parser.parse_args()
 
-    print(f"Starting stock_rtx4060 unified API server on http://{args.host}:{args.port}")
-    print(f"CORS enabled for http://localhost:5173")
+    dashboard_url = f"http://{args.host if args.host != '0.0.0.0' else 'localhost'}:{args.port}"
+    print(f"Starting stock_rtx4060 unified API server on http://0.0.0.0:{args.port}")
+    print(f"Dashboard: {dashboard_url}/")
     print(f"Endpoints:")
+    print(f"  GET /                     — React dashboard (built static)")
     print(f"  GET /api/health           — health check")
     print(f"  GET /api/universe         — dashboard-selectable symbols")
     print(f"  GET /api/symbol           — latest OHLCV for dashboard charts")
@@ -442,7 +474,7 @@ def main(port: int = 5151):
     print(f"  GET /api/paper-status     — latest paper-only virtual trading status")
     print(f"  GET /api/recommend        — run recommendation + return snapshot")
     print(f"  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot")
-    app.run(host=args.host, port=args.port, debug=True)
+    app.run(host=args.host, port=args.port, debug=False, use_reloader=False)
 
 
 if __name__ == "__main__":
