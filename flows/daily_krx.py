@@ -147,6 +147,7 @@ def recommend_task(universe: list[str], *, dry_run: bool = False) -> dict[str, A
     engine = RecommendationEngine(cfg)
     results = engine.run()
     return {
+        "results": [r.to_dict() for r in results],
         "result_count": len(results),
         "verdicts": [getattr(r, "verdict", "UNKNOWN") for r in results],
         "dry_run": dry_run,

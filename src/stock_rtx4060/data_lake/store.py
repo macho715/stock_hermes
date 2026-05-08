@@ -115,10 +115,15 @@ class DuckDBStore(PITStore):
                 continue
         if not dfs:
             return pd.DataFrame()
-        merged = pd.concat(dfs).sort_index()
+        merged = pd.concat(dfs)
         if as_of is not None:
             as_of_ts = pd.Timestamp(as_of, tz="UTC") if pd.Timestamp(as_of).tz is None else pd.Timestamp(as_of)
             merged = merged[merged["_ingested_at"] <= as_of_ts]
+        # Sort by (index, _ingested_at) so that within each duplicate index the
+        # newest ingest comes last; then dedupe with keep="last" to retain the
+        # most recent ingest per bar timestamp.  This makes the read path
+        # deterministic regardless of filesystem glob order.
+        merged = merged.sort_values("_ingested_at", kind="mergesort").sort_index(kind="mergesort")
         merged = merged[~merged.index.duplicated(keep="last")]
         if start is not None:
             merged = merged.loc[pd.Timestamp(start) :]

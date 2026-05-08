@@ -32,8 +32,11 @@ def _resolve_universe() -> list[str]:
 def ingest_alpaca_task(universe: list[str], *, as_of: str | None = None) -> dict[str, int]:
     from stock_rtx4060.data_lake.ingest.alpaca_ingestor import ingest_alpaca
 
-    end = as_of or datetime.now(timezone.utc).date().isoformat()
-    start = (datetime.now(timezone.utc) - timedelta(days=365)).date().isoformat()
+    end_dt = (
+        datetime.fromisoformat(as_of).replace(tzinfo=timezone.utc) if as_of else datetime.now(timezone.utc)
+    )
+    end = end_dt.date().isoformat()
+    start = (end_dt - timedelta(days=365)).date().isoformat()
     counts: dict[str, int] = {}
     for ticker in universe:
         try:
@@ -122,6 +125,7 @@ def recommend_task(universe: list[str], *, dry_run: bool = False) -> dict[str, A
     engine = RecommendationEngine(cfg)
     results = engine.run()
     return {
+        "results": [r.to_dict() for r in results],
         "result_count": len(results),
         "verdicts": [getattr(r, "verdict", "UNKNOWN") for r in results],
         "dry_run": dry_run,
