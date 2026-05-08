@@ -43,3 +43,6 @@ mlartifacts/
 .benchmarks/
 audit_log/
 reports/recommendations/audit_log.jsonl
+
+# Claude Code harness state (worktrees, hooks, local config)
+.claude/
