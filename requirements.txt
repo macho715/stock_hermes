@@ -20,3 +20,7 @@ prometheus-client>=0.20
 duckdb>=1.1
 pyarrow>=17
 httpx>=0.27
+# Phase 4: Portfolio optimisation (all optional — pure-Python HRP fallback works without them)
+skfolio>=0.4
+cvxpy>=1.5
+PyPortfolioOpt>=1.5
