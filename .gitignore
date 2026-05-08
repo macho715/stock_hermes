@@ -39,6 +39,7 @@ test-results/
 # Phase 0+ runtime artifacts
 mlruns/
 mlartifacts/
-data_lake/
+/data_lake/
 .benchmarks/
+audit_log/
 reports/recommendations/audit_log.jsonl
