@@ -35,3 +35,10 @@ reports/dashboard_browser_verification/*.png
 reports/dashboard_browser_verification/snapshot_fixture.js
 reports/generated_reports_inventory_*.csv
 test-results/
+
+# Phase 0+ runtime artifacts
+mlruns/
+mlartifacts/
+data_lake/
+.benchmarks/
+reports/recommendations/audit_log.jsonl

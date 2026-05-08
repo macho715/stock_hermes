@@ -1,2 +1,9 @@
 -r requirements.txt
 pytest>=8
+pytest-cov>=5
+pytest-benchmark>=4
+ruff>=0.6
+black>=24.8
+mypy>=1.11
+pre-commit>=3.8
+types-requests

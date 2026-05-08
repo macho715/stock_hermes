@@ -1,0 +1,18 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: stock_rtx4060
+    static_configs:
+      - targets: ["host.docker.internal:9100"]
+        labels:
+          service: recommendation_engine
+
+  - job_name: prefect
+    static_configs:
+      - targets: ["prefect-server:4200"]
+
+  - job_name: mlflow
+    static_configs:
+      - targets: ["mlflow:5000"]
