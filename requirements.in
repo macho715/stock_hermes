@@ -26,3 +26,11 @@ PyPortfolioOpt>=1.5
 optuna>=4.0
 shap>=0.46
 lightgbm>=4.5
+# Phase 6 LLM advisor layer (all optional — engine has a deterministic
+# fallback when these are missing).
+anthropic>=0.40
+langgraph>=0.2
+feedparser
+sec-edgar-downloader
+pandas_datareader
+jinja2

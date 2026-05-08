@@ -18,9 +18,13 @@ nails the posterior toward the view; a confidence of ``0.0`` produces a wide
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Iterable, TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:
+    from ..advisors.base import AdvisoryOutput
 
 
 @dataclass
@@ -44,6 +48,25 @@ class LLMViews:
 
     def tickers(self) -> list[str]:
         return [v.ticker for v in self.items]
+
+    @classmethod
+    def from_advisory_outputs(cls, outputs: "Iterable[AdvisoryOutput]") -> "LLMViews":
+        """Build an :class:`LLMViews` from advisor outputs.
+
+        Each :class:`AdvisoryOutput` becomes a :class:`ViewItem` with the
+        same ticker, ``advisory_score = output.score`` and
+        ``confidence = output.confidence``.
+        """
+        items: list[ViewItem] = []
+        for out in outputs:
+            items.append(
+                ViewItem(
+                    ticker=str(getattr(out, "ticker", "")),
+                    advisory_score=float(getattr(out, "score", 0.0)),
+                    confidence=float(getattr(out, "confidence", 0.0)),
+                )
+            )
+        return cls(items=items)
 
 
 def _clip(value: float, lo: float, hi: float) -> float:
