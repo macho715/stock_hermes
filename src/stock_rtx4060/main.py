@@ -97,6 +97,16 @@ def build_parser() -> argparse.ArgumentParser:
     paper.add_argument("--run-date", help="YYYY-MM-DD override for run_id; defaults to today")
     paper.add_argument("--force-rerun", action="store_true", help="override existing run for same date/universe")
     paper.add_argument("--rerun-reason", help="required when --force-rerun is set")
+    paper.add_argument(
+        "--broker",
+        choices=["paper", "alpaca", "ibkr", "kis"],
+        default="paper",
+        help=(
+            "Broker backend (default: paper). "
+            "'paper' uses PaperBroker (no credentials needed). "
+            "'alpaca'/'ibkr'/'kis' route through OrderRouter."
+        ),
+    )
 
     ops = sub.add_parser("ops-v1", help="run report-only Ops v1 workflow with manual approval artifacts")
     ops.add_argument("--universe", help="comma-separated ticker list; defaults to built-in sample universe")
@@ -362,9 +372,42 @@ def cmd_paper_run(args: argparse.Namespace) -> int:
     paper_engine = PaperTradingEngine(paper_config)
     status = paper_engine.run(signals, bars_by_ticker)
 
+    broker_name = getattr(args, "broker", "paper")
+    if broker_name != "paper":
+        # Route accepted signals through the live OrderRouter instead of
+        # silently consuming them in the paper engine.
+        try:
+            from .broker.order_router import OrderRouter, KillSwitchError
+            from .broker_bridge import build_order_from_recommendation, OrderSide
+
+            router = OrderRouter(paper_fallback=True)
+            accepted = [p for p in status.get("positions", [])]
+            for pos in accepted:
+                ticker = pos.get("ticker", "")
+                shares = int(pos.get("shares", 0))
+                avg_price = float(pos.get("avg_price", 0.0))
+                if ticker and shares > 0:
+                    try:
+                        router.submit_order(
+                            ticker=ticker,
+                            qty=shares,
+                            side="BUY",
+                            order_type="LIMIT",
+                            limit_price=avg_price,
+                        )
+                    except KillSwitchError as exc:
+                        print(f"KILL SWITCH active — aborting live order routing: {exc}", file=sys.stderr)
+                        break
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"WARNING: order routing failed for {ticker}: {exc}", file=sys.stderr)
+            router.close()
+        except ImportError as exc:
+            print(f"WARNING: live broker not available ({exc}), paper mode used", file=sys.stderr)
+
     summary = {
-        "paper_trading_only": True,
+        "paper_trading_only": broker_name == "paper",
         "screening_output_only": True,
+        "broker": broker_name,
         "run_id": status.get("run_id"),
         "run_dir": str(status.get("run_dir", "")),
         "positions": len(status.get("positions", [])),

@@ -42,3 +42,8 @@ jinja2
 prefect>=3.0
 slack-sdk
 discord-webhook
+# Phase 8 live broker layer (all optional — paper mode works without them)
+alpaca-py>=0.30
+ib_insync>=0.9.86
+websockets>=13
+vcrpy

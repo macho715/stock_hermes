@@ -1,0 +1,3 @@
+# Restricted tickers — one per line
+# Add tickers here to prevent them from being traded.
+# Lines starting with # are comments and are ignored.

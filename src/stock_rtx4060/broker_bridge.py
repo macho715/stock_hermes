@@ -451,6 +451,19 @@ def log_order_result(result: OrderResult, output_dir: Path | str = Path("reports
     return log_path
 
 
+# ---------------------------------------------------------------------------
+# Phase 8 — backward-compat import shim
+#
+# Code that imports from broker_bridge continues to work unchanged.
+# New code should prefer:  from stock_rtx4060.broker import get_broker
+# ---------------------------------------------------------------------------
+
+def get_broker(name: str = "paper", **kwargs):
+    """Factory — see broker/__init__.py for full documentation."""
+    from .broker import get_broker as _get_broker  # noqa: PLC0415
+    return _get_broker(name, **kwargs)
+
+
 if __name__ == "__main__":
     import argparse
 
