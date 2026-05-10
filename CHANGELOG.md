@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes for `stock_rtx4060_unified` are documented here.
+All notable changes for `stock_1901` are documented here.
 
 ## 2026-05-10 — Test Coverage Boost + Bug Fixes
 

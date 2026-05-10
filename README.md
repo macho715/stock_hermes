@@ -461,7 +461,7 @@ API note:
 |---|---|
 | Does this project use FastAPI? | No. |
 | Current backend API framework | Flask + flask-cors |
-| API file | `stock_rtx4060_unified/api_server.py` |
+| API file | `api_server.py` |
 | API port | `http://127.0.0.1:5151` |
 | Dashboard port | `http://127.0.0.1:5173` |
 
@@ -721,7 +721,7 @@ CI 게이트(`fail_under=75`)를 유지하면서 전체 ≥85% 목표를 달성�
 
 ```mermaid
 flowchart LR
-    subgraph TS["tests/  —  509 tests total"]
+    subgraph TS["tests/  —  1,210 tests total"]
         T1["test_ensemble_model_extra.py<br/>50 tests"]
         T2["test_kevpe_adapter.py<br/>57 tests"]
         T3["test_main_extra.py<br/>61 tests"]
@@ -756,7 +756,7 @@ flowchart LR
     M5 --> CI
     M6 --> CI
     MX --> CI
-    CI -->|TOTAL 89%| PASS["PASS"]
+    CI -->|TOTAL 85.82%| PASS["PASS"]
 ```
 
 ### Coverage summary
@@ -769,7 +769,7 @@ flowchart LR
 | `risk_rules.py` | — | **100%** | `test_risk_rules.py` |
 | `reports.py` | — | **100%** | `test_reports.py` |
 | `data_providers.py` | — | **99%** | `test_data_providers_extra.py` |
-| **TOTAL** | 80.79% | **89%** | 509 tests across 15+ files |
+| **TOTAL** | 80.79% | **85.82%** | 1,210 tests across 25+ files |
 
 ### New test files added
 
@@ -797,6 +797,6 @@ cd C:\Users\jichu\Downloads\주식\stock_1901
 .\.venv\Scripts\python.exe -m pytest -q --tb=no
 ```
 
-Observed result: **509 passed**, 89% total coverage (CI gate `fail_under=75` in `pyproject.toml`).
+Observed result: **1,210 passed**, 85.82% total coverage (CI gate `fail_under=75` in `pyproject.toml`). Target ≥85% ✅
 
-Commits: `09c8187` (340 tests, 80.79%), `d7a3022` (509 tests, 89%).
+Commits: `09c8187` (340 tests, 80.79%), `d7a3022` (509 tests, 89%), `717f3a0` + `c6f0928` + `d1f5a9a` (P0-P8 upgrade, 1,210 tests, 85.82%, 2026-05-10).
