@@ -475,6 +475,7 @@ export default function StockPredV5() {
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState("SIGNAL");
   const [recSource, setRecSource] = useState("api"); // "file" | "api"
+  const [advisorEnabled, setAdvisorEnabled] = useState(false);
   const [bench, setBench] = useState({ open: false, rows: [], loading: false, progress: 0 });
   const [clock, setClock] = useState("");
   const [exportFlash, setExportFlash] = useState("");
@@ -506,8 +507,12 @@ export default function StockPredV5() {
       ...recApiDefaults,
       output_dir: `reports/api_recommend_${market.toLowerCase()}`,
     });
+    if (advisorEnabled) {
+      params.set("advisor_run", "1");
+      params.set("advisor_blend_weight", "0.3");
+    }
     return apiUrl(`/api/recommend?${params.toString()}`);
-  }, [market, recUniverse, recApiDefaults]);
+  }, [market, recUniverse, recApiDefaults, advisorEnabled]);
   const recApiDefaultText = useMemo(
     () => Object.entries(recApiDefaults).map(([key, value]) => `${key}=${value}`).join(" · "),
     [recApiDefaults]
@@ -1301,6 +1306,42 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                     }}>
                       <span style={{ color: accent, fontWeight: 700 }}>API REQUEST DEFAULTS</span>
                       <span> · {recApiDefaultText}</span>
+                    </div>
+                  )}
+                  {effectiveRecSource === "api" && (
+                    <div style={{
+                      margin: "4px 8px 0",
+                      padding: "5px 8px",
+                      border: `1px solid ${advisorEnabled ? "#BB66FF55" : C.border}`,
+                      background: advisorEnabled ? "#0D0A1A" : C.bgDeep,
+                      fontFamily: FONT,
+                      fontSize: 8,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      cursor: "pointer",
+                      userSelect: "none",
+                    }}
+                      onClick={() => setAdvisorEnabled((v) => !v)}
+                    >
+                      <div style={{
+                        width: 24, height: 12, borderRadius: 6,
+                        background: advisorEnabled ? "#BB66FF" : C.border,
+                        position: "relative", transition: "background .15s", flexShrink: 0,
+                      }}>
+                        <div style={{
+                          position: "absolute", top: 2,
+                          left: advisorEnabled ? 14 : 2,
+                          width: 8, height: 8, borderRadius: "50%",
+                          background: "#fff", transition: "left .15s",
+                        }} />
+                      </div>
+                      <span style={{ color: advisorEnabled ? "#BB66FF" : C.textMuted, fontWeight: 600, letterSpacing: 1.5 }}>
+                        LLM ADVISOR
+                      </span>
+                      <span style={{ color: C.textMuted, marginLeft: "auto" }}>
+                        {advisorEnabled ? "blend_weight=0.30 · requires ANTHROPIC_API_KEY" : "OFF"}
+                      </span>
                     </div>
                   )}
                   {effectiveRecSource === "file" && (

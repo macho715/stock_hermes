@@ -400,6 +400,13 @@ def api_recommend():
     data_provider = request.args.get("data_provider", "auto")
     model_kind = request.args.get("model_kind", "logistic")
     output_dir = request.args.get("output_dir", "reports/api_recommend")
+    advisor_run = request.args.get("advisor_run", "0") == "1"
+    advisor_blend_weight = float(request.args.get("advisor_blend_weight", "0.3"))
+
+    # Silently disable advisor when ANTHROPIC_API_KEY is absent
+    import os as _os
+    if advisor_run and not _os.getenv("ANTHROPIC_API_KEY"):
+        advisor_run = False
 
     config = RecommendationConfig(
         universe=parse_universe(universe),
@@ -411,6 +418,8 @@ def api_recommend():
         output_dir=output_dir,
         model_kind=model_kind,
         xgb_device="cpu",
+        advisor_run=advisor_run,
+        advisor_blend_weight=advisor_blend_weight if advisor_run else 0.0,
     )
 
     try:
