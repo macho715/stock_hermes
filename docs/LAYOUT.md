@@ -3,55 +3,116 @@
 ## Source Tree
 
 ```
-stock_rtx4060_unified/
+stock_1901/                          # Updated 2026-05-10 (formerly stock_rtx4060_unified)
 ├── README.md
 ├── CHANGELOG.md
-├── main.py                      # CLI entry point
-├── stock_investment_os.py       # (legacy / reference)
+├── CLAUDE.md                        # AI assistant guidance (P0-P8 invariants)
+├── main.py                          # CLI entry point
+├── api_server.py                    # Flask API :5151 (CORS: localhost 5173/4173/5151)
 ├── run.ps1
-├── pyproject.toml               # Project metadata + ruff config
-├── requirements.txt             # Core runtime dependencies
-├── requirements-openbb.txt      # OpenBB optional dependencies
-├── requirements-gpu-wsl.txt     # WSL2/CUDA GPU dependencies
-├── requirements-dev.txt         # Development dependencies
+├── pyproject.toml                   # Project metadata + ruff config
+├── requirements.txt                 # Core runtime dependencies
+├── requirements-openbb.txt          # OpenBB optional dependencies
+├── requirements-gpu-wsl.txt         # WSL2/CUDA GPU dependencies
+├── requirements-dev.txt             # Development dependencies
 ├── config/
-│   └── data_providers.example.json
+│   ├── data_providers.example.json
+│   └── runtime_environment.json     # Runtime lock
+├── flows/                           # P7 Prefect orchestration
+│   ├── daily_krx.py                 # KRX daily flow (16:30 KST Mon-Fri)
+│   ├── daily_us.py                  # US daily flow (16:30 ET Mon-Fri)
+│   └── research_weekly.py           # Weekly HPO + MLflow promotion gate
 ├── src/stock_rtx4060/
 │   ├── __init__.py
-│   ├── main.py                  # CLI parser + command dispatcher
-│   ├── recommendation_engine.py # RecommendationEngine orchestrator
-│   ├── feature_engine.py        # 60+ technical indicators
-│   ├── ensemble_model.py        # XGBoost + LogisticRegression ensemble
-│   ├── backtester.py            # Dry-run trade simulation
-│   ├── backtest_honesty.py      # Phase B evidence-only backtest honesty checks
-│   ├── benchmark.py             # Benchmark runner
-│   ├── risk_rules.py            # Track-S / Track-L risk gate logic
-│   ├── dashboard_bridge.py     # dashboard_snapshot.v1 builder
-│   ├── data_providers.py        # yfinance/openbb/synthetic router
-│   ├── provider_validation.py   # point-in-time OHLCV provider checks
-│   ├── hw_profile.py            # GPU detection (nvidia-smi)
-│   ├── audit_log.py             # Masked JSONL audit writer
-│   ├── ops_workflow.py          # Ops v1 daily brief + manual approval
-│   ├── mcp_adapter.py           # Phase 1 read/report-only MCP adapter
-│   └── reports.py               # Shared Markdown/JSON/CSV helpers
+│   ├── main.py                      # CLI parser + command dispatcher
+│   ├── recommendation_engine.py     # RecommendationEngine orchestrator
+│   ├── feature_engine.py            # 60+ technical indicators
+│   ├── ensemble_model.py            # LightGBM/XGBoost/LR ensemble, PurgedKFold
+│   ├── backtester.py                # Dry-run trade simulation + Deflated Sharpe/PSR
+│   ├── backtest_honesty.py          # Phase B evidence-only backtest honesty checks
+│   ├── benchmark.py                 # Benchmark runner
+│   ├── risk_rules.py                # Track-S / Track-L risk gate logic
+│   ├── dashboard_bridge.py          # dashboard_snapshot.v1 builder
+│   ├── data_providers.py            # yfinance/openbb/synthetic/PIT router
+│   ├── data_cache.py                # SQLite OHLCV cache (USE_DATA_CACHE env)
+│   ├── provider_validation.py       # point-in-time OHLCV provider checks
+│   ├── hw_profile.py                # GPU detection (nvidia-smi)
+│   ├── audit_log.py                 # Masked JSONL audit writer
+│   ├── ops_workflow.py              # Ops v1 daily brief + manual approval
+│   ├── mcp_adapter.py               # Phase 1 read/report-only MCP adapter
+│   ├── reports.py                   # Shared Markdown/JSON/CSV helpers
+│   ├── alert_engine.py              # Alert dispatch (Slack/Discord)
+│   ├── observability/               # P0 — loguru JSONL, prometheus_client, MLflow
+│   │   ├── __init__.py
+│   │   ├── logging_config.py
+│   │   └── metrics.py
+│   ├── data_lake/                   # P1 — PIT bitemporal storage
+│   │   ├── __init__.py
+│   │   ├── pit_store.py             # PITStore ABC
+│   │   ├── duckdb_backend.py        # DuckDB+Parquet backend
+│   │   ├── corp_actions.py          # Corp-action adjuster
+│   │   └── ingestors/               # KIS/Alpaca ingestors
+│   ├── factors/                     # P2 — Factor zoo
+│   │   ├── __init__.py
+│   │   ├── alpha101.py              # Alpha101/158 port
+│   │   ├── barra.py                 # Cross-sectional Barra factors
+│   │   ├── factor_zoo.py            # Factor registry + IC/IR/decay analytics
+│   │   └── rd_agent.py              # RD-Agent auto-mining runner
+│   ├── ml/                          # P3 — ML upgrade
+│   │   ├── __init__.py
+│   │   ├── cv.py                    # PurgedKFold(n_splits, embargo_pct)
+│   │   ├── hpo.py                   # Optuna HPO study
+│   │   └── explain.py               # SHAP explanations
+│   ├── portfolio/                   # P4 — Portfolio optimization
+│   │   ├── __init__.py
+│   │   └── optimizer.py             # skfolio HRP/NCO/CVaR, BL views
+│   ├── backtest/                    # P5 — Advanced backtesting
+│   │   ├── __init__.py
+│   │   ├── vbt_sweep.py             # vectorbt parameter sweep
+│   │   ├── mc_bootstrap.py          # Block-bootstrap Monte Carlo
+│   │   └── stat_tests.py            # Deflated Sharpe, PSR, MinTRL
+│   ├── advisors/                    # P6 — LLM advisory layer
+│   │   ├── __init__.py
+│   │   ├── news_sentiment.py        # NewsSentiment advisor
+│   │   ├── devils_advocate.py       # DevilsAdvocate advisor
+│   │   ├── macro_regime.py          # MacroRegime advisor
+│   │   └── langgraph_dag.py         # LangGraph orchestrator
+│   └── broker/                      # P8 — Live broker adapters
+│       ├── __init__.py
+│       ├── alpaca_adapter.py        # Alpaca adapter
+│       ├── ibkr_adapter.py          # IBKR ib_insync adapter
+│       ├── kis_adapter.py           # KIS OpenAPI adapter
+│       ├── order_router.py          # SOR/TWAP/VWAP + kill-switch
+│       └── reconciliation.py        # Position reconciliation
 ├── dashboard/
-│   ├── stock_pred_v5.jsx        # Repo-owned dashboard source copy
+│   ├── stock_pred_v5.jsx            # Repo-owned dashboard source copy
 │   ├── bridge_smoke.html
 │   └── verify_bridge_smoke.mjs
-├── tests/
-│   ├── test_core.py                  # Ops v1 workflow regression tests
-│   ├── test_backtest_honesty.py      # Phase B backtest honesty tests
-│   ├── test_data_providers.py        # Provider routing tests
-│   ├── test_data_providers_extra.py  # Extended data_providers coverage (99%)
-│   ├── test_provider_validation.py   # Provider validation tests
-│   ├── test_audit_log.py             # Audit masking tests
-│   ├── test_mcp_adapter.py           # MCP boundary tests
-│   ├── test_dashboard_bridge.py      # Dashboard bridge tests
-│   ├── test_reports.py               # reports.py coverage (100%)
-│   ├── test_risk_rules.py            # risk_rules.py coverage (100%)
-│   ├── test_ensemble_model_extra.py  # ensemble_model.py extended coverage (83%)
-│   ├── test_kevpe_adapter.py         # kevpe_adapter.py coverage (91%)
-│   └── test_main_extra.py            # main.py extended coverage (98%)
+├── tests/                           # 1,210 tests — 85.82% coverage (2026-05-10)
+│   ├── test_core.py                 # Ops v1 workflow regression tests
+│   ├── test_backtest_honesty.py     # Phase B backtest honesty tests
+│   ├── test_data_providers.py       # Provider routing tests
+│   ├── test_data_providers_extra.py # Extended data_providers coverage (99%)
+│   ├── test_provider_validation.py  # Provider validation tests
+│   ├── test_audit_log.py            # Audit masking tests
+│   ├── test_mcp_adapter.py          # MCP boundary tests
+│   ├── test_dashboard_bridge.py     # Dashboard bridge tests
+│   ├── test_reports.py              # reports.py coverage (100%)
+│   ├── test_risk_rules.py           # risk_rules.py coverage (100%)
+│   ├── test_ensemble_model_extra.py # ensemble_model.py extended coverage (~85%)
+│   ├── test_kevpe_adapter.py        # kevpe_adapter.py coverage (91%)
+│   ├── test_main_extra.py           # main.py extended coverage (98%)
+│   ├── test_observability.py        # P0 observability coverage
+│   ├── test_data_lake.py            # P1 PITStore/DuckDB coverage
+│   ├── test_factors.py              # P2 factor zoo coverage
+│   ├── test_ml_cv.py                # P3 PurgedKFold coverage
+│   ├── test_ml_hpo.py               # P3 Optuna HPO coverage
+│   ├── test_ml_explain.py           # P3 SHAP coverage
+│   ├── test_portfolio.py            # P4 optimizer coverage
+│   ├── test_backtest_vbt.py         # P5 vectorbt sweep coverage
+│   ├── test_advisors.py             # P6 LLM advisor coverage
+│   ├── test_alert_engine.py         # alert_engine.py coverage (97%)
+│   └── test_broker.py               # P8 broker adapter coverage
 ├── docs/
 │   ├── LAYOUT.md                # This file — source tree + conventions
 │   ├── SYSTEM_ARCHITECTURE.md   # Architecture overview

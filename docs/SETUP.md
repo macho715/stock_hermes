@@ -30,9 +30,9 @@ Run tests through the project `.venv`:
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Observed result (2026-05-08): **509 tests passed**, 89% coverage (≥75% CI gate).
+Observed result (2026-05-10): **1,210 tests passed**, 85.82% coverage (≥85% target, ≥75% CI gate).
 
-Earlier milestones: Phase A = 26 tests, Phase B = 30 tests, 2026-05-07 = 340 tests (80.79%), 2026-05-08 = 509 tests (89%).
+Earlier milestones: Phase A = 26 tests, Phase B = 30 tests, 2026-05-07 = 340 tests (80.79%), 2026-05-08 = 509 tests (89%), 2026-05-10 = 1,210 tests (85.82%).
 
 ## Optional OpenBB Provider
 

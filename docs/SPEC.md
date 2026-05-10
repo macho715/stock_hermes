@@ -217,6 +217,7 @@ Resolved choices:
 | 2026-05-07 | SQLite OHLCV cache (`data_cache.py`) extracted to standalone module; CI gate added; `paper-run` subcommand added. | Commit e20fc5e |
 | 2026-05-07 | Test suite expanded to 340 tests, 80.79% coverage; `risk_rules.py`, `reports.py` at 100%; `data_providers.py` at 99%. | Commit 09c8187 + session work |
 | 2026-05-08 | Test suite expanded to 509 tests, 89% total coverage; `ensemble_model.py` 83%, `kevpe_adapter.py` 91%, `main.py` 98%. New files: `test_ensemble_model_extra.py`, `test_kevpe_adapter.py`, `test_main_extra.py`. | Commit d7a3022 |
+| 2026-05-10 | P0-P8 hedge-fund upgrade complete: observability, data_lake, factors, ml, portfolio, backtest, advisors, broker subpackages. Coverage 78.5%→85.82% (1,210 tests). CORS fix, utcnow deprecation fixes, numpy read-only fix. | Commits 717f3a0, c6f0928, d1f5a9a |
 
 ## Reviewer Checklist
 
@@ -247,4 +248,4 @@ Current implementation status:
 | Dashboard report bridge | Implemented in `src/stock_rtx4060/dashboard_bridge.py` with `dashboard-export`; see `docs/SPEC_DASHBOARD_BRIDGE_2026-05-03.md`. |
 | CI gate | `.github/workflows/ci.yml` runs `pytest --cov=stock_rtx4060` on push/PR; `fail_under=75` enforced in `pyproject.toml`. |
 | paper-run subcommand | Implemented in `src/stock_rtx4060/main.py`; bridges `RecommendationEngine` to `PaperTradingEngine` (no broker orders). |
-| Test suite | 340 tests across 15+ test files; `risk_rules.py` 100%, `reports.py` 100%, `data_providers.py` 99%, total 80.79%. |
+| Test suite | **1,210 tests** across 25+ test files; 85.82% total coverage (2026-05-10). P0-P8 module coverage added. |

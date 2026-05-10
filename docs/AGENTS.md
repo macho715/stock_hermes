@@ -33,6 +33,10 @@ When updating docs, keep these facts synchronized:
 - Current validation split: `.venv` and `run.ps1` PASS, global Python dependency path AMBER.
 - Ops v1 workflow: `ops-v1` creates recommendation reports, a daily brief, an approval journal template, ZERO logs, and a summary JSON.
 - Legacy source evidence stays in `review_needed/` until manually reviewed.
+- **Current test status (2026-05-10): 1,210 tests, 85.82% coverage** (target ≥85% ✅).
+- **P0-P8 phases**: `observability/`, `data_lake/`, `factors/`, `ml/`, `portfolio/`, `backtest/`, `advisors/`, `broker/` subpackages active.
+- **PurgedKFold**: `cv.split(X, groups=_groups)` must always receive `groups` — never `cv.split(X)`.
+- **PIT `as_of` guard**: lake miss with `as_of!=None` raises `RuntimeError`.
 
 ## Continue Quality Gate Rule
 

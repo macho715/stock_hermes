@@ -11,7 +11,7 @@
 | 질문 | 답 |
 |---|---|
 | 이 프로그램은 무엇인가 | 주식 후보를 분석하고, 추천 후보 리포트와 대시보드 표시용 snapshot을 만드는 로컬 주식 연구 시스템 |
-| 실제 실행 중심은 어디인가 | `stock_rtx4060_unified/` Python 추천 엔진 |
+| 실제 실행 중심은 어디인가 | `stock_1901/` Python 추천 엔진 (P0-P8 hedge-fund grade) |
 | 화면은 어디에 있는가 | `stock-pred-v5/` React/Vite 대시보드 |
 | 추천 결과는 어떻게 화면에 연결되는가 | `dashboard_snapshot.v1` 파일 또는 Flask API `/api/recommend` |
 | 데이터는 어디서 오는가 | synthetic, yfinance, optional OpenBB provider |
@@ -26,7 +26,7 @@ flowchart LR
     User[Operator] --> BackendCLI[run.ps1 / main.py]
     User --> DashboardUI[stock-pred-v5 dashboard]
 
-    subgraph Backend["stock_rtx4060_unified - Python backend"]
+    subgraph Backend["stock_1901 - Python backend"]
         BackendCLI --> PackageCLI[src/stock_rtx4060/main.py]
         PackageCLI --> Provider[data_providers.py]
         Provider --> Synthetic[synthetic OHLCV]
@@ -72,7 +72,7 @@ flowchart LR
 
 | Path | Role | Details included here |
 |---|---|---|
-| `stock_rtx4060_unified/` | Active recommendation backend | CLI, providers, audit, reports, ops-v1, dashboard bridge, Flask API |
+| `stock_1901/` | Active recommendation backend (P0-P8) | CLI, providers, audit, reports, ops, dashboard bridge, Flask API, ML, portfolio, broker adapters |
 | `stock-pred-v5/` | Active dashboard frontend | React UI, Vite server, REC tab, FILE/API modes, build commands |
 | `continue-main/` | Reference monorepo | Continue IDE/CLI architecture, checks, agents, MCP docs, not stock runtime |
 | `docs/` | Root history and validation docs | Past move plans, root audits, Mermaid checks, setup notes |
@@ -81,19 +81,19 @@ flowchart LR
 | `_delete_audit/` | Delete audit evidence | Approved deletion audit records |
 | `archive/original_inputs/` | Original input archive | Original zip/input evidence |
 
-## 4. Backend: `stock_rtx4060_unified`
+## 4. Backend: `stock_1901`
 
-`stock_rtx4060_unified` is a consolidated report-only stock screening and backtesting package. It keeps active source under `src/stock_rtx4060/`.
+`stock_1901` is a hedge-fund-grade stock screening, backtesting, and advisory system (P0–P8). It keeps active source under `src/stock_rtx4060/`.
 
 ### Backend entry points
 
 | Entry | Actual file | Purpose |
 |---|---|---|
-| Windows wrapper | `stock_rtx4060_unified/run.ps1` | Chooses `.venv\Scripts\python.exe` first, then Python 3.12, Python 3.11, global `python` |
-| Root Python wrapper | `stock_rtx4060_unified/main.py` | Adds `src/` to import path and dispatches package CLI |
-| Package CLI | `stock_rtx4060_unified/src/stock_rtx4060/main.py` | Defines all CLI commands |
-| API server | `stock_rtx4060_unified/api_server.py` | Local Flask API on `127.0.0.1:5151` |
-| Preview server | `stock_rtx4060_unified/preview_server.py` | Starts Flask API and Vite dashboard together |
+| Windows wrapper | `run.ps1` | Chooses `.venv\Scripts\python.exe` first, then Python 3.12, Python 3.11, global `python` |
+| Root Python wrapper | `main.py` | Adds `src/` to import path and dispatches package CLI |
+| Package CLI | `src/stock_rtx4060/main.py` | Defines all CLI commands |
+| API server | `api_server.py` | Local Flask API on `127.0.0.1:5151` (CORS: localhost 5173/4173/5151) |
+| Preview server | `preview_server.py` | Starts Flask API and Vite dashboard together |
 
 ### Backend commands
 
@@ -254,14 +254,14 @@ Snapshot output includes rank, ticker, track, verdict, score, probability, expec
 | `docs/` | Mintlify documentation |
 | `.continue/` | agents, checks, prompts, and rules |
 
-In this stock workspace, Continue is useful as a reference for quality gates and future review automation. It is not imported by `stock_rtx4060_unified` at runtime and it does not run the recommendation engine.
+In this stock workspace, Continue is useful as a reference for quality gates and future review automation. It is not imported by `stock_1901` at runtime and it does not run the recommendation engine.
 
 ## 10. Setup And Run Commands
 
 Python backend:
 
 ```powershell
-cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+cd C:\Users\jichu\Downloads\주식\stock_1901
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -271,7 +271,7 @@ py -3.12 -m venv .venv
 Optional OpenBB:
 
 ```powershell
-cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+cd C:\Users\jichu\Downloads\주식\stock_1901
 .\.venv\Scripts\python.exe -m pip install -r requirements-openbb.txt
 .\run.ps1 recommend --data-provider openbb --provider-config config/data_providers.example.json --universe "AAPL" --top 1 --output-dir reports\recommendations_openbb_cache_smoke
 ```
@@ -279,7 +279,7 @@ cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
 Recommendation and snapshot:
 
 ```powershell
-cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+cd C:\Users\jichu\Downloads\주식\stock_1901
 .\run.ps1 recommend --data-provider synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports\recommendations
 .\run.ps1 dashboard-export --recommendation-json reports\recommendations\recommendations_algo_v2_YYYYMMDD_HHMMSS.json --output reports\recommendations\dashboard_snapshot.json
 ```
@@ -296,7 +296,7 @@ npm run build
 Integrated preview:
 
 ```powershell
-cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+cd C:\Users\jichu\Downloads\주식\stock_1901
 .\.venv\Scripts\python.exe preview_server.py
 ```
 
@@ -304,14 +304,14 @@ cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
 
 | Output | Location |
 |---|---|
-| Recommendation Markdown/JSON | `stock_rtx4060_unified/reports/recommendations*/` |
-| Provider audit log | `stock_rtx4060_unified/reports/**/audit_log.jsonl` |
-| Ops v1 daily brief | `stock_rtx4060_unified/reports/ops_v1*/ops_v1_daily_brief_*.md` |
-| Approval journal template | `stock_rtx4060_unified/reports/ops_v1*/approval_journal_template.csv` |
-| ZERO log | `stock_rtx4060_unified/reports/ops_v1*/zero_log.md` and `.csv` |
+| Recommendation Markdown/JSON | `reports/recommendations*/` |
+| Provider audit log | `reports/**/audit_log.jsonl` |
+| Ops v1 daily brief | `reports/ops_v1*/ops_v1_daily_brief_*.md` |
+| Approval journal template | `reports/ops_v1*/approval_journal_template.csv` |
+| ZERO log | `reports/ops_v1*/zero_log.md` and `.csv` |
 | Dashboard snapshot | `dashboard_snapshot.json` from `dashboard-export` or API |
 | Dashboard build | `stock-pred-v5/dist/` |
-| Browser verification | `stock_rtx4060_unified/reports/dashboard_browser_verification/` |
+| Browser verification | `reports/dashboard_browser_verification/` |
 | Consolidation evidence | `_consolidation_audit/` |
 | Deletion audit evidence | `_delete_audit/` |
 
@@ -333,7 +333,7 @@ cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
 Use these before claiming the workspace is healthy:
 
 ```powershell
-cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+cd C:\Users\jichu\Downloads\주식\stock_1901
 .\.venv\Scripts\python.exe main.py --help
 .\.venv\Scripts\python.exe -m pytest -q
 .\run.ps1 tensorflow-check
@@ -349,8 +349,8 @@ Expected current baseline from local docs and recent verification:
 | Check | Expected |
 |---|---|
 | Backend CLI help | Lists `env`, `benchmark`, `report`, `predict`, `recommend`, `ops-v1`, `dashboard-export`, `demo`, `journal`, `self-test` |
-| Backend tests | 509 tests pass (2026-05-08), up from 340 tests |
-| Test coverage | TOTAL 89% (2026-05-08), up from 81% |
+| Backend tests | **1,210 tests pass (2026-05-10)**, up from 509 tests |
+| Test coverage | TOTAL **85.82% (2026-05-10)**; target ≥85% ✅ |
 | TensorFlow CPU/LSTM smoke | `.\run.ps1 tensorflow-check` prints `TF_VERSION=2.21.0`, CPU device, `LSTM_SMOKE=PASS` |
 | Dashboard build | Vite build succeeds; chunk-size warning may appear |
 
@@ -368,7 +368,7 @@ Latest document cross-check on 2026-05-03 read the documentation files under the
 
 | Root scanned | Documents read | Why it matters to this README |
 |---|---:|---|
-| `stock_rtx4060_unified/` | 114 | Confirms the active Python backend, CLI commands, reports, audit logs, OpenBB plan, and dashboard bridge |
+| `stock_1901/` | 114+ | Confirms the active Python backend (P0-P8), CLI commands, reports, audit logs, and dashboard bridge |
 | `stock-pred-v5/` | 29 | Confirms the active React/Vite dashboard, REC tab, FILE/API modes, snapshot sample, and build workflow |
 | `continue-main/` | 342 | Confirms Continue is a separate IDE/CLI/MCP reference project, not the stock runtime |
 | `docs/` | 32 | Confirms root-level historical plans, setup notes, layout notes, and architecture references |
@@ -380,7 +380,7 @@ The dashboard now has two verified REC paths. API mode calls the local Flask rec
 
 ```mermaid
 flowchart LR
-    Backend[stock_rtx4060_unified] --> Command[main.py dashboard-export]
+    Backend[stock_1901] --> Command[main.py dashboard-export]
     Command --> Snapshot[dashboard_snapshot.json]
     Command --> Audit[audit_log.jsonl]
     Command --> Approval[approval_journal_template.csv]
@@ -395,7 +395,7 @@ flowchart LR
 Export backend files to the dashboard:
 
 ```powershell
-cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+cd C:\Users\jichu\Downloads\주식\stock_1901
 .\.venv\Scripts\python.exe main.py dashboard-export --recommendation-json .\reports\full_verify_ops_v1\recommendations\recommendations_algo_v2_20260503_151612.json --output .\reports\dashboard_public_export_smoke\dashboard_snapshot.json --public-dir ..\stock-pred-v5\public --approval-journal .\reports\full_verify_ops_v1\approval_journal_template.csv
 ```
 
@@ -447,7 +447,7 @@ What changed:
 Run the latest verified Phase B smoke:
 
 ```powershell
-cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+cd C:\Users\jichu\Downloads\주식\stock_1901
 .\.venv\Scripts\python.exe -m pytest -q
 .\run.ps1 recommend --synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --cv-gap 5 --output-dir reports\phase_b_backtest_honesty_smoke
 .\run.ps1 dashboard-export --recommendation-json reports\phase_b_backtest_honesty_smoke\recommendations_algo_v2_20260503_194454.json --output reports\phase_b_backtest_honesty_smoke\dashboard_snapshot.json
@@ -495,7 +495,7 @@ Evidence files:
 Latest relevant verification:
 
 ```powershell
-cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+cd C:\Users\jichu\Downloads\주식\stock_1901
 .\.venv\Scripts\python.exe -m pytest tests\test_api_model_scores.py -q -p no:cacheprovider --basetemp C:\tmp\stock-pytest-symbol-fallback-green-20260506
 .\.venv\Scripts\python.exe -m py_compile api_server.py src\stock_rtx4060\data_providers.py
 ```
@@ -712,10 +712,10 @@ PYTHONPATH=.:src python main.py paper --help
 
 ---
 
-## 19. Test Coverage Boost - 2026-05-08
+## 19. Test Coverage Boost - 2026-05-08 → 2026-05-10
 
-테스트 스위트를 340 → **509 tests**, 총 커버리지 80.79% → **89%** 로 확장했습니다.
-CI 게이트(`fail_under=75`)를 유지하면서 3개 핵심 모듈 모두 ≥80% 개별 목표를 달성했습니다.
+테스트 스위트를 340 → **509 → 1,210 tests**, 총 커버리지 80.79% → 89% → **85.82%** 로 확장했습니다.
+CI 게이트(`fail_under=75`)를 유지하면서 전체 ≥85% 목표를 달성했습니다 (2026-05-10 기준).
 
 ### Coverage graph
 
@@ -793,7 +793,7 @@ flowchart LR
 ### Verification
 
 ```powershell
-cd C:\Users\jichu\Downloads\주식\stock_rtx4060_unified
+cd C:\Users\jichu\Downloads\주식\stock_1901
 .\.venv\Scripts\python.exe -m pytest -q --tb=no
 ```
 

@@ -31,6 +31,8 @@
 
 ## Phase 2: Engineering Review
 
+**Status: ✅ Completed (2026-05-10, commit d13a9a6)** — ruff exclusions applied to `pyproject.toml`; active code (`api_server.py`, `flows/`, `src/`, `tests/`, `tools/`) cleaned; all tests pass.
+
 ### 2.1 Mermaid
 
 ```mermaid
