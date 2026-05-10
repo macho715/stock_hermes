@@ -24,7 +24,7 @@
 | Dashboard app | `stock-pred-v5/` | React/Vite 화면, US/KRX 시장 토글, 차트, 모델 점수, REC 추천 패널 |
 | Main dashboard component | `stock-pred-v5/src/StockPredV5.jsx` | 전체 화면 레이아웃, 시장 선택, 종목 데이터 fetch, SIGNAL/MODELS/BACKTEST/REC 탭 |
 | Recommendation panel | `stock-pred-v5/src/components/RecommendationPanel.jsx` | FILE/API 추천 snapshot 로드, Audit/Approval/Provider 요약, 추천 카드 목록 |
-| Recommendation card | `stock-pred-v5/src/components/RecommendationCard.jsx` | 개별 추천 후보 카드 렌더링 |
+| Recommendation card | `stock-pred-v5/src/components/RecommendationCard.jsx` | 개별 추천 후보 카드 렌더링; LLM Advisor 점수 게이지 포함 (Updated: 2026-05-10) |
 | Risk badge | `stock-pred-v5/src/components/RiskGateBadge.jsx` | 추천 verdict 시각 표시 |
 | KEVPE badge | `stock-pred-v5/src/components/KevpeBadge.jsx` | KEVPE 이벤트가 있을 때 regime/score 표시 |
 | File bridge | `stock-pred-v5/public/dashboard_snapshot.json` | FILE 모드 REC 입력 |

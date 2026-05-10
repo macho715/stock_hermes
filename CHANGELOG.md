@@ -2,6 +2,21 @@
 
 All notable changes for `stock_1901` are documented here.
 
+## 2026-05-10 — LLM Advisor Score Gauge + Test Coverage Boost + Bug Fixes
+
+### Added
+- **`root_folder_snapshot/stock-pred-v5/src/components/RecommendationCard.jsx`** — LLM Advisor 점수 게이지 패널 추가 (feat(P6))
+  - `advisor_score` (−1 ~ +1) 게이지 바, 숫자 레이블, `advisor_rationale` 3줄 클립 렌더링
+  - `dashboard_snapshot.v1`에 이미 존재하던 필드를 프론트엔드에서 최초로 시각화
+  - null / NaN guard — 점수 없으면 패널 숨김 (기존 카드 레이아웃 영향 없음)
+- **`root_folder_snapshot/stock-pred-v5/public/dashboard_snapshot.json`** — `advisor_score`, `advisor_rationale` null 필드 추가 (additive schema extension)
+- **`dashboard/stock_pred_v5.jsx`** — 동일 기능 `AdvisorOverlay` 컴포넌트 추가 (legacy standalone 파일 동기화)
+- **`tests/test_observability.py`** — log.py 추가 커버리지 테스트 116줄 추가
+
+### QA
+- 1210 passed, 17 skipped — 회귀 없음 ✅
+- 커밋: `4857429` → GitHub `main` push 완료
+
 ## 2026-05-10 — Test Coverage Boost + Bug Fixes
 
 ### Added

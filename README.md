@@ -55,6 +55,7 @@ flowchart LR
         RecTab --> RecPanel[RecommendationPanel.jsx]
         RecPanel --> RecCard[RecommendationCard.jsx]
         RecCard --> Badge[RiskGateBadge.jsx]
+        RecCard --> AdvisorGauge[LLM Advisor Gauge<br/>advisor_score −1~+1]
         PublicSnapshot[public/dashboard_snapshot.json] --> RecPanel
     end
 
