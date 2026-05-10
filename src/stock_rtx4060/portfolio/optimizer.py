@@ -163,11 +163,12 @@ def _pure_python_hrp(returns: pd.DataFrame, cov: pd.DataFrame) -> pd.Series:
     from scipy.cluster.hierarchy import linkage
     from scipy.spatial.distance import squareform
 
-    corr = returns.corr().fillna(0.0).values
+    corr = returns.corr().fillna(0.0).values.copy()
     np.fill_diagonal(corr, 1.0)
     dist = _correlation_distance(corr)
     # Symmetrise and zero diagonal for SciPy
     dist = (dist + dist.T) / 2.0
+    dist = dist.copy()
     np.fill_diagonal(dist, 0.0)
     condensed = squareform(dist, checks=False)
     link = linkage(condensed, method="single")
