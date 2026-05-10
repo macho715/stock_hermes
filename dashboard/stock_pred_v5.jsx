@@ -1322,6 +1322,11 @@ function BackendTab({ snapshot, currentResult, backendError, accent }) {
               </div>
             ))}
           </div>
+          <AdvisorOverlay
+            advisorScore={selected.advisor_score}
+            advisorRationale={selected.advisor_rationale}
+            verdict={selected.verdict}
+          />
         </Panel>
       )}
 
@@ -1365,6 +1370,60 @@ function verdictColor(verdict) {
   if (String(verdict).startsWith("ZERO")) return C.red;
   if (String(verdict).startsWith("RED")) return C.red;
   return C.textDim;
+}
+
+/* ----------  ADVISOR OVERLAY  ---------- */
+function AdvisorOverlay({ advisorScore, advisorRationale, verdict }) {
+  if (advisorScore === null || advisorScore === undefined) return null;
+  const score = parseFloat(advisorScore);
+  if (isNaN(score)) return null;
+  const pct = Math.round(((score + 1) / 2) * 100); // [-1,+1] → [0,100]%
+  const barColor = score >= 0 ? C.buy : C.sell;
+  const badgeStyle = {
+    background: verdictColor(verdict),
+    color: "#000",
+    borderRadius: 4,
+    padding: "1px 6px",
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: "0.05em",
+  };
+  return (
+    <div style={{ marginTop: 12, padding: "10px 12px", background: "#0d1117", borderRadius: 8, border: "1px solid #1e2a35" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span style={{ fontSize: 10, color: "#8899aa", letterSpacing: "0.08em" }}>LLM ADVISOR</span>
+        {verdict && <span style={badgeStyle}>{verdict}</span>}
+      </div>
+      <div style={{ position: "relative", height: 6, background: "#1e2a35", borderRadius: 3, marginBottom: 6 }}>
+        <div style={{ position: "absolute", left: "50%", top: 0, width: 1, height: "100%", background: "#3a4a5a" }} />
+        <div style={{
+          position: "absolute",
+          left: score >= 0 ? "50%" : `${pct}%`,
+          width: `${Math.abs(score) * 50}%`,
+          height: "100%",
+          background: barColor,
+          borderRadius: 3,
+          opacity: 0.85,
+        }} />
+      </div>
+      <div style={{ textAlign: "right", fontSize: 11, color: barColor, fontWeight: 700, marginBottom: 4 }}>
+        {score >= 0 ? "+" : ""}{score.toFixed(2)}
+      </div>
+      {advisorRationale && (
+        <div style={{
+          fontSize: 10,
+          color: "#7788aa",
+          lineHeight: 1.5,
+          display: "-webkit-box",
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}>
+          {advisorRationale}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ----------  SIGNAL TAB  ---------- */

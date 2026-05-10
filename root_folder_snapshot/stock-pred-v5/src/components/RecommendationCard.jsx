@@ -124,6 +124,48 @@ export default function RecommendationCard({ result, currency = "$", accent = "#
           Validations: {result.confirmations_passed || 0}/{result.confirmations_total || Object.keys(result.validations).length} passed
         </div>
       )}
+
+      {/* LLM Advisor overlay */}
+      {result.advisor_score != null && !isNaN(parseFloat(result.advisor_score)) && (() => {
+        const score = parseFloat(result.advisor_score);
+        const barColor = score >= 0 ? C.green : C.red;
+        const pct = Math.round(((score + 1) / 2) * 100);
+        return (
+          <div style={{ marginTop: 10, padding: "8px 10px", background: C.bgDeep, borderRadius: 4, border: `1px solid ${C.borderHi}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+              <span style={{ fontSize: 8, color: C.textMuted, letterSpacing: "0.1em" }}>LLM ADVISOR</span>
+              <span style={{ fontSize: 11, color: barColor, fontWeight: 700 }}>
+                {score >= 0 ? "+" : ""}{score.toFixed(2)}
+              </span>
+            </div>
+            <div style={{ position: "relative", height: 4, background: C.border, borderRadius: 2, marginBottom: 5 }}>
+              <div style={{ position: "absolute", left: "50%", top: 0, width: 1, height: "100%", background: C.borderHi }} />
+              <div style={{
+                position: "absolute",
+                left: score >= 0 ? "50%" : `${pct}%`,
+                width: `${Math.abs(score) * 50}%`,
+                height: "100%",
+                background: barColor,
+                borderRadius: 2,
+                opacity: 0.9,
+              }} />
+            </div>
+            {result.advisor_rationale && (
+              <div style={{
+                fontSize: 9,
+                color: C.textDim,
+                lineHeight: 1.5,
+                display: "-webkit-box",
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+              }}>
+                {result.advisor_rationale}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -119,7 +119,9 @@
       "kevpe_expected_return_pct": null,
       "kevpe_ci": null,
       "kevpe_confidence": null,
-      "kevpe_reason": null
+      "kevpe_reason": null,
+      "advisor_score": null,
+      "advisor_rationale": null
     },
     {
       "rank": 2,
@@ -214,7 +216,9 @@
       "kevpe_expected_return_pct": null,
       "kevpe_ci": null,
       "kevpe_confidence": null,
-      "kevpe_reason": null
+      "kevpe_reason": null,
+      "advisor_score": null,
+      "advisor_rationale": null
     }
   ]
 }
