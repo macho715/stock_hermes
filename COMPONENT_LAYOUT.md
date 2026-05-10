@@ -306,7 +306,35 @@ This dashboard is a screening interface.
 | REC button behavior | Loads recommendation data; does not submit orders |
 | Approval panel | Displays review status; does not approve trades by itself |
 
-## 10. Where To Add New Components
+## 10. Observability Stack Layout — Added 2026-05-10
+
+풀옵션 기동 시 다음 6개 서비스가 동시에 실행됩니다.
+
+| 서비스 | 기본 포트 | Docker 컨테이너 | 역할 |
+|--------|-----------|----------------|------|
+| Vite React Dashboard | 5173 | — (로컬 프로세스) | 메인 대시보드 UI |
+| Flask API Server | 5151 | — (로컬 프로세스) | OHLCV·모델 스코어·추천 API |
+| MLflow Tracking | 5000 | `stock1901_mlflow` | 실험 추적, 모델 레지스트리 |
+| Prefect Server | 4200 | `stock1901_prefect` | Flow 스케줄·실행 관리 |
+| Prometheus | 9090 | `stock1901_prometheus` | 메트릭 수집 |
+| Grafana | 3000 (기본) / 3001 (충돌 시) | `stock1901_grafana` | 메트릭 시각화 |
+
+> ⚠️ `open-webui` 등 외부 컨테이너가 포트 3000을 선점하면 Grafana는 3001로 기동.
+> 워크어라운드: `docs/RUNBOOK.md` → "Grafana 포트 충돌 워크어라운드" 참조.
+
+### CORS 허용 오리진 (api_server.py — 2026-05-10 수정)
+
+```python
+origins = [
+    "http://localhost:5173",   # Vite dev
+    "http://localhost:4173",   # Vite preview
+    "http://localhost:5151",   # Flask self
+]
+```
+
+기존 `origins=["*"]` 와일드카드는 보안 이슈로 제거됨.
+
+## 11. Where To Add New Components
 
 | Need | Add here | Reason |
 |---|---|---|

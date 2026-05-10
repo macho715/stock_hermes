@@ -1,7 +1,7 @@
 # Operations Runbook
 
 _Source of truth: `run.ps1`, `main.py`, `config/runtime_environment.json`_
-_Last synced: 2026-05-07_
+_Last synced: 2026-05-10_
 
 > **Scope:** All procedures are report-only / screening-only.
 > This system does not execute broker orders, manage accounts, or perform live trades.
@@ -16,6 +16,43 @@ _Last synced: 2026-05-07_
 | Python | `.venv\Scripts\python.exe` (3.12) |
 | Test command | `.venv\Scripts\python.exe -m pytest` |
 | Compile check | `.venv\Scripts\python.exe -m compileall` |
+
+---
+
+## Full Dashboard Stack (풀옵션 기동) — Updated 2026-05-10
+
+모든 서비스를 순서대로 기동합니다.
+
+### 서비스 포트 현황
+
+| 서비스 | 포트 | 명령 |
+|--------|------|------|
+| Flask API Server | 5151 | `python api_server.py --port 5151` |
+| Vite React Dashboard | 5173 | `npm --prefix root_folder_snapshot/stock-pred-v5 run dev` |
+| MLflow Tracking | 5000 | `docker compose -f docker-compose.dev.yml up mlflow` |
+| Prefect Server | 4200 | `docker compose -f docker-compose.dev.yml up prefect-server` |
+| Prometheus | 9090 | `docker compose -f docker-compose.dev.yml up prometheus` |
+| Grafana | 3000 (기본) / **3001 (포트 충돌 시)** | `docker compose -f docker-compose.dev.yml up grafana` |
+
+### Grafana 포트 충돌 워크어라운드
+
+`open-webui` 등 다른 컨테이너가 포트 3000을 선점한 경우:
+
+```bash
+docker run -d \
+  --name stock1901_grafana_3001 \
+  -p 3001:3000 \
+  -e GF_SECURITY_ADMIN_PASSWORD=admin \
+  -e GF_USERS_ALLOW_SIGN_UP=false \
+  grafana/grafana:11.2.0
+```
+
+접속: http://localhost:3001 · 로그인: `admin / admin`
+
+### launch.json 원클릭 기동 (Claude Code 내)
+
+`.claude/launch.json`에 등록된 서버명으로 `preview_start` 호출:
+- `API Server`, `Vite Dev Server`, `MLflow`, `Grafana`, `Prefect Server`
 
 ---
 
@@ -179,14 +216,17 @@ FAIL Required test coverage of 75.0% not reached. Total coverage: XX%
 .\.venv\Scripts\python.exe -m pytest --cov=stock_rtx4060 --cov-report=term-missing -q 2>&1 | grep "%"
 ```
 
-Current low-coverage modules (as of 2026-05-07):
+Current coverage status (as of 2026-05-10): **85.82%** (1,210 tests) ✅ Target ≥85% met.
 
-| Module | Coverage | Priority |
-|--------|----------|----------|
-| `ensemble_model.py` | 49% | High — ML train/predict paths |
-| `kevpe_adapter.py` | 43% | Medium — external adapter |
-| `main.py` | 51% | Medium — CLI dispatch |
-| `alert_engine.py` | 73% | Low risk |
+Previously low-coverage modules — now resolved:
+
+| Module | Before | After | Status |
+|--------|--------|-------|--------|
+| `ensemble_model.py` | 49% | ~85% | ✅ Resolved |
+| `ml/explain.py` | 0% | 89% | ✅ Resolved |
+| `ml/hpo.py` | 0% | 88% | ✅ Resolved |
+| `alert_engine.py` | 66% | 97% | ✅ Resolved |
+| `dashboard_bridge.py` | 70% | 100% | ✅ Resolved |
 
 ---
 
