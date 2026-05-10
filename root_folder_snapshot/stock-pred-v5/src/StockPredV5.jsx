@@ -76,6 +76,7 @@ function normalizeDashboardConfig(raw) {
     },
     api_defaults: {
       symbol_period: String(raw?.api_defaults?.symbol_period || ""),
+      symbol_data_provider: raw?.api_defaults?.symbol_data_provider || {},
       model_scores: raw?.api_defaults?.model_scores || {},
       recommend: raw?.api_defaults?.recommend || {},
     },
@@ -585,6 +586,7 @@ export default function StockPredV5() {
 
   /* fetch on selection */
   useEffect(() => {
+    if (!dashboardConfig) return;
     if (!selected) return;
     if (!symbolPeriod) return;
     if (cache[selected]) {
@@ -613,7 +615,7 @@ export default function StockPredV5() {
       setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [selected, cache, symbolPeriod, symbolDataProvider]);
+  }, [selected, cache, symbolPeriod, symbolDataProvider, dashboardConfig]);
 
   /* backend model evidence for primary SIGNAL/MODELS */
   useEffect(() => {
@@ -714,6 +716,7 @@ export default function StockPredV5() {
   /* prefetch other symbols' last-prices for sidebar */
   const [sidebarSnap, setSidebarSnap] = useState({});
   useEffect(() => {
+    if (!dashboardConfig) return;
     if (universeSource === "loading") return;
     if (!symbolPeriod) return;
     let cancel = false;
@@ -760,10 +763,11 @@ export default function StockPredV5() {
     })();
     return () => { cancel = true; };
     // eslint-disable-next-line
-  }, [market, universeSource, symbols, symbolPeriod, symbolDataProvider]);
+  }, [market, universeSource, symbols, symbolPeriod, symbolDataProvider, dashboardConfig]);
 
   /* benchmark scan */
   const runBenchmark = useCallback(async () => {
+    if (!dashboardConfig) return;
     if (!symbolPeriod) return;
     setBench({ open: true, rows: [], loading: true, progress: 0 });
     const rows = [];
@@ -803,7 +807,7 @@ export default function StockPredV5() {
     }
     rows.sort((a, b) => b.ens - a.ens);
     setBench({ open: true, rows, loading: false, progress: 1 });
-  }, [cache, symbols, signalThresholds, symbolPeriod]);
+  }, [cache, symbols, signalThresholds, symbolPeriod, symbolDataProvider, dashboardConfig]);
 
   /* export helpers */
   const fmtMoney = (v) =>
@@ -1089,7 +1093,8 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                     padding: "8px 10px", marginBottom: 3,
                     background: isActive ? C.panelHi : "transparent",
                     borderLeft: `2px solid ${isActive ? accent : "transparent"}`,
-                    cursor: "pointer", border: "none",
+                    borderTop: "none", borderRight: "none", borderBottom: "none",
+                    cursor: "pointer",
                     fontFamily: FONT, color: C.text,
                     transition: "background .15s",
                   }}

@@ -175,6 +175,50 @@ class TestDataCache:
         # The replaced payload has 3 rows
         assert len(result) == 3
 
+    def test_cache_preserves_datetime_index_as_date_column(self, tmp_path):
+        """Datetime-indexed OHLCV keeps a date column for dashboard APIs."""
+        cache = make_cache(tmp_path)
+        df = pd.DataFrame(
+            {
+                "Open": [100.0, 101.0],
+                "High": [101.0, 102.0],
+                "Low": [99.0, 100.0],
+                "Close": [100.5, 101.5],
+                "Volume": [1000, 2000],
+            },
+            index=pd.to_datetime(["2026-05-01", "2026-05-04"]),
+        )
+
+        cache.set("AAPL", "6mo", "yfinance", df)
+        result = cache.get("AAPL", "6mo", "yfinance")
+
+        assert result is not None
+        assert "Date" in result.columns
+        assert str(result.loc[0, "Date"]).startswith("2026-05-01")
+
+    def test_cache_treats_legacy_payload_without_date_as_miss(self, tmp_path):
+        """Old OHLCV cache rows without dates cannot support dashboard freshness."""
+        cache = make_cache(tmp_path)
+        db_file = tmp_path / "test.db"
+        legacy = pd.DataFrame(
+            {
+                "Open": [100.0],
+                "High": [101.0],
+                "Low": [99.0],
+                "Close": [100.5],
+                "Volume": [1000],
+            }
+        )
+        with sqlite3.connect(str(db_file)) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO ohlcv_cache "
+                "(ticker, period, provider, fetch_date, row_count, payload_json) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                ("005930.KS", "6mo", "yfinance", cache._fetch_key(), len(legacy), legacy.to_json(orient="records")),
+            )
+
+        assert cache.get("005930.KS", "6mo", "yfinance") is None
+
     def test_cache_multiple_tickers_independent(self, tmp_path):
         """Different tickers stored in the same DB do not interfere."""
         cache = make_cache(tmp_path)

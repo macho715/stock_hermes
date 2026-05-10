@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
@@ -82,6 +83,19 @@ def _frame_to_ohlcv_records(frame: Any) -> list[dict[str, Any]]:
     normalized = frame.rename(columns=rename_map)
     records: list[dict[str, Any]] = []
     for idx, row in normalized.iterrows():
+        date_value = None
+        for date_col in ("Date", "date", "Datetime", "datetime"):
+            if date_col in normalized.columns:
+                date_value = row.get(date_col)
+                break
+        date_ts = None
+        if date_value is not None:
+            try:
+                date_ts = pd.Timestamp(date_value)
+            except Exception:
+                date_ts = None
+        if date_ts is None and hasattr(idx, "to_pydatetime"):
+            date_ts = pd.Timestamp(idx)
         close = row.get("close")
         if close is None:
             continue
@@ -91,10 +105,10 @@ def _frame_to_ohlcv_records(frame: Any) -> list[dict[str, Any]]:
             continue
         if close_value != close_value:
             continue
-        timestamp_ms = int(idx.to_pydatetime().timestamp() * 1000) if hasattr(idx, "to_pydatetime") else 0
+        timestamp_ms = int(date_ts.to_pydatetime().timestamp() * 1000) if date_ts is not None else 0
         records.append(
             {
-                "date": idx.strftime("%Y-%m-%d") if hasattr(idx, "strftime") else str(idx)[:10],
+                "date": date_ts.strftime("%Y-%m-%d") if date_ts is not None else str(idx)[:10],
                 "timestamp": timestamp_ms,
                 "open": float(row.get("open", close_value)),
                 "high": float(row.get("high", close_value)),

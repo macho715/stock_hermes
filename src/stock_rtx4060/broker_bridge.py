@@ -478,7 +478,7 @@ if __name__ == "__main__":
     parser.add_argument("--track", type=str, default="S", help="Track: S or L")
     parser.add_argument("--score", type=float, default=78.5, help="Recommendation score")
     parser.add_argument("--output-dir", type=str, default="reports/broker_bridge", help="Output directory")
-    args = parser.parse()
+    args = parser.parse_args()
 
     broker = PaperBroker(starting_cash=100_000.0)
     account = broker.get_account_info()

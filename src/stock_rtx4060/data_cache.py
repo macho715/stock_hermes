@@ -107,6 +107,10 @@ class DataCache:
                 logger.debug("EXPIRED ticker=%s period=%s", ticker, period)
                 return None
             df = pd.DataFrame(json.loads(payload_json))
+            has_date_column = any(str(col).lower() in {"date", "datetime", "timestamp"} for col in df.columns)
+            if isinstance(df.index, pd.RangeIndex) and not has_date_column:
+                logger.debug("LEGACY_MISS ticker=%s period=%s missing date column", ticker, period)
+                return None
             logger.debug("HIT ticker=%s period=%s rows=%d", ticker, period, len(df))
             return df
         except Exception as exc:
@@ -123,15 +127,21 @@ class DataCache:
             return
         try:
             fetch_date = self._fetch_key()
-            payload_json = df.to_json(orient="records", date_format="iso")
+            payload_df = df.copy()
+            if isinstance(payload_df.index, pd.DatetimeIndex) and not any(
+                str(col).lower() in {"date", "datetime", "timestamp"} for col in payload_df.columns
+            ):
+                payload_df = payload_df.reset_index()
+                payload_df = payload_df.rename(columns={payload_df.columns[0]: "Date"})
+            payload_json = payload_df.to_json(orient="records", date_format="iso")
             with sqlite3.connect(str(self.db_path)) as conn:
                 conn.execute(
                     "INSERT OR REPLACE INTO ohlcv_cache "
                     "(ticker, period, provider, fetch_date, row_count, payload_json) "
                     "VALUES (?, ?, ?, ?, ?, ?)",
-                    (ticker, period, provider, fetch_date, len(df), payload_json),
+                    (ticker, period, provider, fetch_date, len(payload_df), payload_json),
                 )
-            logger.debug("SET ticker=%s period=%s rows=%d", ticker, period, len(df))
+            logger.debug("SET ticker=%s period=%s rows=%d", ticker, period, len(payload_df))
         except Exception as exc:
             logger.warning("DataCache.set error: %s", exc)
 

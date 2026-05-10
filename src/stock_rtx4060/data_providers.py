@@ -257,7 +257,7 @@ def _load_pykrx(
         # Strip .KS suffix for PyKRX
         symbol = ticker.replace(".KS", "").replace(".KQ", "")
         start_date = _period_to_start_date_yyyymmdd(period)
-        end_date = pd.Timestamp.utcnow().strftime("%Y%m%d")
+        end_date = pd.Timestamp.now('UTC').strftime("%Y%m%d")
         frame = pykrx_stock.get_market_ohlcv_by_date(start_date, end_date, symbol, freq="d", adjusted=True)
         if frame.empty:
             raise RuntimeError("empty OHLCV frame from PyKRX")
@@ -405,17 +405,17 @@ def _period_to_end_date(period: str) -> str:
     """Convert period string (e.g. '3y', '6m') to end date in YYYYMMDD format."""
     value = str(period or "").strip().lower()
     if len(value) < 2:
-        return pd.Timestamp.utcnow().strftime("%Y%m%d")
+        return pd.Timestamp.now('UTC').strftime("%Y%m%d")
     unit = value[-1]
     try:
         amount = int(value[:-1])
     except ValueError:
-        return pd.Timestamp.utcnow().strftime("%Y%m%d")
+        return pd.Timestamp.now('UTC').strftime("%Y%m%d")
     days_by_unit = {"d": 1, "w": 7, "m": 30, "y": 365}
     days = days_by_unit.get(unit)
     if days is None:
-        return pd.Timestamp.utcnow().strftime("%Y%m%d")
-    end = pd.Timestamp.utcnow() - pd.Timedelta(days=amount * days)
+        return pd.Timestamp.now('UTC').strftime("%Y%m%d")
+    end = pd.Timestamp.now('UTC') - pd.Timedelta(days=amount * days)
     return end.strftime("%Y%m%d")
 
 
@@ -553,7 +553,8 @@ def _make_synthetic_ohlcv(n: int = 760, seed: int = 42, drift: float = 0.00035) 
     low = close * (1.0 - rng.uniform(0.002, 0.020, n))
     open_ = low + rng.uniform(0.0, 1.0, n) * (high - low)
     volume = rng.integers(1_000_000, 7_000_000, n).astype(float)
-    idx = pd.bdate_range(end=pd.Timestamp.utcnow().normalize(), periods=n)
+    end = pd.offsets.BDay().rollback(pd.Timestamp.now("UTC").tz_localize(None).normalize())
+    idx = pd.bdate_range(end=end, periods=n)
     return pd.DataFrame({"Open": open_, "High": high, "Low": low, "Close": close, "Volume": volume}, index=idx)
 
 

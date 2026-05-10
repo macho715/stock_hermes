@@ -261,7 +261,7 @@ def make_synthetic_ohlcv(n: int = 760, seed: int = 42, drift: float = 0.00035) -
     low = close * (1.0 - rng.uniform(0.002, 0.020, n))
     open_ = low + rng.uniform(0.0, 1.0, n) * (high - low)
     volume = rng.integers(1_000_000, 7_000_000, n).astype(float)
-    idx = pd.bdate_range(end=pd.Timestamp.utcnow().normalize(), periods=n)
+    idx = pd.bdate_range(end=pd.Timestamp.now("UTC").normalize(), periods=n)
     return pd.DataFrame({"Open": open_, "High": high, "Low": low, "Close": close, "Volume": volume}, index=idx)
 
 
