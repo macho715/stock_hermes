@@ -8,7 +8,7 @@
 - **Repo**: `macho715/stock_1901` (Linux, `/home/user/stock_1901`)
 - **Active branch**: `claude/upgrade-investment-system-2Mc7x`
 - **Package**: `stock_rtx4060` under `src/stock_rtx4060/`
-- **Python**: 3.12 (CI), 3.11+ local
+- **Python**: 3.12 (CI), 3.14.4 local
 
 ## Development Branch
 
@@ -42,7 +42,7 @@ git push -u origin claude/upgrade-investment-system-2Mc7x
 5. **PurgedKFold groups**: `cv.split(X, groups=_groups)` must always receive the `groups` array — never `cv.split(X)`.
 6. **PIT as_of guard**: When `as_of is not None`, falling through to live providers is forbidden (raises `RuntimeError`).
 7. **numpy bounds**: `numpy>=1.26,<3.0` — shap>=0.50 requires numpy>=2; never re-pin to `<2.0`.
-8. **Test coverage**: `pytest --cov=stock_rtx4060 --cov-fail-under=75` must pass. Target ≥85% total.
+8. **Test coverage**: `pytest --cov=stock_rtx4060 --cov-fail-under=75` must pass. **Current: 85.82%** (1,210 tests). Target ≥85% total.
 
 ## Critical Files
 
@@ -155,3 +155,19 @@ pip check 2>&1 | grep -v "^No broken"
 | New broker | `src/stock_rtx4060/broker/` implementing `BrokerAdapter` ABC |
 | New Prefect flow | `flows/` + cron schedule in deployment config |
 | New dashboard field | `recommendation_engine.py` + `dashboard_bridge.py` + `tests/test_dashboard_bridge.py` |
+
+## Known Issues & Workarounds
+
+| Issue | Workaround |
+|---|---|
+| `logging.basicConfig(force=True)` in `_intercept_stdlib()` installs a global `InterceptHandler` | Tests calling `configure_logging()` or `_intercept_stdlib()` must `monkeypatch.setattr(logging, "basicConfig", lambda **kw: None)` |
+| numpy read-only views from `.corr().values` in Python 3.14 | Always `.copy()` before `np.fill_diagonal()` — see `portfolio/optimizer.py` |
+| `pd.Timestamp.utcnow()` deprecated in Pandas 4.x | Use `pd.Timestamp.now('UTC')` — patched in `data_providers.py`, `recommendation_engine.py` |
+
+## Recent Fix Log
+
+| Date | Commit | Fix |
+|---|---|---|
+| 2026-05-10 | `717f3a0` | Coverage 78.5%→85.82%, CORS wildcard fix, InterceptHandler isolation |
+| 2026-05-10 | `c6f0928` | Deprecated utcnow×6, broker_bridge parse_args typo |
+| 2026-05-10 | `d1f5a9a` | numpy read-only array (Python 3.14 compat) |

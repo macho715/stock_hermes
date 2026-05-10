@@ -156,6 +156,7 @@ Phase B backtest honesty is evidence-only. A Backtest Honesty PASS does not appr
 | Phase B targeted tests | PASS, 7 tests passed for backtest honesty, dashboard bridge compatibility, and synthetic recommendation JSON evidence |
 | Phase B full regression | PASS, 30 tests passed |
 | Phase B smoke | PASS, `reports/phase_b_backtest_honesty_smoke/dashboard_snapshot.json` contains `backtest_honesty_summary.status=AMBER`, candidate `backtest_honesty.status=AMBER`, and `screening_output_only=True` |
+| Overall test coverage (2026-05-10) | **85.82%** — 1,210 tests, 0 failures. explain.py 89%, hpo.py 88%, yf/alpaca/kis ingestors 95–100%. portfolio/optimizer.py Python 3.14 numpy read-only array compat confirmed. |
 
 ---
 
@@ -176,9 +177,9 @@ Report-only stock-candidate screening engine. Walk-forward ensemble ML, 9 risk g
 | Backtester | `src/stock_rtx4060/backtester.py` | Dry-run trade simulation |
 | Risk Rules | `src/stock_rtx4060/risk_rules.py` | GREEN/AMBER/RED/ZERO gate logic, position sizing |
 | Dashboard Bridge | `src/stock_rtx4060/dashboard_bridge.py` | Converts recommendation JSON to dashboard_snapshot.v1 |
-| API Server | `api_server.py` (root) | Flask server (port 5151) for stock-pred-v5 integration |
+| API Server | `api_server.py` (root) | Flask server (port 5151) for stock-pred-v5 integration. > **2026-05-10**: CORS restricted to `localhost:5173/4173/5151` only (was wildcard). |
 | Reports Writer | `src/stock_rtx4060/reports.py` | Markdown + JSON output writers |
-| Data Providers | `src/stock_rtx4060/data_providers.py` | Provider router: synthetic / yfinance / openbb / auto |
+| Data Providers | `src/stock_rtx4060/data_providers.py` | Provider router: synthetic / yfinance / openbb / auto. Data Lake ingestors (yf/alpaca/kis) are production-ready with ≥94% test coverage (2026-05-10). |
 | Audit Log | `src/stock_rtx4060/audit_log.py` | JSONL append-only event log with secret masking |
 | Ops Workflow | `src/stock_rtx4060/ops_workflow.py` | Daily brief + manual approval template + ZERO log |
 | HW Profile | `src/stock_rtx4060/hw_profile.py` | nvidia-smi probe, TensorFlow GPU check, RuntimeStatus |

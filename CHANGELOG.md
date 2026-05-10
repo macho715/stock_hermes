@@ -2,6 +2,28 @@
 
 All notable changes for `stock_rtx4060_unified` are documented here.
 
+## 2026-05-10 — Test Coverage Boost + Bug Fixes
+
+### Added
+- **`tests/`** — 294 new tests across 11 new files; total: 1,210 passed
+  - `test_ml_explain.py`, `test_ml_hpo.py` — ml/explain (0→89%), ml/hpo (0→88%)
+  - `test_data_lake_ingest.py` — yf/alpaca/kis ingestors (0→95-100%)
+  - `test_ml_registry.py`, `test_corp_actions.py` — registry (39→93%), splits_dividends (22→100%)
+  - `test_alert_engine_extra.py`, `test_dashboard_bridge_extra.py` — alert_engine (66→97%), dashboard_bridge (70→100%)
+  - `test_data_lake_store.py`, `test_universe_snapshot.py`, `test_coverage_boost.py`, `test_observability_extra.py`
+
+### Fixed
+- **`src/stock_rtx4060/data_providers.py`** (5 lines) — `pd.Timestamp.utcnow()` → `pd.Timestamp.now('UTC')` (Pandas4Warning)
+- **`src/stock_rtx4060/recommendation_engine.py`** — same deprecated timestamp fix
+- **`src/stock_rtx4060/broker_bridge.py`** — `parser.parse()` → `parser.parse_args()` (CLI crash on direct invocation)
+- **`src/stock_rtx4060/portfolio/optimizer.py`** — `.values.copy()` for numpy read-only arrays (Python 3.14 compat)
+- **`api_server.py`** — CORS `origins=["*"]` → `["http://localhost:5173", "http://localhost:4173", "http://localhost:5151"]`
+- **`tests/test_observability_extra.py`** — test isolation bug: monkeypatch `logging.basicConfig` to prevent `InterceptHandler` from polluting global root logger
+
+### Coverage
+- Total test coverage: **78.5% → 85.82%** (target ≥85% ✅)
+- Tests: 916 → 1,210 (+294)
+
 ## 2026-05-08 — Hedge-Fund Grade System Upgrade (Phase 0–8)
 
 ### Summary
