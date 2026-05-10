@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import builtins
 import json
 import sys
-from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
@@ -15,7 +12,6 @@ import pytest
 import stock_rtx4060.data_providers as dp
 from stock_rtx4060.audit_log import AuditEvent, AuditLogger
 from stock_rtx4060.data_providers import (
-    ProviderResult,
     _elapsed_ms,
     _make_synthetic_ohlcv,
     _normalize_pykrx_columns,
@@ -29,7 +25,6 @@ from stock_rtx4060.data_providers import (
     load_provider_config,
     resolve_provider,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -327,7 +322,7 @@ def test_load_yfinance_success(tmp_path, monkeypatch):
     assert result.source == "yfinance"
     assert not result.frame.empty
     lines = (tmp_path / "audit.jsonl").read_text(encoding="utf-8").splitlines()
-    assert any('"status": "SUCCESS"' in l for l in lines)
+    assert any('"status": "SUCCESS"' in line for line in lines)
 
 
 # ---------------------------------------------------------------------------

@@ -12,13 +12,12 @@ import json
 import logging
 import os
 import time
-from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
-from .position_tracker import PortfolioSnapshot, TrackedPosition, PositionStatus
+from .position_tracker import PortfolioSnapshot, PositionStatus, TrackedPosition
 
 SCHEMA_VERSION = "alert_engine.v1"
 logger = logging.getLogger(__name__)
@@ -53,7 +52,7 @@ class Alert:
 
     def __post_init__(self) -> None:
         if not self.timestamp_utc:
-            self.timestamp_utc = datetime.now(timezone.utc).isoformat()
+            self.timestamp_utc = datetime.now(UTC).isoformat()
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -164,7 +163,7 @@ class AlertConfig:
     alert_enabled: bool = True  # legacy compatibility
 
     @classmethod
-    def from_file(cls, path: str | Path) -> "AlertConfig":
+    def from_file(cls, path: str | Path) -> AlertConfig:
         p = Path(path)
         if not p.exists():
             return cls()
@@ -328,7 +327,6 @@ class AlertEngine:
 
         # 3. EXPOSURE_WARNING
         if snapshot.total_exposure > 0 and snapshot.total_position_value > 0:
-            exposure_ratio = snapshot.total_position_value / snapshot.total_exposure if snapshot.total_exposure > 0 else 0
             # total_exposure == total_position_value in this context
             # We check against max_exposure_pct with total_capital assumption of 100k
             assumed_capital = 100_000.0
@@ -486,22 +484,22 @@ if __name__ == "__main__":
     engine = AlertEngine(config)
 
     if args.portfolio_json:
-        import tempfile
-        from .position_tracker import load_positions_from_recommendation_json, refresh_positions, PortfolioSnapshot
+        from .position_tracker import PortfolioSnapshot, load_positions_from_recommendation_json, refresh_positions
 
         positions = load_positions_from_recommendation_json(args.portfolio_json)
         positions = refresh_positions(positions)
         snapshot = PortfolioSnapshot.from_positions(positions)
     else:
-        from datetime import datetime, timezone
-        from .position_tracker import TrackedPosition, PortfolioSnapshot
+        from datetime import datetime
+
+        from .position_tracker import PortfolioSnapshot, TrackedPosition
 
         positions = [
             TrackedPosition(ticker="AAPL", track="S", entry_date="2026-05-01", entry_price=185.0, quantity=10, stop=177.0, tp1=194.0, tp2=203.5),
             TrackedPosition(ticker="MSFT", track="L", entry_date="2026-05-01", entry_price=415.0, quantity=5, stop=375.0, tp1=450.0, tp2=498.0),
         ]
         for p in positions:
-            p.mark_open(current_price=p.entry_price, timestamp_utc=datetime.now(timezone.utc).isoformat())
+            p.mark_open(current_price=p.entry_price, timestamp_utc=datetime.now(UTC).isoformat())
         snapshot = PortfolioSnapshot.from_positions(positions)
 
     if args.watch:
@@ -514,7 +512,7 @@ if __name__ == "__main__":
                 positions = refresh_positions(positions)
                 snapshot = PortfolioSnapshot.from_positions(positions)
             emitted = engine.check_and_alert(snapshot, model_auc=args.model_auc, oof_coverage=args.oof_coverage)
-            print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}Z] Checked — {len(emitted)} alerts emitted")
+            print(f"[{datetime.now(UTC).strftime('%H:%M:%S')}Z] Checked — {len(emitted)} alerts emitted")
             time.sleep(args.interval)
     else:
         emitted = engine.check_and_alert(snapshot, model_auc=args.model_auc, oof_coverage=args.oof_coverage)

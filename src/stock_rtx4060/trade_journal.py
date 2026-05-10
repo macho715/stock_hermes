@@ -8,9 +8,8 @@ Stage 4 of 5-stage investment system upgrade.
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import asdict, dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -88,15 +87,15 @@ class JournalEntry:
         if not self.id:
             self.id = _generate_id()
         if not self.created_at:
-            self.created_at = datetime.now(timezone.utc).isoformat()
-        self.updated_at = datetime.now(timezone.utc).isoformat()
+            self.created_at = datetime.now(UTC).isoformat()
+        self.updated_at = datetime.now(UTC).isoformat()
 
     def open_position(self, entry_price: float, quantity: int, entry_date: str | None = None) -> None:
         self.entry_price = entry_price
         self.quantity = quantity
         self.entry_date = entry_date or date.today().isoformat()
         self.state = EntryState.OPEN.value
-        self.updated_at = datetime.now(timezone.utc).isoformat()
+        self.updated_at = datetime.now(UTC).isoformat()
 
     def close_position(self, close_price: float, outcome: str, close_date: str | None = None, post_trade_notes: str = "") -> None:
         self.close_price = close_price
@@ -104,7 +103,7 @@ class JournalEntry:
         self.close_date = close_date or date.today().isoformat()
         self.state = EntryState.CLOSED.value
         self.post_trade_notes = post_trade_notes
-        self.updated_at = datetime.now(timezone.utc).isoformat()
+        self.updated_at = datetime.now(UTC).isoformat()
 
         if self.entry_price > 0 and self.quantity > 0:
             pnl = (close_price - self.entry_price) * self.quantity
@@ -115,7 +114,7 @@ class JournalEntry:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "JournalEntry":
+    def from_dict(cls, data: dict) -> JournalEntry:
         # Strip schema_version if present
         data = {k: v for k, v in data.items() if k != "schema_version"}
         return cls(**data)
@@ -180,7 +179,7 @@ class TradeJournal:
                 for k, v in updates.items():
                     if hasattr(e, k):
                         setattr(e, k, v)
-                e.updated_at = datetime.now(timezone.utc).isoformat()
+                e.updated_at = datetime.now(UTC).isoformat()
                 entries[i] = e
                 self._save_all(entries)
                 return e
@@ -255,7 +254,7 @@ class TradeJournal:
         """일지 리포트 생성."""
         out_dir = Path(output_dir) if output_dir else self.output_dir / "reports"
         out_dir.mkdir(parents=True, exist_ok=True)
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         json_path = out_dir / f"journal_report_{timestamp}.json"
         md_path = out_dir / f"journal_report_{timestamp}.md"
 
@@ -266,7 +265,7 @@ class TradeJournal:
 
         report = {
             "schema_version": SCHEMA_VERSION,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "statistics": stats,
             "recent_entries": [e.to_dict() for e in entries[-20:]],
             "open_positions": [e.to_dict() for e in open_entries],
@@ -274,12 +273,12 @@ class TradeJournal:
         json_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
 
         md_lines = [
-            f"# Trade Journal Report — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}Z",
+            f"# Trade Journal Report — {datetime.now(UTC).strftime('%Y-%m-%d %H:%M')}Z",
             "",
             "## Statistics",
             "",
-            f"| Metric | Value |",
-            f"|--------|-------|",
+            "| Metric | Value |",
+            "|--------|-------|",
             f"| Total Entries | {stats['total_entries']} |",
             f"| Open Positions | {stats['open_positions']} |",
             f"| Closed Positions | {stats['closed_positions']} |",
@@ -297,8 +296,8 @@ class TradeJournal:
 
         md_lines.extend(["", "### Open Positions", ""])
         if open_entries:
-            md_lines.append(f"| Ticker | Track | Entry Date | Entry | Qty | Stop | TP2 |")
-            md_lines.append(f"|--------|-------|------------|-------|-----|------|-----|")
+            md_lines.append("| Ticker | Track | Entry Date | Entry | Qty | Stop | TP2 |")
+            md_lines.append("|--------|-------|------------|-------|-----|------|-----|")
             for e in open_entries:
                 md_lines.append(f"| {e.ticker} | {e.track} | {e.entry_date} | ${e.entry_price:.2f} | {e.quantity} | ${e.stop_price:.2f} | ${e.tp2_price:.2f} |")
         else:
@@ -307,8 +306,8 @@ class TradeJournal:
         md_lines.extend(["", "### Recent Closed (Last 10)", ""])
         if closed:
             recent = sorted(closed, key=lambda x: x.close_date or "")[-10:]
-            md_lines.append(f"| Ticker | Close Date | Entry | Close | Outcome | P&L |")
-            md_lines.append(f"|--------|------------|-------|-------|---------|-----|")
+            md_lines.append("| Ticker | Close Date | Entry | Close | Outcome | P&L |")
+            md_lines.append("|--------|------------|-------|-------|---------|-----|")
             for e in recent:
                 pnl_str = f"${e.realized_pnl_abs:+,.2f}" if e.realized_pnl_abs is not None else "—"
                 md_lines.append(f"| {e.ticker} | {e.close_date} | ${e.entry_price:.2f} | ${e.close_price:.2f} | {e.outcome} | {pnl_str} |")
@@ -385,7 +384,7 @@ if __name__ == "__main__":
     elif args.report:
         json_path, md_path = journal.generate_report()
         stats = journal.statistics()
-        print(f"Journal Report:")
+        print("Journal Report:")
         print(f"  Total: {stats['total_entries']} entries, {stats['open_positions']} open, {stats['closed_positions']} closed")
         print(f"  Win Rate: {stats['win_rate']:.1%} | Total P&L: ${stats['total_realized_pnl']:+,.2f}")
         print(f"\n  Reports: {json_path}")
@@ -393,7 +392,7 @@ if __name__ == "__main__":
 
     else:
         stats = journal.statistics()
-        print(f"Trade Journal Summary:")
+        print("Trade Journal Summary:")
         print(f"  Total: {stats['total_entries']} | Open: {stats['open_positions']} | Closed: {stats['closed_positions']}")
         print(f"  Win Rate: {stats['win_rate']:.1%} | P&L: ${stats['total_realized_pnl']:+,.2f}")
-        print(f"\nOptions: --add, --close, --list, --report")
+        print("\nOptions: --add, --close, --list, --report")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -49,7 +49,7 @@ class AuditEvent:
     error_type: str | None = None
     duration_ms: float | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
-    timestamp_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat(timespec="seconds"))
+    timestamp_utc: str = field(default_factory=lambda: datetime.now(UTC).isoformat(timespec="seconds"))
 
     def to_dict(self) -> dict[str, Any]:
         return mask_secret(asdict(self))
@@ -63,7 +63,7 @@ class AuditLogger:
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     @classmethod
-    def for_output_dir(cls, output_dir: str | Path, filename: str = "audit_log.jsonl") -> "AuditLogger":
+    def for_output_dir(cls, output_dir: str | Path, filename: str = "audit_log.jsonl") -> AuditLogger:
         return cls(Path(output_dir) / filename)
 
     def write(self, event: AuditEvent) -> Path:

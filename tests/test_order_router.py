@@ -5,14 +5,9 @@ Uses unittest.mock — no live broker connections.
 
 from __future__ import annotations
 
-import os
-import tempfile
-import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -96,7 +91,7 @@ class TestOrderRouterSubmitOrder:
 
     def test_submit_krx_order(self):
         from stock_rtx4060.broker.order_router import OrderRouter
-        from stock_rtx4060.broker_bridge import OrderStatus, OrderResult
+        from stock_rtx4060.broker_bridge import OrderResult, OrderStatus
 
         router = OrderRouter(paper_fallback=True)
         mock_kis = _make_mock_adapter("KIS_MOCK")
@@ -134,7 +129,7 @@ class TestKillSwitch:
         KILLED_FILE.unlink(missing_ok=True)
 
     def test_kill_switch_blocks_orders(self):
-        from stock_rtx4060.broker.order_router import OrderRouter, KillSwitchError
+        from stock_rtx4060.broker.order_router import KillSwitchError, OrderRouter
 
         router = OrderRouter(paper_fallback=True)
         router._alpaca = _make_mock_adapter("ALPACA_PAPER")
@@ -145,7 +140,7 @@ class TestKillSwitch:
             router.submit_order("AAPL", 10, "BUY")
 
     def test_kill_switch_writes_file(self):
-        from stock_rtx4060.broker.order_router import OrderRouter, KILLED_FILE
+        from stock_rtx4060.broker.order_router import KILLED_FILE, OrderRouter
 
         router = OrderRouter(paper_fallback=True)
         router.kill_switch()
@@ -155,7 +150,7 @@ class TestKillSwitch:
         assert "KILLED" in content.upper()
 
     def test_killed_file_blocks_orders(self, tmp_path):
-        from stock_rtx4060.broker.order_router import OrderRouter, KillSwitchError, KILLED_FILE
+        from stock_rtx4060.broker.order_router import KILLED_FILE, KillSwitchError, OrderRouter
 
         # Write KILLED file manually
         KILLED_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -175,7 +170,7 @@ class TestKillSwitch:
         router._check_kill_switch()
 
     def test_reset_kill_switch(self):
-        from stock_rtx4060.broker.order_router import OrderRouter, KillSwitchError, KILLED_FILE
+        from stock_rtx4060.broker.order_router import KILLED_FILE, KillSwitchError, OrderRouter
 
         router = OrderRouter(paper_fallback=True)
         router._alpaca = _make_mock_adapter("ALPACA_PAPER")
@@ -258,7 +253,7 @@ class TestTWAPExecutor:
         assert sum(submitted_qtys) == 11
 
     def test_twap_kill_switch_propagates(self):
-        from stock_rtx4060.broker.order_router import TWAPExecutor, KillSwitchError
+        from stock_rtx4060.broker.order_router import KillSwitchError, TWAPExecutor
 
         router = self._make_router()
         router.kill_switch()
@@ -322,7 +317,7 @@ class TestVWAPExecutor:
         assert sum(submitted_qtys) == 100
 
     def test_vwap_kill_switch_propagates(self):
-        from stock_rtx4060.broker.order_router import VWAPExecutor, KillSwitchError
+        from stock_rtx4060.broker.order_router import KillSwitchError, VWAPExecutor
 
         router = self._make_router()
         router.kill_switch()

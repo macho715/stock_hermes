@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -280,7 +280,7 @@ def _load_pykrx(
                     "ticker_type": "KRX",
                     "data_freshness_minutes": 0,
                     "market_close_adj": True,
-                    "source_timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "source_timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
                 },
                 duration_ms=_elapsed_ms(started),
             ),
@@ -296,7 +296,7 @@ def _load_pykrx(
                 "ticker_type": "KRX",
                 "data_freshness_minutes": 0,
                 "market_close_adj": True,
-                "source_timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "source_timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
             },
         )
     except Exception as exc:
@@ -361,7 +361,7 @@ def _load_fdr(
                     "ticker_type": "KRX" if ticker.endswith((".KS", ".KQ")) else "UNKNOWN",
                     "data_freshness_minutes": 0,
                     "market_close_adj": False,
-                    "source_timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "source_timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
                 },
                 duration_ms=_elapsed_ms(started),
             ),
@@ -377,7 +377,7 @@ def _load_fdr(
                 "ticker_type": "KRX" if ticker.endswith((".KS", ".KQ")) else "UNKNOWN",
                 "data_freshness_minutes": 0,
                 "market_close_adj": False,
-                "source_timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "source_timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
             },
             fallback_reason=fallback_reason,
         )
@@ -422,7 +422,7 @@ def _period_to_end_date(period: str) -> str:
 def _period_to_start_date_yyyymmdd(period: str) -> str:
     start_date = _period_to_start_date(period)
     if not start_date:
-        return (datetime.now(timezone.utc).date() - timedelta(days=365 * 3)).strftime("%Y%m%d")
+        return (datetime.now(UTC).date() - timedelta(days=365 * 3)).strftime("%Y%m%d")
     return start_date.replace("-", "")
 
 
@@ -531,7 +531,7 @@ def _period_to_start_date(period: str) -> str | None:
     days = days_by_unit.get(unit)
     if days is None:
         return None
-    start = datetime.now(timezone.utc).date() - timedelta(days=amount * days)
+    start = datetime.now(UTC).date() - timedelta(days=amount * days)
     return start.isoformat()
 
 

@@ -6,12 +6,10 @@ All tests use unittest.mock — no live Alpaca API calls.
 from __future__ import annotations
 
 import sys
-import os
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers to build mock Alpaca objects without importing alpaca-py
@@ -71,8 +69,8 @@ class TestAlpacaAdapterNoCreds:
 
         mocks = _make_alpaca_mocks()
         with _patch_alpaca(mocks):
-            from stock_rtx4060.broker.alpaca_adapter import AlpacaAdapter
             from stock_rtx4060.broker import BrokerNotConfiguredError
+            from stock_rtx4060.broker.alpaca_adapter import AlpacaAdapter
 
             with pytest.raises(BrokerNotConfiguredError):
                 AlpacaAdapter(api_key="", secret_key="")
@@ -152,7 +150,7 @@ class TestAlpacaAdapterSubmitOrder:
 
         with _patch_alpaca(mocks):
             from stock_rtx4060.broker.alpaca_adapter import AlpacaAdapter
-            from stock_rtx4060.broker_bridge import OrderRequest, OrderSide, OrderType, OrderStatus
+            from stock_rtx4060.broker_bridge import OrderRequest, OrderSide, OrderStatus, OrderType
 
             adapter = AlpacaAdapter(api_key="KEY", secret_key="SECRET", paper=True)
             order = OrderRequest(
@@ -255,8 +253,8 @@ class TestAlpacaSmokeTest:
 
     def test_smoke_exits_zero(self):
         """Importing and running the smoke test logic in-process."""
-        from stock_rtx4060.broker.alpaca_adapter import _SIDE_MAP, _ORDER_TYPE_MAP, _map_alpaca_status
-        from stock_rtx4060.broker_bridge import OrderSide, OrderType, OrderStatus
+        from stock_rtx4060.broker.alpaca_adapter import _ORDER_TYPE_MAP, _SIDE_MAP, _map_alpaca_status
+        from stock_rtx4060.broker_bridge import OrderSide, OrderStatus, OrderType
 
         # Enum mappings should be correct
         assert _SIDE_MAP[OrderSide.BUY] == "buy"

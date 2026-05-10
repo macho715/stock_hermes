@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import numpy as np
+import pandas as pd
 
-from .position_tracker import PortfolioSnapshot, TrackedPosition, PositionStatus
+from .position_tracker import PortfolioSnapshot, PositionStatus, TrackedPosition
 
 SCHEMA_VERSION = "portfolio_analytics.v1"
 
@@ -71,10 +71,10 @@ class PortfolioAnalytics:
 
     def __post_init__(self) -> None:
         if not self.generated_at:
-            self.generated_at = datetime.now(timezone.utc).isoformat()
+            self.generated_at = datetime.now(UTC).isoformat()
 
     @classmethod
-    def from_snapshot(cls, snapshot: PortfolioSnapshot, capital: float = 100_000.0) -> "PortfolioAnalytics":
+    def from_snapshot(cls, snapshot: PortfolioSnapshot, capital: float = 100_000.0) -> PortfolioAnalytics:
         analytics = cls(capital=capital)
         analytics.total_position_value = snapshot.total_position_value
 
@@ -254,10 +254,10 @@ def analyze_portfolio(snapshot: PortfolioSnapshot, capital: float = 100_000.0) -
 
 
 def factor_exposure(
-    returns: "pd.Series",  # type: ignore[name-defined]  # forward-ref keeps pandas import lazy
-    factor_returns: "pd.DataFrame",  # type: ignore[name-defined]
+    returns: pd.Series,
+    factor_returns: pd.DataFrame,
     window: int = 60,
-) -> "pd.DataFrame":  # type: ignore[name-defined]
+) -> pd.DataFrame:
     """Thin wrapper around :func:`backtest.risk_attribution.factor_exposure_regression`.
 
     Lives on :mod:`portfolio_analytics` so callers can pull factor exposures
@@ -273,7 +273,7 @@ def save_analytics_report(analytics: PortfolioAnalytics, output_dir: str | Path)
     """분석 결과를 JSON + Markdown으로 저장."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     json_path = output_dir / f"portfolio_analytics_{timestamp}.json"
     md_path = output_dir / f"portfolio_analytics_{timestamp}.md"
 
@@ -285,8 +285,8 @@ def save_analytics_report(analytics: PortfolioAnalytics, output_dir: str | Path)
         "",
         "## Exposure",
         "",
-        f"| Metric | Value | Limit | Status |",
-        f"|--------|-------|-------|--------|",
+        "| Metric | Value | Limit | Status |",
+        "|--------|-------|-------|--------|",
         f"| Total Exposure | {a.total_exposure_pct:.1%} | {a.max_total_exposure_pct:.1%} | {'✅' if a.total_exposure_pct <= a.max_total_exposure_pct else '🚨'} |",
         f"| Track-S Exposure | {a.track_s_exposure_pct:.1%} | {a.max_track_s_exposure_pct:.1%} | {'✅' if a.track_s_exposure_pct <= a.max_track_s_exposure_pct else '🚨'} |",
         f"| Track-L Exposure | {a.track_l_exposure_pct:.1%} | {a.max_track_l_exposure_pct:.1%} | {'✅' if a.track_l_exposure_pct <= a.max_track_l_exposure_pct else '🚨'} |",
@@ -295,8 +295,8 @@ def save_analytics_report(analytics: PortfolioAnalytics, output_dir: str | Path)
         "",
         "## Risk",
         "",
-        f"| Metric | Value |",
-        f"|--------|-------|",
+        "| Metric | Value |",
+        "|--------|-------|",
         f"| Portfolio Beta (vs SPY) | {a.beta_to_spy:.2f} |",
         f"| 1-Day 95% VaR | {a.var_1d_95_pct:.2%} |",
         f"| Current Drawdown | {a.current_drawdown_pct:.2%} |",
@@ -315,7 +315,7 @@ def save_analytics_report(analytics: PortfolioAnalytics, output_dir: str | Path)
     if a.concentrated_sector:
         md_lines.append(f"\n⚠️ **Sector Concentration Alert:** {a.concentrated_sector} = {a.concentration_risk_pct:.1%} (max {a.max_sector_concentration_pct:.1%})")
 
-    md_lines.extend(["", "## P&L", "", f"| Metric | Value |", f"|--------|-------|", f"| Unrealized P&L | {a.unrealized_pnl_abs:+,.2f} |", f"| Realized P&L | {a.realized_pnl_abs:+,.2f} |"])
+    md_lines.extend(["", "## P&L", "", "| Metric | Value |", "|--------|-------|", f"| Unrealized P&L | {a.unrealized_pnl_abs:+,.2f} |", f"| Realized P&L | {a.realized_pnl_abs:+,.2f} |"])
 
     if a.rebalance_needed:
         md_lines.extend(["", "## ⚠️ Rebalance Required", ""])
@@ -330,9 +330,9 @@ def save_analytics_report(analytics: PortfolioAnalytics, output_dir: str | Path)
 
 if __name__ == "__main__":
     import argparse
-    import tempfile
-    from datetime import datetime, timezone
-    from stock_rtx4060.position_tracker import TrackedPosition, PortfolioSnapshot, save_portfolio_snapshot
+    from datetime import datetime
+
+    from stock_rtx4060.position_tracker import PortfolioSnapshot, TrackedPosition
 
     parser = argparse.ArgumentParser(description="Portfolio Analytics — Stage 3")
     parser.add_argument("--portfolio-json", type=str, default=None, help="Load from portfolio snapshot JSON")
@@ -353,7 +353,7 @@ if __name__ == "__main__":
         ]
         for i, p in enumerate(positions):
             current = p.entry_price * (1 + (i + 1) * 0.01)  # slight gain
-            p.mark_open(current_price=current, timestamp_utc=datetime.now(timezone.utc).isoformat())
+            p.mark_open(current_price=current, timestamp_utc=datetime.now(UTC).isoformat())
         snapshot = PortfolioSnapshot.from_positions(positions)
 
     analytics = analyze_portfolio(snapshot, capital=args.capital)
@@ -364,6 +364,6 @@ if __name__ == "__main__":
         for s in analytics.rebalance_suggestions:
             print(f"  ⚠️ {s}")
     else:
-        print(f"  ✅ Rebalance OK")
+        print("  ✅ Rebalance OK")
     print(f"\nReports: {json_path}")
     print(f"         {md_path}")

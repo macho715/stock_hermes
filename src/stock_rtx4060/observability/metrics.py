@@ -4,7 +4,8 @@ from __future__ import annotations
 from typing import Any
 
 try:
-    from prometheus_client import Counter, Histogram, start_http_server as _start_http_server
+    from prometheus_client import Counter, Histogram
+    from prometheus_client import start_http_server as _start_http_server
 
     _HAS_PROM = True
 except ImportError:  # pragma: no cover
@@ -14,7 +15,7 @@ except ImportError:  # pragma: no cover
 
 
 class _NoOp:
-    def labels(self, *_: Any, **__: Any) -> "_NoOp":
+    def labels(self, *_: Any, **__: Any) -> _NoOp:
         return self
 
     def observe(self, *_: Any, **__: Any) -> None:
@@ -23,10 +24,10 @@ class _NoOp:
     def inc(self, *_: Any, **__: Any) -> None:
         pass
 
-    def time(self) -> "_NoOp":  # context manager noop
+    def time(self) -> _NoOp:  # context manager noop
         return self
 
-    def __enter__(self) -> "_NoOp":
+    def __enter__(self) -> _NoOp:
         return self
 
     def __exit__(self, *_: Any) -> None:

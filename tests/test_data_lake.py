@@ -1,7 +1,8 @@
 """Phase 1 PIT data lake tests. Use temp dirs only — no network."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+import os
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -44,7 +45,7 @@ def test_pit_as_of_excludes_future_writes(tmp_path: Path, synthetic_ohlcv: pd.Da
 
     store = DuckDBStore(root=tmp_path)
     store.write("MSFT", synthetic_ohlcv, source="test")
-    after_first = datetime.now(timezone.utc) + timedelta(seconds=1)
+    after_first = datetime.now(UTC) + timedelta(seconds=1)
     df_full = store.read("MSFT", as_of=after_first + timedelta(days=1))
     assert len(df_full) == 20
     df_past = store.read("MSFT", as_of=after_first - timedelta(seconds=10))
@@ -100,6 +101,7 @@ def test_universe_snapshot_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert len(files) == 1
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Windows chmod does not expose POSIX owner-only mode reliably")
 def test_kis_credentials_require_chmod_600(tmp_path: Path) -> None:
     from stock_rtx4060.data_lake.ingest.kis_ingestor import _load_credentials
 

@@ -2,19 +2,14 @@
 
 from __future__ import annotations
 
-import json
-import tempfile
-from datetime import datetime, timezone
-
 import pytest
 
 from stock_rtx4060.trade_journal import (
-    EntryReason,
+    SCHEMA_VERSION,
     EntryState,
     JournalEntry,
     Outcome,
     TradeJournal,
-    SCHEMA_VERSION,
 )
 
 

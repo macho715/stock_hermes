@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from typing import Any, Iterator, Mapping
+from typing import Any
 
 try:
     import mlflow  # type: ignore[import-not-found]

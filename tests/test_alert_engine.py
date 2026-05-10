@@ -2,32 +2,19 @@
 
 from __future__ import annotations
 
-import json
-import tempfile
-from datetime import datetime, timezone
-from pathlib import Path
-
-import pytest
-
 from stock_rtx4060.alert_engine import (
+    ALERT_TYPE_MODEL_QUALITY_WARNING,
+    ALERT_TYPE_POSITION_CLOSED,
+    ALERT_TYPE_STOP_APPROACHING,
+    ALERT_TYPE_TP_APPROACHING,
     Alert,
     AlertConfig,
     AlertEngine,
     AlertPriority,
     AlertThresholds,
     ConsoleChannel,
-    LarkWebhookChannel,
-    TelegramChannel,
-    ALERT_TYPE_STOP_APPROACHING,
-    ALERT_TYPE_TP_APPROACHING,
-    ALERT_TYPE_POSITION_CLOSED,
-    ALERT_TYPE_EXPOSURE_WARNING,
-    ALERT_TYPE_DRAWDOWN_ALERT,
-    ALERT_TYPE_MODEL_QUALITY_WARNING,
-    SCHEMA_VERSION,
 )
 from stock_rtx4060.position_tracker import (
-    PositionStatus,
     PortfolioSnapshot,
     TrackedPosition,
 )

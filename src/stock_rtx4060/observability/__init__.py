@@ -1,10 +1,10 @@
 """Observability package: structured logs, metrics, MLflow tracking."""
-from .log import get_logger, configure_logging
+from .log import configure_logging, get_logger
 from .metrics import (
-    recommendation_latency_ms,
-    provider_fetch_ms,
-    gate_count,
     advisor_calls_total,
+    gate_count,
+    provider_fetch_ms,
+    recommendation_latency_ms,
     start_http_server,
 )
 from .mlflow_client import MLflowSession, log_metrics, log_params

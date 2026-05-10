@@ -19,8 +19,6 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
-from datetime import datetime, timezone
 from typing import Any
 
 from ..broker_bridge import (
@@ -190,7 +188,7 @@ class IBKRAdapter(BrokerAdapter):
     def submit_order(self, order: OrderRequest) -> OrderResult:
         self._require_connected()
         try:
-            from ib_insync import Stock, Order
+            from ib_insync import Order, Stock
 
             contract = Stock(order.ticker, "SMART", "USD")
             self._ib.qualifyContracts(contract)

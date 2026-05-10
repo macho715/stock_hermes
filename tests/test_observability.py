@@ -2,10 +2,7 @@
 from __future__ import annotations
 
 import os
-import tempfile
 from pathlib import Path
-
-import pytest
 
 
 def test_get_logger_returns_callable() -> None:
@@ -39,6 +36,6 @@ def test_mlflow_session_no_op_when_unavailable() -> None:
     from stock_rtx4060.observability import MLflowSession, log_metrics, log_params
 
     os.environ.pop("MLFLOW_TRACKING_URI", None)
-    with MLflowSession("test_experiment") as run:
+    with MLflowSession("test_experiment"):
         log_params({"a": 1})
         log_metrics({"loss": 0.5})

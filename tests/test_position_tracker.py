@@ -3,24 +3,19 @@
 from __future__ import annotations
 
 import json
-import tempfile
-from datetime import date, datetime, timezone
-from pathlib import Path
 
 import pytest
 
 from stock_rtx4060.position_tracker import (
-    PositionStatus,
+    SCHEMA_VERSION,
     CloseReason,
+    PortfolioSnapshot,
+    PositionStatus,
     PriceQuote,
     TrackedPosition,
-    PortfolioSnapshot,
-    fetch_quote,
-    fetch_quotes_bulk,
     load_positions_from_recommendation_json,
-    save_portfolio_snapshot,
     refresh_positions,
-    SCHEMA_VERSION,
+    save_portfolio_snapshot,
 )
 
 

@@ -30,7 +30,7 @@ _PRIORITY_COLOR = {
 }
 
 
-def _build_payload(alert: "Alert") -> dict[str, Any]:
+def _build_payload(alert: Alert) -> dict[str, Any]:
     """Construct the Slack webhook payload (Incoming Webhooks spec).
 
     See https://api.slack.com/messaging/webhooks for the schema. We include the
@@ -91,7 +91,7 @@ class SlackWebhookChannel:
         self.enabled = enabled
         self.timeout = timeout
 
-    def send(self, alert: "Alert") -> bool:
+    def send(self, alert: Alert) -> bool:
         if not self.enabled or not self.webhook_url:
             return False
         payload = _build_payload(alert)

@@ -6,17 +6,12 @@ Tests diff detection, pause-on-large-diff, background thread.
 from __future__ import annotations
 
 import threading
-import time
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from stock_rtx4060.broker.reconciliation import (
     Reconciler,
     ReconciliationDiff,
-    LARGE_DIFF_THRESHOLD_PCT,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

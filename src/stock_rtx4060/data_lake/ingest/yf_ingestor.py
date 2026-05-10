@@ -1,11 +1,6 @@
 """yfinance → PIT lake ingestor. Reuses existing data_providers loader."""
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any
-
-import pandas as pd
-
 from ..audit_provenance import log_pit_write
 from ..store import PITStore, get_default_store
 

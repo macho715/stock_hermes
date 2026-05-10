@@ -16,8 +16,8 @@ import pytest
 from stock_rtx4060.advisors.claude_client import (
     CACHE_READ_MULTIPLIER,
     CACHE_WRITE_MULTIPLIER,
-    ClaudeClient,
     DEFAULT_MODEL,
+    ClaudeClient,
     compute_cost_usd,
 )
 
@@ -45,7 +45,7 @@ class _Message:
 
 
 class _SyncMessages:
-    def __init__(self, parent: "_FakeClient") -> None:
+    def __init__(self, parent: _FakeClient) -> None:
         self.parent = parent
 
     def create(self, **kwargs: Any) -> _Message:

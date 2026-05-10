@@ -6,9 +6,7 @@ All 6 check types + ComplianceError messages.
 from __future__ import annotations
 
 import json
-import os
 from datetime import date, timedelta
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -16,15 +14,14 @@ import pytest
 from stock_rtx4060.broker.compliance import (
     ComplianceConfig,
     ComplianceError,
-    check_order,
-    _check_single_position,
-    _check_sector_exposure,
-    _check_no_leverage,
     _check_krx_price_limit,
+    _check_no_leverage,
     _check_restricted_tickers,
+    _check_sector_exposure,
+    _check_single_position,
     _check_wash_sale,
+    check_order,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

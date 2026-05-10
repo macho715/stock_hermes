@@ -388,8 +388,7 @@ def cmd_paper_run(args: argparse.Namespace) -> int:
             # Route accepted signals through the live OrderRouter instead of
             # silently consuming them in the paper engine.
             try:
-                from .broker.order_router import OrderRouter, KillSwitchError
-                from .broker_bridge import build_order_from_recommendation, OrderSide
+                from .broker.order_router import KillSwitchError, OrderRouter
 
                 router = OrderRouter(paper_fallback=True)
                 accepted = [p for p in status.get("positions", [])]

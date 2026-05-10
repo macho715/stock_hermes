@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 import sys
-import types
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
@@ -239,8 +237,6 @@ def test_direction_model_fit_xgb_fallback_to_rf(feature_df, monkeypatch):
     """xgb fails, rf succeeds → kind_used contains rf-fallback."""
     from stock_rtx4060.ensemble_model import DirectionModel, ModelConfig
 
-    call_count = {"n": 0}
-
     def _fail_xgb(*a, **kw):
         raise RuntimeError("no xgb")
 
@@ -280,7 +276,7 @@ def test_direction_model_predict_proba_rf(feature_df):
 
     cfg = ModelConfig(model_kind="rf")
     dm = DirectionModel(cfg)
-    from stock_rtx4060.feature_engine import feature_columns, TARGET_COLUMNS
+    from stock_rtx4060.feature_engine import TARGET_COLUMNS, feature_columns
     target_cols = list(TARGET_COLUMNS)
     fc = [c for c in feature_columns(feature_df) if c not in target_cols]
     X = feature_df.loc[:, fc].iloc[:120]
@@ -302,7 +298,7 @@ def test_direction_model_predict_proba_unfitted_raises():
 
 def test_direction_model_feature_importance_rf(feature_df):
     from stock_rtx4060.ensemble_model import DirectionModel, ModelConfig
-    from stock_rtx4060.feature_engine import feature_columns, TARGET_COLUMNS
+    from stock_rtx4060.feature_engine import TARGET_COLUMNS, feature_columns
 
     cfg = ModelConfig(model_kind="rf")
     dm = DirectionModel(cfg)
@@ -319,7 +315,7 @@ def test_direction_model_feature_importance_rf(feature_df):
 
 def test_direction_model_feature_importance_logistic(feature_df):
     from stock_rtx4060.ensemble_model import DirectionModel, ModelConfig
-    from stock_rtx4060.feature_engine import feature_columns, TARGET_COLUMNS
+    from stock_rtx4060.feature_engine import TARGET_COLUMNS, feature_columns
 
     cfg = ModelConfig(model_kind="logistic")
     dm = DirectionModel(cfg)
@@ -455,7 +451,6 @@ def test_ensemble_fit_too_few_rows():
 
 def test_ensemble_fit_single_class_raises():
     from stock_rtx4060.ensemble_model import EnsemblePredictor, ModelConfig
-    from stock_rtx4060.feature_engine import TARGET_COLUMNS, feature_columns
 
     feat = _build_features()
     feat = feat.copy()
@@ -489,9 +484,6 @@ def test_ensemble_predict_not_trained_raises():
 
 
 def test_ensemble_predict_returns_dict(fitted_ensemble, feature_df):
-    from stock_rtx4060.feature_engine import feature_columns, TARGET_COLUMNS
-
-    target_cols = list(TARGET_COLUMNS)
     fc = fitted_ensemble.feature_cols
     X = feature_df.loc[:, fc].iloc[-30:]
     result = fitted_ensemble.predict(X)
@@ -573,7 +565,6 @@ def _make_fitted_ep_with_prob(feature_df, fixed_prob: float):
     ep = EnsemblePredictor(cfg)
     ep.fit(feature_df)
     # Monkey-patch DirectionModel.predict_proba to return fixed probability
-    n = len(feature_df)
     ep.main_model.predict_proba = lambda X: np.full(len(X), fixed_prob)
     ep.lstm = None
     return ep

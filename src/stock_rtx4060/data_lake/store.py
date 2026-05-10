@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -77,7 +77,7 @@ class DuckDBStore(PITStore):
         if not isinstance(frame.index, pd.DatetimeIndex):
             raise ValueError("frame.index must be a DatetimeIndex")
         df = frame.copy()
-        ingested_at = datetime.now(timezone.utc)
+        ingested_at = datetime.now(UTC)
         df["_ingested_at"] = ingested_at
         df["_source"] = source
         df["_ticker"] = ticker
@@ -101,10 +101,8 @@ class DuckDBStore(PITStore):
         end: str | datetime | None = None,
         as_of: str | datetime | None = None,
     ) -> pd.DataFrame:
-        pattern = self._glob(ticker)
-        files = list(Path().glob(pattern.replace(str(self.root) + "/", "").lstrip("/"))) or list(
-            self.root.glob(f"symbol={ticker}/**/*.parquet")
-        )
+        symbol_root = self.root / f"symbol={ticker}"
+        files = sorted(symbol_root.glob("**/*.parquet")) if symbol_root.exists() else []
         if not files:
             return pd.DataFrame()
         dfs: list[pd.DataFrame] = []
@@ -175,7 +173,7 @@ class _ArcticAdapter(PITStore):
         if frame.empty:
             return 0
         df = frame.copy()
-        df["_ingested_at"] = datetime.now(timezone.utc)
+        df["_ingested_at"] = datetime.now(UTC)
         df["_source"] = source
         self._lib.append(ticker, df, validate_index=True, prune_previous_versions=False)
         return len(df)

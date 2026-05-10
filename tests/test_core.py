@@ -3,13 +3,13 @@ from types import SimpleNamespace
 
 import pandas as pd
 
+from stock_rtx4060 import recommendation_engine as recommendation_module
 from stock_rtx4060.backtester import Backtester
+from stock_rtx4060.dashboard_bridge import build_dashboard_snapshot
 from stock_rtx4060.ensemble_model import EnsemblePredictor, ModelConfig
 from stock_rtx4060.feature_engine import TechnicalIndicators, make_synthetic_ohlcv
-from stock_rtx4060 import recommendation_engine as recommendation_module
-from stock_rtx4060.recommendation_engine import RecommendationConfig, RecommendationEngine
-from stock_rtx4060.dashboard_bridge import build_dashboard_snapshot
 from stock_rtx4060.kevpe_adapter import KevpeAdapterResult
+from stock_rtx4060.recommendation_engine import RecommendationConfig, RecommendationEngine
 from stock_rtx4060.risk_rules import evaluate_track_s_candidate, position_size_by_risk
 
 

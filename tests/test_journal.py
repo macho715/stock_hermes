@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-
-import pytest
+from datetime import UTC, datetime
 
 from stock_rtx4060.journal import (
     _stable_json,
@@ -36,7 +34,7 @@ def test_stable_json_is_deterministic():
 
 
 def test_generate_journal_id_format():
-    ts = datetime(2026, 5, 7, 10, 0, 0, tzinfo=timezone.utc)
+    ts = datetime(2026, 5, 7, 10, 0, 0, tzinfo=UTC)
     jid = generate_journal_id("AAPL", "S", 1, timestamp=ts)
     assert jid == "JRN-2026-0507-AAPL-S-001"
 

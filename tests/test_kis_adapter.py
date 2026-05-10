@@ -8,9 +8,7 @@ from __future__ import annotations
 import json
 import os
 import time
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -71,7 +69,7 @@ class TestKISAdapterMockMode:
         assert q.last > 0
 
     def test_submit_order_buy(self):
-        from stock_rtx4060.broker_bridge import OrderRequest, OrderSide, OrderType, OrderStatus
+        from stock_rtx4060.broker_bridge import OrderRequest, OrderSide, OrderStatus, OrderType
 
         adapter = self._make_adapter()
         order = OrderRequest(
@@ -86,7 +84,7 @@ class TestKISAdapterMockMode:
         assert result.ticker == "005930.KS"
 
     def test_submit_order_sell(self):
-        from stock_rtx4060.broker_bridge import OrderRequest, OrderSide, OrderType, OrderStatus
+        from stock_rtx4060.broker_bridge import OrderRequest, OrderSide, OrderStatus, OrderType
 
         adapter = self._make_adapter()
         order = OrderRequest(
@@ -164,8 +162,8 @@ class TestKISCredentialLoading:
                 assert adapter._app_key == "ENVKEY"
 
     def test_toml_config_loaded(self, tmp_path, monkeypatch):
-        from stock_rtx4060.broker.kis_adapter import KISAdapter, _load_toml_simple
         import stock_rtx4060.broker.kis_adapter as kis_mod
+        from stock_rtx4060.broker.kis_adapter import KISAdapter
 
         # Create a fake toml config
         config_file = tmp_path / "kis.toml"
@@ -185,6 +183,7 @@ class TestKISCredentialLoading:
             assert adapter._app_key == "TOMLKEY"
             assert adapter._account_no == "TOML12345678"
 
+    @pytest.mark.skipif(os.name == "nt", reason="Windows chmod does not expose POSIX owner-only mode reliably")
     def test_chmod_600_enforced(self, tmp_path, monkeypatch):
         import stock_rtx4060.broker.kis_adapter as kis_mod
         from stock_rtx4060.broker.kis_adapter import KISAdapter

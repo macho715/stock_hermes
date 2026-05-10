@@ -39,11 +39,10 @@ print(kevpe_result.regime, kevpe_result.score)
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-import numpy as np
 import pandas as pd
 
 # KEVPE_v2 types — imported dynamically to avoid hard dependency
@@ -70,7 +69,7 @@ class KevpeAdapterResult:
     is_available: bool  # False if KEVPE not initialized or data insufficient
 
     @classmethod
-    def unavailable(cls, reason: str = "KEVPE not configured") -> "KevpeAdapterResult":
+    def unavailable(cls, reason: str = "KEVPE not configured") -> KevpeAdapterResult:
         return cls(
             regime="AMBER",
             score=0.5,
@@ -205,12 +204,6 @@ class KevpeAdapter:
 
             # ── detect volatility windows ─────────────────────────────
             windows = kevpe_v2.detect_volatility_windows(ohlcv_clean, cfg)
-
-            # ── match events to windows ───────────────────────────────
-            if kevpe_events:
-                matches = kevpe_v2.match_events_to_windows(windows, kevpe_events, cfg)
-            else:
-                matches = []
 
             # ── build historical feature pool (for signal) ────────────
             # KEVPE requires historical patterns + forward returns to compute signal
@@ -424,7 +417,7 @@ class KevpeAdapter:
 # Singleton accessor for recommendation engine integration
 # ────────────────────────────────────────────────────────────────
 
-_kevpe_adapter_instance: Optional[KevpeAdapter] = None
+_kevpe_adapter_instance: KevpeAdapter | None = None
 
 
 def get_kevpe_adapter() -> KevpeAdapter:

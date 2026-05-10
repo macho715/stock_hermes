@@ -184,19 +184,26 @@ def evaluate_track_s_candidate(
     dollar_volume = float(row.get("dollar_volume", 0.0))
     gate = Gate.GREEN
     if not np.isfinite(entry) or entry <= 0 or stop >= entry:
-        gate = Gate.ZERO; reasons.append("invalid entry/stop")
+        gate = Gate.ZERO
+        reasons.append("invalid entry/stop")
     if allow_margin or allow_options:
-        gate = Gate.ZERO; reasons.append("margin/options are disabled by fail-safe")
+        gate = Gate.ZERO
+        reasons.append("margin/options are disabled by fail-safe")
     if monthly_pnl_pct <= cfg.track_s_monthly_stop_pct:
-        gate = Gate.ZERO; reasons.append("monthly Track-S stop reached")
+        gate = Gate.ZERO
+        reasons.append("monthly Track-S stop reached")
     if dollar_volume and dollar_volume < cfg.min_dollar_volume:
-        gate = min_gate(gate, Gate.RED); reasons.append(f"liquidity below minimum: {dollar_volume:,.0f}")
+        gate = min_gate(gate, Gate.RED)
+        reasons.append(f"liquidity below minimum: {dollar_volume:,.0f}")
     if risk_reward < cfg.track_s_min_rr:
-        gate = min_gate(gate, Gate.AMBER); reasons.append(f"risk_reward<{cfg.track_s_min_rr:.1f}")
+        gate = min_gate(gate, Gate.AMBER)
+        reasons.append(f"risk_reward<{cfg.track_s_min_rr:.1f}")
     if score < cfg.track_s_min_score:
-        gate = min_gate(gate, Gate.AMBER if score >= 65 else Gate.RED); reasons.append(f"score<{cfg.track_s_min_score:.1f}")
+        gate = min_gate(gate, Gate.AMBER if score >= 65 else Gate.RED)
+        reasons.append(f"score<{cfg.track_s_min_score:.1f}")
     if open_risk > cfg.track_s_capital * cfg.max_open_risk_pct:
-        gate = min_gate(gate, Gate.RED); reasons.append("open risk exceeds Track-S cap")
+        gate = min_gate(gate, Gate.RED)
+        reasons.append("open risk exceeds Track-S cap")
     verdict = {Gate.GREEN: "Watch/Buy", Gate.AMBER: "Watch Only", Gate.RED: "Reject", Gate.ZERO: "No Trade"}[gate]
     return CandidateVerdict(ticker, "S", round(score, 2), gate, verdict, round(entry, 4), round(stop, 4), round(tp1, 4), round(tp2, 4), round(risk_reward, 3), round(risk_per_share, 4), quantity, round(position_value, 2), round(open_risk, 2), reasons)
 
@@ -207,7 +214,8 @@ def evaluate_track_l_candidate(ticker: str, row: pd.Series, entry: float, config
     stop, tp1, tp2 = entry * 0.88, entry * 1.10, entry * 1.20
     gate = Gate.GREEN if score >= cfg.track_l_min_score else (Gate.AMBER if score >= 70 else Gate.RED)
     if entry <= 0 or not np.isfinite(entry):
-        gate = Gate.ZERO; reasons.append("invalid entry")
+        gate = Gate.ZERO
+        reasons.append("invalid entry")
     verdict = {Gate.GREEN: "Eligible/DCA", Gate.AMBER: "Hold/Monitor", Gate.RED: "Reject", Gate.ZERO: "No Action"}[gate]
     max_position_value = cfg.track_l_capital * cfg.track_l_single_name_limit_pct
     quantity = floor(max_position_value / entry) if entry > 0 else 0

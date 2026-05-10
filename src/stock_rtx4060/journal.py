@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +19,7 @@ def sha256_hex(value: str) -> str:
 
 def generate_journal_id(ticker: str, track: str, sequence: int, timestamp: datetime | None = None) -> str:
     """Generate journal ID: JRN-{YYYY}-{MMDD}-{TICKER}-{TRACK}-{SEQ}."""
-    ts = timestamp or datetime.now(timezone.utc)
+    ts = timestamp or datetime.now(UTC)
     yyyy = ts.strftime("%Y")
     mmdd = ts.strftime("%m%d")
     return f"JRN-{yyyy}-{mmdd}-{ticker}-{track.upper()}-{sequence:03d}"
@@ -44,7 +44,7 @@ def write_journal_entry(
     sequence: int = 1,
 ) -> Path:
     """Write a journal entry JSON file for an approved recommendation."""
-    ts = datetime.now(timezone.utc)
+    ts = datetime.now(UTC)
     journal_id = generate_journal_id(ticker, track, sequence, ts)
 
     entry: dict[str, Any] = {

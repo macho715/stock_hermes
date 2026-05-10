@@ -16,7 +16,8 @@ import functools
 import logging
 import os
 import time
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 logger = logging.getLogger("flows")
 
@@ -27,8 +28,8 @@ F = TypeVar("F", bound=Callable[..., Any])
 # ---------------------------------------------------------------------------
 try:  # pragma: no cover - exercised only when prefect is installed
     from prefect import flow as _prefect_flow
-    from prefect import task as _prefect_task
     from prefect import get_run_logger as _prefect_get_run_logger
+    from prefect import task as _prefect_task
 
     _HAS_PREFECT = True
 except Exception:  # noqa: BLE001 - prefect is optional

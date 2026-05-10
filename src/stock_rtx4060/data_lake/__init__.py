@@ -7,9 +7,9 @@ Two backends are exposed via the ``DATA_LAKE_BACKEND`` env var:
 Bitemporal model: every row carries ``_ingested_at``. Queries through
 ``pit_resolver.read(..., as_of=...)`` return rows known at or before ``as_of``.
 """
-from .store import PITStore, get_default_store, DuckDBStore
-from .pit_resolver import read as read_pit
 from .audit_provenance import log_pit_read
+from .pit_resolver import read as read_pit
+from .store import DuckDBStore, PITStore, get_default_store
 
 __all__ = [
     "PITStore",

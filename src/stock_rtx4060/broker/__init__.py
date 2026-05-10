@@ -15,11 +15,15 @@ from ..broker_bridge import (
     BrokerPosition,
     OrderRequest,
     OrderResult,
-    OrderSide as Side,
-    OrderStatus as Status,
     OrderType,
     PaperBroker,
     Quote,
+)
+from ..broker_bridge import (
+    OrderSide as Side,
+)
+from ..broker_bridge import (
+    OrderStatus as Status,
 )
 
 

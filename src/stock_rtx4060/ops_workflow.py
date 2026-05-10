@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import asdict, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 import pandas as pd
 
@@ -105,7 +106,7 @@ def _write_ops_daily_brief(path: Path, results: list[RecommendationResult], conf
     lines = [
         "# Ops v1 Daily Brief",
         "",
-        f"Generated: {datetime.now(timezone.utc).isoformat(timespec='seconds')}",
+        f"Generated: {datetime.now(UTC).isoformat(timespec='seconds')}",
         "",
         "Boundary: `screening_output_only`; manual approval required; no broker order execution.",
         "",
@@ -170,7 +171,7 @@ def _write_zero_logs(out_dir: Path, results: list[RecommendationResult]) -> tupl
     lines = [
         "# ZERO Log",
         "",
-        f"Generated: {datetime.now(timezone.utc).isoformat(timespec='seconds')}",
+        f"Generated: {datetime.now(UTC).isoformat(timespec='seconds')}",
         "",
         "These rules block account-affecting actions in Ops v1.",
         "",
@@ -189,7 +190,7 @@ def _write_zero_logs(out_dir: Path, results: list[RecommendationResult]) -> tupl
 
 def _write_summary(path: Path, results: list[RecommendationResult], config: RecommendationConfig, paths: dict[str, str]) -> Path:
     payload: dict[str, Any] = {
-        "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "workflow": "ops_v1_manual_approval",
         "config": asdict(config),
         "candidate_count": len(results),

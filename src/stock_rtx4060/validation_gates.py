@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class GateResult(str, Enum):
+class GateResult(StrEnum):
     PASS = "PASS"
     AMBER = "AMBER"
     RED = "RED"

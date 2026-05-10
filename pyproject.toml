@@ -10,10 +10,23 @@ markers = [
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+exclude = [
+    "archive",
+    "logs",
+    "reports",
+    "review_needed",
+    "root_folder_snapshot",
+    "workspaces",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"api_server.py" = ["E402"]
+"tools/generate_krx_calendar_fixture.py" = ["E402"]
+"tools/run_api_server_no_debug.py" = ["E402"]
 
 [tool.black]
 line-length = 120

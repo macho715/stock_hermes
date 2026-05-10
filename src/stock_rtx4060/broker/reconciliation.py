@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -146,7 +146,7 @@ class Reconciler:
         -------
         list[ReconciliationDiff]
         """
-        self.last_run_at = datetime.now(timezone.utc).isoformat()
+        self.last_run_at = datetime.now(UTC).isoformat()
 
         # Gather broker positions
         broker_positions: dict[str, float] = {}

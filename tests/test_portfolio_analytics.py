@@ -5,15 +5,14 @@ from __future__ import annotations
 import pytest
 
 from stock_rtx4060.portfolio_analytics import (
+    SCHEMA_VERSION,
     PortfolioAnalytics,
     PortfolioSnapshot,
-    _estimate_sector,
-    _estimate_portfolio_beta,
     _compute_var_1d_95,
+    _estimate_portfolio_beta,
+    _estimate_sector,
     _is_open,
-    analyze_portfolio,
     save_analytics_report,
-    SCHEMA_VERSION,
 )
 from stock_rtx4060.position_tracker import PositionStatus, TrackedPosition
 
@@ -157,7 +156,6 @@ class TestSaveAnalyticsReport:
     """저장 테스트."""
 
     def test_save_json_and_md(self, tmp_path):
-        from datetime import datetime, timezone
         p = TrackedPosition(ticker="AAPL", track="S", entry_date="2026-05-01", entry_price=185.0, quantity=10, stop=177.0, tp1=194.0, tp2=203.5)
         p.mark_open(current_price=190.0, timestamp_utc="2026-05-01T10:00:00Z")
         snapshot = PortfolioSnapshot.from_positions([p])

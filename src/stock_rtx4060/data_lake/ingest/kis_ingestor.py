@@ -14,9 +14,7 @@ import os
 import stat
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 
@@ -43,7 +41,7 @@ def _load_credentials(path: Path | None = None) -> KISCredentials:
             f"KIS credential file not found: {target}. Create it with appkey/appsecret/account_number."
         )
     mode = target.stat().st_mode
-    if mode & (stat.S_IRWXG | stat.S_IRWXO):
+    if os.name != "nt" and mode & (stat.S_IRWXG | stat.S_IRWXO):
         raise PermissionError(
             f"KIS credential file {target} must be chmod 600 (owner-only)."
         )

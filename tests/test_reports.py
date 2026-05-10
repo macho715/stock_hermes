@@ -5,9 +5,6 @@ from __future__ import annotations
 import csv
 import json
 from dataclasses import dataclass
-from pathlib import Path
-
-import pytest
 
 from stock_rtx4060.reports import (
     ReportWriter,
@@ -17,7 +14,6 @@ from stock_rtx4060.reports import (
     now_stamp,
 )
 from stock_rtx4060.risk_rules import CandidateVerdict, Gate, RiskConfig
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from math import isfinite
 from typing import Any, Literal
 
@@ -52,7 +52,7 @@ def evaluate_backtest_honesty(
         "passed": sum(1 for check in checks if check["status"] == "PASS"),
         "amber": sum(1 for check in checks if check["status"] == "AMBER"),
         "failed": sum(1 for check in checks if check["status"] == "FAIL"),
-        "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
     }
 
 
@@ -67,7 +67,7 @@ def summarize_honesty(items: list[dict[str, Any]]) -> dict[str, Any]:
         "passed": sum(1 for check in checks if check.get("status") == "PASS"),
         "amber": sum(1 for check in checks if check.get("status") == "AMBER"),
         "failed": sum(1 for check in checks if check.get("status") == "FAIL"),
-        "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
     }
 
 

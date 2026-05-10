@@ -11,7 +11,6 @@ sys.path.insert(0, str(ROOT))
 
 from api_server import app
 
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the local Flask API without debug reloader")
     parser.add_argument("--host", default="127.0.0.1")

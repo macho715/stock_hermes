@@ -198,8 +198,9 @@ class AlpacaAdapter(BrokerAdapter):
         directly — caller is responsible for confirming live trading intent.
         """
         try:
-            from alpaca.trading.requests import MarketOrderRequest, LimitOrderRequest
-            from alpaca.trading.enums import OrderSide as AlpacaSide, TimeInForce
+            from alpaca.trading.enums import OrderSide as AlpacaSide
+            from alpaca.trading.enums import TimeInForce
+            from alpaca.trading.requests import LimitOrderRequest, MarketOrderRequest
 
             side_str = _SIDE_MAP.get(order.side.upper(), "buy")
             alpaca_side = AlpacaSide(side_str)
@@ -284,9 +285,8 @@ def _smoke_test() -> None:
     # Test 1: Missing credentials → BrokerNotConfiguredError (correct behaviour)
     try:
         _env_backup = {k: os.environ.pop(k, None) for k in ("ALPACA_API_KEY", "ALPACA_SECRET_KEY")}
-        adapter_without_keys = None
         try:
-            adapter_without_keys = AlpacaAdapter(api_key="", secret_key="")
+            AlpacaAdapter(api_key="", secret_key="")
         except BrokerNotConfiguredError:
             print("  [PASS] BrokerNotConfiguredError raised when keys missing")
         except ImportError as e:

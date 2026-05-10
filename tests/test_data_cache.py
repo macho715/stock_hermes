@@ -4,14 +4,11 @@ All tests use tmp_path to avoid writing to ~/.stock_rtx4060_cache.db.
 """
 from __future__ import annotations
 
-import os
 import sqlite3
 
 import pandas as pd
-import pytest
 
 from stock_rtx4060.data_cache import DataCache
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -111,7 +108,6 @@ class TestDataCache:
 
     def test_cache_purge_expired(self, tmp_path):
         """purge_expired() removes stale rows and leaves fresh ones alone."""
-        import json
         from stock_rtx4060.data_cache import DataCache
 
         db_file = tmp_path / "test.db"

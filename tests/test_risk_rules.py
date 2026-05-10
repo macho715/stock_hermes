@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from math import floor
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -21,7 +20,6 @@ from stock_rtx4060.risk_rules import (
     score_track_l,
     score_track_s,
 )
-
 
 # ---------------------------------------------------------------------------
 # _clamp
@@ -140,7 +138,6 @@ def test_to_dict_preserves_all_fields():
 
 def test_position_size_normal():
     qty, pv, risk = position_size_by_risk(entry=100.0, stop=96.0, track_capital=20_000.0, risk_per_trade_pct=0.0075)
-    expected_risk_budget = 20_000.0 * 0.0075  # 150.0
     expected_qty = floor(150.0 / 4.0)  # 37
     assert qty == expected_qty
     assert pv == pytest.approx(expected_qty * 100.0)

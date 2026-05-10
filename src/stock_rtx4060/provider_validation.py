@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 import pandas as pd
@@ -112,11 +112,11 @@ def _date_index(frame: pd.DataFrame) -> pd.DatetimeIndex | None:
 
 def _to_utc_timestamp(value: datetime | pd.Timestamp | None) -> pd.Timestamp:
     if value is None:
-        return pd.Timestamp.now(tz=timezone.utc)
+        return pd.Timestamp.now(tz=UTC)
     timestamp = pd.Timestamp(value)
     if timestamp.tzinfo is None:
-        timestamp = timestamp.tz_localize(timezone.utc)
-    return timestamp.tz_convert(timezone.utc)
+        timestamp = timestamp.tz_localize(UTC)
+    return timestamp.tz_convert(UTC)
 
 
 def _date_string(value: pd.Timestamp | None) -> str | None:

@@ -2,9 +2,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta, timezone
-
-import pandas as pd
+from datetime import UTC, datetime, timedelta
 
 from ..audit_provenance import log_pit_write
 from ..store import PITStore, get_default_store
@@ -33,7 +31,7 @@ def ingest_alpaca(
         from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
     except ImportError:
         return 0
-    end_dt = datetime.fromisoformat(end) if end else datetime.now(timezone.utc)
+    end_dt = datetime.fromisoformat(end) if end else datetime.now(UTC)
     start_dt = datetime.fromisoformat(start) if start else end_dt - timedelta(days=365 * 5)
     tf_map = {
         "1Day": TimeFrame.Day,

@@ -7,10 +7,9 @@ from __future__ import annotations
 
 import sys
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Helpers — mock ib_insync
@@ -77,8 +76,8 @@ class TestIBKRAdapterRequireConnected:
         mocks = _make_ib_mocks(raise_on_connect=ConnectionRefusedError())
 
         with _patch_ib(mocks):
-            from stock_rtx4060.broker.ibkr_adapter import IBKRAdapter
             from stock_rtx4060.broker import BrokerNotConfiguredError
+            from stock_rtx4060.broker.ibkr_adapter import IBKRAdapter
 
             adapter = IBKRAdapter(host="127.0.0.1", port=7497, timeout=1.0)
             with pytest.raises(BrokerNotConfiguredError):
@@ -88,8 +87,8 @@ class TestIBKRAdapterRequireConnected:
         mocks = _make_ib_mocks(raise_on_connect=ConnectionRefusedError())
 
         with _patch_ib(mocks):
-            from stock_rtx4060.broker.ibkr_adapter import IBKRAdapter
             from stock_rtx4060.broker import BrokerNotConfiguredError
+            from stock_rtx4060.broker.ibkr_adapter import IBKRAdapter
 
             adapter = IBKRAdapter(host="127.0.0.1", port=7497, timeout=1.0)
             with pytest.raises(BrokerNotConfiguredError):
@@ -99,8 +98,8 @@ class TestIBKRAdapterRequireConnected:
         mocks = _make_ib_mocks(raise_on_connect=ConnectionRefusedError())
 
         with _patch_ib(mocks):
-            from stock_rtx4060.broker.ibkr_adapter import IBKRAdapter
             from stock_rtx4060.broker import BrokerNotConfiguredError
+            from stock_rtx4060.broker.ibkr_adapter import IBKRAdapter
             from stock_rtx4060.broker_bridge import OrderRequest
 
             adapter = IBKRAdapter(host="127.0.0.1", port=7497, timeout=1.0)

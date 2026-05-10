@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import yfinance as yf
 
@@ -181,7 +182,7 @@ class TrackedPosition:
             CloseReason.MANUAL.value: PositionStatus.MANUAL_CLOSE.value,
         }.get(reason, PositionStatus.MANUAL_CLOSE.value)
         self.close_reason = reason
-        self.close_date = datetime.now(timezone.utc).date().isoformat()
+        self.close_date = datetime.now(UTC).date().isoformat()
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -207,7 +208,7 @@ def fetch_quote(ticker: str, currency: str | None = None) -> PriceQuote | None:
         return PriceQuote(
             ticker=ticker,
             current_price=float(price),
-            timestamp_utc=datetime.now(timezone.utc).isoformat(),
+            timestamp_utc=datetime.now(UTC).isoformat(),
             currency=currency or "USD",
         )
     except Exception:
@@ -284,10 +285,10 @@ class PortfolioSnapshot:
 
     def __post_init__(self) -> None:
         if not self.generated_at:
-            self.generated_at = datetime.now(timezone.utc).isoformat()
+            self.generated_at = datetime.now(UTC).isoformat()
 
     @classmethod
-    def from_positions(cls, positions: list[TrackedPosition]) -> "PortfolioSnapshot":
+    def from_positions(cls, positions: list[TrackedPosition]) -> PortfolioSnapshot:
         snapshot = cls()
         snapshot.total_positions = len(positions)
 
@@ -340,7 +341,7 @@ def load_positions_from_recommendation_json(json_path: str | Path) -> list[Track
     for item in results:
         verdict = item.get("verdict", "")
         if verdict in ("ELIGIBLE_RECOMMENDATION", "ACCUMULATE_RECOMMENDATION"):
-            entry_date = item.get("generated_at_utc", datetime.now(timezone.utc).date().isoformat())[:10]
+            entry_date = item.get("generated_at_utc", datetime.now(UTC).date().isoformat())[:10]
             positions.append(
                 TrackedPosition(
                     ticker=item["ticker"],
@@ -362,7 +363,7 @@ def save_portfolio_snapshot(snapshot: PortfolioSnapshot, output_dir: str | Path)
     """Save portfolio snapshot as JSON and Markdown."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     json_path = output_dir / f"portfolio_snapshot_{timestamp}.json"
     md_path = output_dir / f"portfolio_snapshot_{timestamp}.md"
 
@@ -373,8 +374,8 @@ def save_portfolio_snapshot(snapshot: PortfolioSnapshot, output_dir: str | Path)
         "",
         f"**Status:** {snapshot.open_positions} open / {snapshot.closed_positions} closed",
         "",
-        f"| Metric | Value |",
-        f"|--------|-------|",
+        "| Metric | Value |",
+        "|--------|-------|",
         f"| Total Unrealized P&L | {snapshot.total_unrealized_pnl_abs:+,.2f} ({snapshot.total_unrealized_pnl_pct:+.2%}) |",
         f"| Track-S Value | ${snapshot.track_s_value:,.2f} ({snapshot.track_s_unrealized_pct:+.2%}) |",
         f"| Track-L Value | ${snapshot.track_l_value:,.2f} ({snapshot.track_l_unrealized_pct:+.2%}) |",
@@ -406,7 +407,7 @@ def refresh_positions(positions: list[TrackedPosition], delay: float = 0.15) -> 
     """Refresh current prices for all positions. Returns updated positions with close_reason if any closed."""
     tickers = [p.ticker for p in positions if p.status not in (PositionStatus.CLOSED_BY_STOP.value, PositionStatus.CLOSED_BY_TP1.value, PositionStatus.CLOSED_BY_TP2.value, PositionStatus.MANUAL_CLOSE.value)]
     quotes = fetch_quotes_bulk(tickers, delay=delay)
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = datetime.now(UTC).isoformat()
 
     closed_events: list[tuple[str, str]] = []  # (ticker, reason)
 
@@ -441,7 +442,7 @@ if __name__ == "__main__":
         tickers = [t.strip().upper() for t in args.tickers.split(",")]
         # Create dummy positions for demo
         positions = [
-            TrackedPosition(ticker=t, track="S", entry_date=datetime.now(timezone.utc).date().isoformat(), entry_price=100.0, quantity=10, stop=95.0, tp1=105.0, tp2=110.0)
+            TrackedPosition(ticker=t, track="S", entry_date=datetime.now(UTC).date().isoformat(), entry_price=100.0, quantity=10, stop=95.0, tp1=105.0, tp2=110.0)
             for t in tickers
         ]
 
@@ -453,7 +454,7 @@ if __name__ == "__main__":
             positions = refresh_positions(positions)
             snapshot = PortfolioSnapshot.from_positions(positions)
             json_path, md_path = save_portfolio_snapshot(snapshot, args.output_dir)
-            print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}Z] Updated → {json_path}")
+            print(f"[{datetime.now(UTC).strftime('%H:%M:%S')}Z] Updated → {json_path}")
             time.sleep(args.interval)
     else:
         positions = refresh_positions(positions)

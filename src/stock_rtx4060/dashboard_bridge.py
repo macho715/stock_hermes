@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import json
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
 
 RESULT_REQUIRED_FIELDS = {
     "ticker",
@@ -73,7 +72,7 @@ def build_dashboard_snapshot(payload: dict[str, Any], *, source_json_path: str |
 
     return {
         "schema_version": "dashboard_snapshot.v1",
-        "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "source": "stock_rtx4060_unified",
         "source_recommendation_json": str(source_json_path) if source_json_path else None,
         "mode": "report_only",

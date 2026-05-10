@@ -30,7 +30,6 @@ PROMOTION_DELTA_THRESHOLD = 0.05  # 5% improvement required
 @with_retries(retries=1, retry_delay_seconds=30)
 def factor_mining_task(universe: list[str], *, cycles: int = 1, budget_usd: float = 1.0) -> dict[str, Any]:
     """Run RD-Agent factor mining; returns a list of newly produced files."""
-    from pathlib import Path
 
     from stock_rtx4060.factors.rd_agent.runner import run_factor_mining
 
@@ -95,7 +94,6 @@ def _current_production_score(model_name: str) -> float | None:
     if not run_id:
         return None
     try:
-        import mlflow  # type: ignore[import-not-found]
         from mlflow.tracking import MlflowClient  # type: ignore[import-not-found]
 
         client = MlflowClient()

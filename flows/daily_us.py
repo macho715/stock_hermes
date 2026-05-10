@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from .utils import flow, get_run_logger, slack_on_failure, task, with_retries
+from .utils import flow, get_run_logger, slack_on_failure, with_retries
 
 logger = logging.getLogger("flows.daily_us")
 
@@ -33,7 +33,7 @@ def ingest_alpaca_task(universe: list[str], *, as_of: str | None = None) -> dict
     from stock_rtx4060.data_lake.ingest.alpaca_ingestor import ingest_alpaca
 
     end_dt = (
-        datetime.fromisoformat(as_of).replace(tzinfo=timezone.utc) if as_of else datetime.now(timezone.utc)
+        datetime.fromisoformat(as_of).replace(tzinfo=UTC) if as_of else datetime.now(UTC)
     )
     end = end_dt.date().isoformat()
     start = (end_dt - timedelta(days=365)).date().isoformat()

@@ -16,9 +16,9 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.pipeline import Pipeline
@@ -162,7 +162,7 @@ class DirectionModel:
         device = "cuda" if self.config.xgb_device == "cuda" else "cpu"
         return make_lightgbm(device=device, random_state=self.config.random_state)
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "DirectionModel":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> DirectionModel:
         if y.nunique() < 2:
             raise RuntimeError("target class가 하나뿐이라 분류 모델을 학습할 수 없습니다")
         self.feature_cols = list(X.columns)
@@ -248,7 +248,6 @@ class LSTMPredictor:
         return np.stack([X[i - self.config.seq_len : i] for i in range(self.config.seq_len, len(X))])
 
     def _build_model(self, n_features: int):
-        import tensorflow as tf  # type: ignore
         from tensorflow.keras.layers import LSTM, BatchNormalization, Dense, Dropout, Input
         from tensorflow.keras.models import Sequential
         from tensorflow.keras.optimizers import Adam
@@ -268,7 +267,7 @@ class LSTMPredictor:
         model.compile(optimizer=Adam(learning_rate=0.001), loss="binary_crossentropy", metrics=["accuracy"])
         return model
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "LSTMPredictor":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> LSTMPredictor:
         from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau  # type: ignore
 
         clean = self.imputer.fit_transform(X.replace([np.inf, -np.inf], np.nan))

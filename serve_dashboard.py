@@ -3,8 +3,9 @@
 Run: python serve_dashboard.py
 Open: http://localhost:5151
 """
-import json, base64, gzip, random, math
-from flask import Flask, jsonify, Response, request
+import random
+
+from flask import Flask, Response, jsonify, request
 
 app = Flask(__name__)
 
@@ -75,8 +76,6 @@ def symbol():
 def model_scores():
     sym = request.args.get("symbol","AAPL").upper()
     random.seed(hash(sym) % 9999)
-    rows = OHLCV.get(sym, OHLCV["AAPL"])
-    last = rows[-1]["close"]
     score = round(45 + random.random()*35, 1)
     verdict = "AMBER_REVIEW_ONLY" if score >= 55 else "RED_NOT_RECOMMENDED"
     return jsonify({
@@ -103,7 +102,9 @@ def recommend():
                     "note":"Run locally with full dependencies for recommendations"})
 
 if __name__ == "__main__":
-    import webbrowser, threading, time
+    import threading
+    import time
+    import webbrowser
     def _open():
         time.sleep(1.5)
         webbrowser.open("http://localhost:5151")

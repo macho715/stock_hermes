@@ -11,10 +11,11 @@ import hashlib
 import json
 import math
 import os
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from .krx_calendar import KRXCalendarUnavailable, load_krx_calendar_fixture, next_krx_session
 
@@ -119,7 +120,7 @@ class PaperDecision:
         return {
             "schema_version": SCHEMA_VERSION,
             "run_id": run_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "ticker": self.ticker,
             "status": self.status,
             "reason": self.reason,
@@ -210,7 +211,7 @@ class PaperTradingEngine:
 
         run_dir.mkdir(parents=True, exist_ok=True)
         lock_path = run_dir / ".paper_run.lock"
-        lock_path.write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
+        lock_path.write_text(datetime.now(UTC).isoformat(), encoding="utf-8")
         try:
             return self._write_run(run_id, run_dir, signal_list, bars_by_ticker)
         except Exception:

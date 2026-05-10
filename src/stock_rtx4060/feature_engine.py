@@ -7,12 +7,11 @@ as the label origin.  Targets are forward returns over ``horizon`` bars.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 import numpy as np
 import pandas as pd
-
 
 OHLCV_COLUMNS = ("Open", "High", "Low", "Close", "Volume")
 TARGET_COLUMNS = ("target_direction", "target_return")

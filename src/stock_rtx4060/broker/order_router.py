@@ -20,9 +20,7 @@ the in-memory flag is True OR the KILLED file exists on disk.
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -31,7 +29,6 @@ from ..broker_bridge import (
     BrokerAdapter,
     OrderRequest,
     OrderResult,
-    OrderSide,
     OrderStatus,
     OrderType,
 )

@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Iterable
 
 SCHEMA_VERSION = "krx_trading_calendar.v1"
 MARKET = "KRX"
@@ -95,7 +95,7 @@ def generate_krx_calendar_fixture(
         "timezone": TIMEZONE,
         "source": SOURCE,
         "source_status": source_status,
-        "generated_at": generated_at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generated_at": generated_at or datetime.now(UTC).isoformat(timespec="seconds"),
         "date_range": {"start": _parse_date(start_date).isoformat(), "end": _parse_date(end_date).isoformat()},
         "trading_days": _normalize_days(trading_days),
         "notes": notes or [],

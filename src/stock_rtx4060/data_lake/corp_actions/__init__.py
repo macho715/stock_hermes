@@ -1,6 +1,6 @@
 """Corporate actions pipeline: splits and dividends adjustment."""
-from .splits_dividends import fetch_yf_actions, fetch_pykrx_actions, CorpAction
 from .adjuster import adjust_ohlcv, build_adjustment_factor
+from .splits_dividends import CorpAction, fetch_pykrx_actions, fetch_yf_actions
 
 __all__ = [
     "CorpAction",

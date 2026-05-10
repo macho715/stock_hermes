@@ -29,10 +29,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-import stat
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -89,6 +88,8 @@ def _load_toml_simple(path: Path) -> dict[str, str]:
 def _enforce_chmod600(path: Path) -> None:
     """Raise PermissionError if file permissions are too broad."""
     try:
+        if os.name == "nt":
+            return
         mode = path.stat().st_mode & 0o777
         if mode & 0o077:  # group/other bits set
             raise PermissionError(
@@ -160,7 +161,7 @@ class _TokenCache:
             data = {
                 "access_token": token,
                 "expires_at": time.time() + expires_in,
-                "saved_at": datetime.now(timezone.utc).isoformat(),
+                "saved_at": datetime.now(UTC).isoformat(),
             }
             self._path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -356,7 +357,7 @@ class KISAdapter(BrokerAdapter):
         # Enforce KRX trading hours via krx_calendar
         try:
             fixture = load_krx_calendar_fixture()
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            today = datetime.now(UTC).strftime("%Y-%m-%d")
             if today not in fixture.trading_day_set:
                 logger.warning("KIS submit_order: today %s is not a KRX trading day", today)
         except KRXCalendarUnavailable:
@@ -484,6 +485,8 @@ class KISAdapter(BrokerAdapter):
         self._ws_thread.start()
 
     async def _ws_loop(self) -> None:
+        import asyncio
+
         try:
             import websockets
         except ImportError:
@@ -497,7 +500,7 @@ class KISAdapter(BrokerAdapter):
                     try:
                         msg = await asyncio.wait_for(ws.recv(), timeout=5.0)
                         logger.debug("KIS WS message: %s", msg[:200])
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         continue
         except Exception as exc:  # noqa: BLE001
             logger.warning("KIS WebSocket error: %s", exc)

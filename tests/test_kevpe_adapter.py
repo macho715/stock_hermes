@@ -1,7 +1,6 @@
 """Extra coverage for kevpe_adapter.py — targets 43% → ≥80%."""
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
@@ -9,7 +8,6 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Fake KEVPE module fixture
@@ -177,8 +175,8 @@ def test_adapter_init_explicit_path():
 
 
 def test_infer_kevpe_path_not_found(monkeypatch, tmp_path):
-    from stock_rtx4060.kevpe_adapter import KevpeAdapter
     import stock_rtx4060.kevpe_adapter as _mod
+    from stock_rtx4060.kevpe_adapter import KevpeAdapter
 
     # Point the module's __file__ to a temp dir that won't contain KEVPE_final_package
     monkeypatch.setattr(_mod, "__file__", str(tmp_path / "kevpe_adapter.py"))
@@ -234,8 +232,8 @@ def test_ensure_init_spec_none(tmp_path, monkeypatch):
 
 
 def test_ensure_init_exec_module_raises(tmp_path, monkeypatch):
+
     from stock_rtx4060.kevpe_adapter import KevpeAdapter
-    import importlib.util
 
     (tmp_path / "kevpe_v2.py").write_text("raise RuntimeError('bad module')")
     adapter = KevpeAdapter(kevpe_package_path=str(tmp_path))
@@ -647,7 +645,7 @@ def test_get_kevpe_adapter_singleton():
 
 
 def test_get_kevpe_adapter_returns_instance():
-    from stock_rtx4060.kevpe_adapter import get_kevpe_adapter, KevpeAdapter
+    from stock_rtx4060.kevpe_adapter import KevpeAdapter, get_kevpe_adapter
 
     adapter = get_kevpe_adapter()
     assert isinstance(adapter, KevpeAdapter)
@@ -903,8 +901,8 @@ def test_extract_feature_from_windows_none_window(fake_kevpe):
 
 def test_extract_feature_from_windows_exception(fake_kevpe, monkeypatch):
     """feature_vector_from_event raises → returns None (line 392)."""
+
     from stock_rtx4060.kevpe_adapter import KevpeAdapter
-    from types import SimpleNamespace
 
     def bad_fvfe(*a, **kw):
         raise ValueError("feature error")

@@ -86,7 +86,7 @@ def test_green_can_be_downgraded_to_amber_by_negative_advisor():
     cfg = RecommendationConfig(advisor_run=True, advisor_blend_weight=0.30)
     checks = _passing_checks()
     deterministic_score = 78.0  # GREEN for Track-S (>= 75)
-    advisory_score, confidence = -1.0, 1.0
+    advisory_score = -1.0
     final_score = _blend(deterministic_score, advisory_score, cfg.advisor_blend_weight)
 
     det_verdict = _verdict("S", deterministic_score, checks, cfg)
@@ -103,7 +103,7 @@ def test_green_can_be_downgraded_to_red_by_strong_negative_advisor():
     cfg = RecommendationConfig(advisor_run=True, advisor_blend_weight=0.50)
     checks = _passing_checks()
     deterministic_score = 78.0
-    advisory_score, confidence = -1.0, 1.0
+    advisory_score = -1.0
     final_score = _blend(deterministic_score, advisory_score, cfg.advisor_blend_weight)
 
     det_verdict = _verdict("S", deterministic_score, checks, cfg)

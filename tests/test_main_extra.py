@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-import stock_rtx4060.main as main_mod
 from stock_rtx4060.feature_engine import make_synthetic_ohlcv
 from stock_rtx4060.main import (
     _mean,
@@ -30,7 +29,6 @@ from stock_rtx4060.main import (
     main,
     normalize_legacy_args,
 )
-
 
 # ---------------------------------------------------------------------------
 # Shared fakes

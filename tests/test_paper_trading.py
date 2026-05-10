@@ -1,7 +1,7 @@
 import json
-import sys
-import pytest
 from pathlib import Path
+
+import pytest
 
 from stock_rtx4060.paper_trading import (
     PaperTradingConfig,

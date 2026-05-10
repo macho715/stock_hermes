@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterable, Literal
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -20,12 +20,12 @@ from sklearn.metrics import accuracy_score
 from sklearn.model_selection import TimeSeriesSplit
 
 from .audit_log import AuditEvent, AuditLogger
-from .backtester import BacktestConfig, Backtester
 from .backtest_honesty import evaluate_backtest_honesty, summarize_honesty
+from .backtester import BacktestConfig, Backtester
 from .data_providers import ProviderResult, load_ohlcv_with_provider
-from .kevpe_adapter import get_kevpe_adapter, kevpe_signal_to_supplement
 from .ensemble_model import DirectionModel, ModelConfig, _safe_auc
 from .feature_engine import TechnicalIndicators, build_features, feature_columns
+from .kevpe_adapter import get_kevpe_adapter, kevpe_signal_to_supplement
 
 Track = Literal["S", "L"]
 Verdict = Literal[
@@ -154,7 +154,7 @@ class RiskPlan:
 class RecommendationRun:
     """Report write result with legacy attribute and path-key access."""
 
-    results: list["RecommendationResult"]
+    results: list[RecommendationResult]
     errors: list[dict]
     markdown_path: str
     json_path: str
@@ -701,7 +701,7 @@ def _apply_advisor_blend(
     deterministic_score: float,
     cfg: RecommendationConfig,
     snap: dict,
-    plan: "RiskPlan",
+    plan: RiskPlan,
     model_stats: dict,
 ) -> tuple[float, str | None, float]:
     """Run the LLM advisor for ``ticker`` and return ``(advisor_score, rationale, blended_score)``.
@@ -967,7 +967,7 @@ class RecommendationEngine:
             confirmations_total=len(checks),
             validations=checks,
             reasons=reasons,
-            generated_at_utc=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            generated_at_utc=datetime.now(UTC).isoformat(timespec="seconds"),
             backtest_honesty=honesty,
             # KEVPE overlay fields (populated from supplementary signal)
             kevpe_available=kevpe_supp.get("kevpe_available", False),
@@ -1025,7 +1025,7 @@ class RecommendationEngine:
         errors = [r.to_dict() for r in results if r.verdict == "RED_DATA_OR_MODEL_ERROR"]
         honesty_summary = summarize_honesty([r.backtest_honesty or {} for r in results])
         payload = {
-            "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
             "config": asdict(self.config),
             "disclaimer": "screening_output_only; manual approval required; no broker order execution; not financial advice",
             "algorithm_patch": "v2 leak-safe CV + ATR risk plan + fixed-risk sizing + OOF backtest",
@@ -1069,7 +1069,7 @@ class RecommendationEngine:
 
 
 def _error_result(ticker: str, track: Track, message: str) -> RecommendationResult:
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now = datetime.now(UTC).isoformat(timespec="seconds")
     fail = ValidationCheck("ERROR", "FAIL", message)
     return RecommendationResult(
         ticker=ticker,
@@ -1158,7 +1158,7 @@ def render_markdown(results: list[RecommendationResult], cfg: RecommendationConf
     lines = [
         "# Stock Recommendation Report — Algorithm v2",
         "",
-        f"Generated: {datetime.now(timezone.utc).isoformat(timespec='seconds')}",
+        f"Generated: {datetime.now(UTC).isoformat(timespec='seconds')}",
         "",
         "Boundary: `screening_output_only`; manual approval required; no broker order execution; not financial advice.",
         "",

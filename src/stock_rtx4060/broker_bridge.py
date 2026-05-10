@@ -23,8 +23,8 @@ from __future__ import annotations
 import json
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -67,7 +67,7 @@ class Quote:
 
     def __post_init__(self) -> None:
         if not self.timestamp_utc:
-            self.timestamp_utc = datetime.now(timezone.utc).isoformat()
+            self.timestamp_utc = datetime.now(UTC).isoformat()
 
     @property
     def mid_price(self) -> float:
@@ -92,7 +92,7 @@ class AccountInfo:
 
     def __post_init__(self) -> None:
         if not self.timestamp_utc:
-            self.timestamp_utc = datetime.now(timezone.utc).isoformat()
+            self.timestamp_utc = datetime.now(UTC).isoformat()
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -111,10 +111,10 @@ class BrokerPosition:
 
     def __post_init__(self) -> None:
         if not self.timestamp_utc:
-            self.timestamp_utc = datetime.now(timezone.utc).isoformat()
+            self.timestamp_utc = datetime.now(UTC).isoformat()
 
     @classmethod
-    def from_tracked_position(cls, pos: TrackedPosition) -> "BrokerPosition":
+    def from_tracked_position(cls, pos: TrackedPosition) -> BrokerPosition:
         market_value = pos.current_price * pos.quantity
         cost_basis = pos.entry_price * pos.quantity
         unrealized = market_value - cost_basis
@@ -127,7 +127,7 @@ class BrokerPosition:
             market_value=market_value,
             unrealized_pnl=unrealized,
             unrealized_pnl_pct=unrealized_pct,
-            timestamp_utc=datetime.now(timezone.utc).isoformat(),
+            timestamp_utc=datetime.now(UTC).isoformat(),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -160,11 +160,12 @@ class OrderRequest:
 
     def __post_init__(self) -> None:
         if not self.order_id:
-            import hashlib, time
+            import hashlib
+            import time
             raw = f"{time.time()}{self.ticker}".encode()
             self.order_id = hashlib.sha256(raw).hexdigest()[:16]
         if not self.created_at:
-            self.created_at = datetime.now(timezone.utc).isoformat()
+            self.created_at = datetime.now(UTC).isoformat()
         # Force simulation_only True always
         self.simulation_only = True
 
@@ -192,7 +193,7 @@ class OrderResult:
 
     def __post_init__(self) -> None:
         if not self.created_at:
-            self.created_at = datetime.now(timezone.utc).isoformat()
+            self.created_at = datetime.now(UTC).isoformat()
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -230,7 +231,7 @@ class BrokerAdapter(ABC):
         """
         ...
 
-    def close(self) -> None:
+    def close(self) -> None:  # noqa: B027
         """리소스 정리."""
         pass
 
@@ -288,7 +289,7 @@ class PaperBroker(BrokerAdapter):
             fill_price_effective=order.limit_price or order.entry_price or 0.0,
             simulation_only=True,
             simulation_reason="PAPER_MODE: No real broker API keys configured",
-            filled_at=datetime.now(timezone.utc).isoformat(),
+            filled_at=datetime.now(UTC).isoformat(),
         )
         self._order_log.append(result)
         return result
@@ -341,13 +342,13 @@ def generate_trade_plan(
     """
     output_dir = Path(output_dir or "reports/trade_plans")
     output_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
     json_path = output_dir / f"trade_plan_{order.ticker}_{timestamp}.json"
     md_path = output_dir / f"trade_plan_{order.ticker}_{timestamp}.md"
 
     plan_data = {
         "schema_version": SCHEMA_VERSION,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "simulation_only": True,
         "warning": "DRAFT — User review and explicit approval required before any real order",
         "order": order.to_dict(),
@@ -374,7 +375,7 @@ def generate_trade_plan(
     risk_reward = (tp2_price - entry_price) / risk_per_share if risk_per_share > 0 else 0.0
 
     md_lines = [
-        f"# 📋 Trade Plan — {order.ticker} — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}Z",
+        f"# 📋 Trade Plan — {order.ticker} — {datetime.now(UTC).strftime('%Y-%m-%d %H:%M')}Z",
         "",
         "## ⚠️ SIMULATION ONLY — APPROVAL REQUIRED",
         "",
@@ -386,8 +387,8 @@ def generate_trade_plan(
         "",
         "## Order Details",
         "",
-        f"| Field | Value |",
-        f"|-------|-------|",
+        "| Field | Value |",
+        "|-------|-------|",
         f"| Ticker | {order.ticker} |",
         f"| Side | {order.side} |",
         f"| Order Type | {order.order_type} |",
@@ -404,8 +405,8 @@ def generate_trade_plan(
         "",
         "## Risk Summary",
         "",
-        f"| Metric | Value |",
-        f"|--------|-------|",
+        "| Metric | Value |",
+        "|--------|-------|",
         f"| Position Value | ${entry_price * order.quantity:,.2f} |",
         f"| Risk Per Trade | ${risk_per_share * order.quantity:,.2f} |",
         f"| Account Buying Power | ${account_info.buying_power:,.2f} |",
@@ -436,7 +437,7 @@ def generate_trade_plan(
     else:
         md_lines.append("_Quote not available_")
 
-    md_lines.extend(["", "---", f"*Generated: {datetime.now(timezone.utc).isoformat()}Z | Broker Bridge v{SCHEMA_VERSION} | simulation_only=True*"])
+    md_lines.extend(["", "---", f"*Generated: {datetime.now(UTC).isoformat()}Z | Broker Bridge v{SCHEMA_VERSION} | simulation_only=True*"])
     md_path.write_text("\n".join(md_lines), encoding="utf-8")
     return json_path, md_path
 

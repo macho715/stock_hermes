@@ -11,9 +11,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -26,12 +25,12 @@ DIST = ROOT / "root_folder_snapshot" / "stock-pred-v5" / "dist"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from stock_rtx4060.dashboard_bridge import build_dashboard_snapshot
 from stock_rtx4060.data_providers import load_ohlcv_with_provider
 from stock_rtx4060.ensemble_model import EnsemblePredictor, ModelConfig
 from stock_rtx4060.feature_engine import TechnicalIndicators
-from stock_rtx4060.recommendation_engine import RecommendationConfig, RecommendationEngine, parse_universe
-from stock_rtx4060.dashboard_bridge import build_dashboard_snapshot
 from stock_rtx4060.paper_trading import load_paper_status
+from stock_rtx4060.recommendation_engine import RecommendationConfig, RecommendationEngine, parse_universe
 
 app = Flask(__name__, static_folder=str(DIST), static_url_path="")
 CORS(
@@ -214,8 +213,8 @@ def api_symbol():
                 }
             ), 502
         last_date = records[-1]["date"]
-        last_dt = datetime.fromisoformat(last_date).replace(tzinfo=timezone.utc)
-        freshness_days = max(0, (datetime.now(timezone.utc).date() - last_dt.date()).days)
+        last_dt = datetime.fromisoformat(last_date).replace(tzinfo=UTC)
+        freshness_days = max(0, (datetime.now(UTC).date() - last_dt.date()).days)
         return jsonify(
             {
                 "symbol": symbol,
@@ -276,7 +275,7 @@ def api_model_scores():
                         "row_count": int(len(provider_result.frame)),
                         "feature_rows": int(len(feature_df)),
                         "last_date": _last_date_value(provider_result.frame),
-                        "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                        "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
                     },
                 }
             ), 422
@@ -337,7 +336,7 @@ def api_model_scores():
                     "training_mode": "walk_forward_refit",
                     "lstm_requested": use_lstm,
                     "lstm_enabled": bool(latest.get("lstm_enabled")),
-                    "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
                 },
                 "status": "PASS",
             }
@@ -355,7 +354,7 @@ def api_model_scores():
                 "error": str(exc),
                 "type": type(exc).__name__,
                 "evidence": {
-                    "generated_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
                 },
             }
         ), 502
@@ -465,15 +464,15 @@ def main(port: int = 5151):
     dashboard_url = f"http://{args.host if args.host != '0.0.0.0' else 'localhost'}:{args.port}"
     print(f"Starting stock_rtx4060 unified API server on http://0.0.0.0:{args.port}")
     print(f"Dashboard: {dashboard_url}/")
-    print(f"Endpoints:")
-    print(f"  GET /                     — React dashboard (built static)")
-    print(f"  GET /api/health           — health check")
-    print(f"  GET /api/universe         — dashboard-selectable symbols")
-    print(f"  GET /api/symbol           — latest OHLCV for dashboard charts")
-    print(f"  GET /api/model-scores     — backend model evidence for one symbol")
-    print(f"  GET /api/paper-status     — latest paper-only virtual trading status")
-    print(f"  GET /api/recommend        — run recommendation + return snapshot")
-    print(f"  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot")
+    print("Endpoints:")
+    print("  GET /                     — React dashboard (built static)")
+    print("  GET /api/health           — health check")
+    print("  GET /api/universe         — dashboard-selectable symbols")
+    print("  GET /api/symbol           — latest OHLCV for dashboard charts")
+    print("  GET /api/model-scores     — backend model evidence for one symbol")
+    print("  GET /api/paper-status     — latest paper-only virtual trading status")
+    print("  GET /api/recommend        — run recommendation + return snapshot")
+    print("  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot")
     app.run(host=args.host, port=args.port, debug=False, use_reloader=False)
 
 

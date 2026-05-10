@@ -10,9 +10,8 @@ import json
 import logging
 import os
 import sqlite3
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 
@@ -71,15 +70,15 @@ class DataCache:
 
     def _fetch_key(self) -> str:
         """Return current UTC hour as string: '2026-05-07T08'."""
-        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H")
+        return datetime.now(UTC).strftime("%Y-%m-%dT%H")
 
     def _is_expired(self, fetch_date: str) -> bool:
         """Return True if fetch_date is older than ttl_hours."""
         try:
             fetched_at = datetime.strptime(fetch_date, "%Y-%m-%dT%H").replace(
-                tzinfo=timezone.utc
+                tzinfo=UTC
             )
-            cutoff = datetime.now(timezone.utc) - timedelta(hours=self.ttl_hours)
+            cutoff = datetime.now(UTC) - timedelta(hours=self.ttl_hours)
             return fetched_at < cutoff
         except ValueError:
             # Unparseable date — treat as expired
@@ -89,7 +88,7 @@ class DataCache:
     # Public API
     # ------------------------------------------------------------------
 
-    def get(self, ticker: str, period: str, provider: str) -> Optional[pd.DataFrame]:
+    def get(self, ticker: str, period: str, provider: str) -> pd.DataFrame | None:
         """Return cached DataFrame or None if miss/expired/disabled."""
         if not self.is_enabled():
             return None
@@ -156,7 +155,7 @@ class DataCache:
             return 0
         try:
             cutoff = (
-                datetime.now(timezone.utc) - timedelta(hours=self.ttl_hours)
+                datetime.now(UTC) - timedelta(hours=self.ttl_hours)
             ).strftime("%Y-%m-%dT%H")
             with sqlite3.connect(str(self.db_path)) as conn:
                 cur = conn.execute(

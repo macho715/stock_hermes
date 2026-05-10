@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from stock_rtx4060.validation_gates import (
     GateResult,
     g01_data_freshness,
@@ -17,7 +15,6 @@ from stock_rtx4060.validation_gates import (
     g09_approval,
     g10_audit_evidence,
 )
-
 
 # --- G-01 DATA_FRESHNESS ---
 

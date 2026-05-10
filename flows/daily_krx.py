@@ -15,10 +15,10 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from .utils import flow, get_run_logger, slack_on_failure, task, with_retries
+from .utils import flow, get_run_logger, slack_on_failure, with_retries
 
 logger = logging.getLogger("flows.daily_krx")
 
@@ -44,7 +44,7 @@ def ingest_kis_task(universe: list[str], *, as_of: str | None = None) -> dict[st
     """Ingest daily KRX bars via KIS Open API for each ticker in ``universe``."""
     from stock_rtx4060.data_lake.ingest.kis_ingestor import ingest_kis
 
-    end_dt = datetime.strptime(as_of, "%Y%m%d").replace(tzinfo=timezone.utc) if as_of else datetime.now(timezone.utc)
+    end_dt = datetime.strptime(as_of, "%Y%m%d").replace(tzinfo=UTC) if as_of else datetime.now(UTC)
     end = end_dt.strftime("%Y%m%d")
     start = (end_dt - timedelta(days=365)).strftime("%Y%m%d")
     counts: dict[str, int] = {}
