@@ -17,7 +17,7 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score
-from sklearn.model_selection import TimeSeriesSplit
+from .ml.cv import PurgedKFold
 
 from .audit_log import AuditEvent, AuditLogger
 from .backtest_honesty import evaluate_backtest_honesty, summarize_honesty
@@ -353,14 +353,15 @@ def _fit_walk_forward_model(feature_df: pd.DataFrame, horizon: int, cfg: Recomme
 
     model_cfg = _model_config(cfg, horizon)
     n_splits = min(cfg.xgb_splits, max(2, len(X) // 120))
-    gap = min(max(0, model_cfg.gap or 0), max(0, len(X) // (n_splits + 1) - 1))
-    splitter = TimeSeriesSplit(n_splits=n_splits, gap=gap)
+    embargo_pct = float(np.clip(horizon / max(len(X), 1), 0.01, 0.10))
+    splitter = PurgedKFold(n_splits=n_splits, embargo_pct=embargo_pct)
+    groups = np.arange(len(X), dtype=int) + horizon
     oof = pd.Series(np.nan, index=X.index, dtype=float)
     accs: list[float] = []
     aucs: list[float] = []
     models_used: list[str] = []
 
-    for train_idx, test_idx in splitter.split(X):
+    for train_idx, test_idx in splitter.split(X, groups=groups):
         x_tr, x_te = X.iloc[train_idx], X.iloc[test_idx]
         y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
         model = DirectionModel(model_cfg).fit(x_tr, y_tr)
@@ -384,7 +385,7 @@ def _fit_walk_forward_model(feature_df: pd.DataFrame, horizon: int, cfg: Recomme
         "accuracy": float(np.mean(accs)) if accs else 0.0,
         "auc": float(np.mean(aucs)) if aucs else 0.5,
         "oof_coverage": coverage,
-        "gap": gap,
+        "gap": int(np.floor(len(X) * embargo_pct)),
         "models_used": sorted(set(models_used + [final_model.kind_used])),
     }
 

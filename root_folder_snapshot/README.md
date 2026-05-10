@@ -230,6 +230,19 @@ Flask API endpoints from `api_server.py`:
 | `GET /api/recommend` | Runs recommendation engine and returns `dashboard_snapshot.v1` |
 | `GET /api/snapshot?path=X` | Converts an existing recommendation JSON into a snapshot response |
 
+`/api/recommend` query parameters (all optional):
+
+| Parameter | Default | Description |
+|---|---|---|
+| `universe` | `AAPL,MSFT` | Comma-separated tickers |
+| `track` | `BOTH` | `S`, `L`, or `BOTH` |
+| `period` | `3y` | yfinance history period |
+| `top` | `5` | Max candidates returned |
+| `advisor_run` | `0` | `1` to enable P6 LLM Advisor blend (requires `ANTHROPIC_API_KEY`) |
+| `advisor_blend_weight` | `0.3` | Blend weight when `advisor_run=1`; ignored otherwise |
+
+> **Note**: when `ANTHROPIC_API_KEY` is absent, `api_server.py` silently forces `advisor_run=False` — the engine runs in deterministic mode and the response will not contain `advisor_score`.
+
 `dashboard_bridge.py` requires these source result fields before building a dashboard snapshot:
 
 | Group | Fields |

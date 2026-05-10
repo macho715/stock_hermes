@@ -395,7 +395,6 @@ def api_recommend():
     universe = request.args.get("universe")
     track = request.args.get("track", "BOTH")
     period = request.args.get("period", "3y")
-    top = int(request.args.get("top", 5))
     synthetic = request.args.get("synthetic", "0") == "1"
     data_provider = request.args.get("data_provider", "auto")
     model_kind = request.args.get("model_kind", "logistic")
@@ -408,21 +407,25 @@ def api_recommend():
     if advisor_run and not _os.getenv("ANTHROPIC_API_KEY"):
         advisor_run = False
 
-    config = RecommendationConfig(
-        universe=parse_universe(universe),
-        track=track,
-        period=period,
-        top_n=top,
-        synthetic=synthetic,
-        data_provider=data_provider,
-        output_dir=output_dir,
-        model_kind=model_kind,
-        xgb_device="cpu",
-        advisor_run=advisor_run,
-        advisor_blend_weight=advisor_blend_weight if advisor_run else 0.0,
-    )
+    _tickers = parse_universe(universe)
+    if len(_tickers) > 30:
+        return jsonify({"error": f"universe too large: {len(_tickers)} tickers (max 30)"}), 400
 
     try:
+        top = int(request.args.get("top", 5))
+        config = RecommendationConfig(
+            universe=_tickers,
+            track=track,
+            period=period,
+            top_n=top,
+            synthetic=synthetic,
+            data_provider=data_provider,
+            output_dir=output_dir,
+            model_kind=model_kind,
+            xgb_device="cpu",
+            advisor_run=advisor_run,
+            advisor_blend_weight=advisor_blend_weight if advisor_run else 0.0,
+        )
         engine = RecommendationEngine(config)
         results = engine.run()
         paths = engine.write_reports(results)

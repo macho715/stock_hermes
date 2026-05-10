@@ -236,9 +236,9 @@ graph TD
 | File | Role |
 |---|---|
 | `src/main.jsx` | React mount |
-| `src/StockPredV5.jsx` | Main dashboard UI: SIGNAL, MODELS, BACKTEST, REC |
-| `src/components/RecommendationPanel.jsx` | Loads dashboard snapshot through FILE or API mode |
-| `src/components/RecommendationCard.jsx` | Renders ticker, track, score, probability, EV, entry, stop, TP2, R/R, validation count |
+| `src/StockPredV5.jsx` | Main dashboard UI: SIGNAL, MODELS, BACKTEST, REC; `advisorEnabled` state + LLM ADVISOR purple pill toggle in REC panel (Updated: 2026-05-10) |
+| `src/components/RecommendationPanel.jsx` | Loads dashboard snapshot through FILE / IMPORT / API mode; `recApiUrl` injects `advisor_run=1&advisor_blend_weight=0.3` when LLM Advisor toggle is ON |
+| `src/components/RecommendationCard.jsx` | Renders ticker, track, score, probability, EV, entry, stop, TP2, R/R, validation count; LLM Advisor score gauge (Updated: 2026-05-10) |
 | `src/components/RiskGateBadge.jsx` | Renders verdict badge for ELIGIBLE, ACCUMULATE, AMBER, RED, ZERO, fallback labels |
 
 ### Dashboard public and build output

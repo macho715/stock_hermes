@@ -13,6 +13,30 @@ This file follows the Keep a Changelog section style. Git history was not availa
 
 ## [Unreleased]
 
+### 2026-05-10 — LLM Advisor Toggle + /api/recommend advisor params (feat P6)
+
+This section records the P6 LLM Advisor wiring to the live dashboard API and the corresponding
+React UI toggle added to the REC panel.
+
+#### Added
+
+- **`stock_rtx4060_unified/api_server.py`** — `advisor_run` and `advisor_blend_weight` query
+  params wired to `/api/recommend`; `RecommendationConfig` now receives both values from the
+  request.  Silently disabled (`advisor_run=False`) when `ANTHROPIC_API_KEY` is absent so
+  existing callers remain unaffected.
+- **`root_folder_snapshot/stock-pred-v5/src/StockPredV5.jsx`** — `advisorEnabled` boolean state
+  (default `false`) added.  `recApiUrl` useMemo injects `advisor_run=1&advisor_blend_weight=0.3`
+  when `advisorEnabled` is `true`, triggering a fresh `/api/recommend` call with advisor blend
+  active.  A purple pill toggle ("LLM ADVISOR") is rendered inside the REC panel below the "API
+  REQUEST DEFAULTS" box; visible only in API source mode.
+
+#### QA
+
+- 1,210 tests passed, 17 skipped — zero regression (pytest, 2026-05-10).
+- `df6468f` committed and pushed to `origin/main`.
+
+---
+
 ### 2026-05-03 root documentation sync for dashboard public export
 
 This section records the root-document update that aligns `SYSTEM_ARCHITECTURE.md`, `SYSTEM_LAYOUT.md`, `README.md`, `plan.md`, and this changelog with the latest verified dashboard public export workflow.

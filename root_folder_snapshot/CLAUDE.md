@@ -40,6 +40,7 @@ Last verified: 2026-05-03
 - Never mark a recommendation Green from model probability alone; Risk Gate and validation checks must pass.
 - If yfinance or external market data is unavailable, use `--synthetic` only for smoke tests and label outputs as synthetic/demo.
 - If a test fails, explain the root cause and fix it rather than suppressing assertions.
+- LLM Advisor (`advisor_run=True`) requires `ANTHROPIC_API_KEY`; `api_server.py` silently disables it when the key is absent — never assume the advisor ran unless the response contains `advisor_score`. Dashboard toggle (`advisorEnabled`) is `false` by default and appends `advisor_run=1&advisor_blend_weight=0.3` to `/api/recommend` only when explicitly enabled.
 
 ## Response Contract
 - Use Korean for user-facing explanations unless asked otherwise.
