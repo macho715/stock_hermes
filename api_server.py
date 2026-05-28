@@ -28,7 +28,7 @@ if str(SRC) not in sys.path:
 
 from stock_rtx4060.dashboard_bridge import build_dashboard_snapshot
 from stock_rtx4060.data_providers import load_ohlcv_with_provider
-from stock_rtx4060.ensemble_model import EnsemblePredictor, ModelConfig
+from stock_rtx4060.ensemble_model import EnsemblePredictor, GRUPredictor, ModelConfig, _has_torch
 from stock_rtx4060.feature_engine import TechnicalIndicators
 from stock_rtx4060.paper_trading import load_paper_status
 from stock_rtx4060.recommendation_engine import RecommendationConfig, RecommendationEngine, parse_universe
@@ -324,12 +324,46 @@ def api_model_scores():
         if model.oof_probabilities_ is not None:
             oof_coverage = float(model.oof_probabilities_.notna().mean())
 
+        # Secondary LogReg score — always computed (fast, no extra deps)
+        logistic_score: float | None
+        if backend_kind == "logistic":
+            logistic_score = primary_score
+        else:
+            try:
+                _lr = EnsemblePredictor(ModelConfig(
+                    horizon=horizon, n_splits=3, gap=horizon,
+                    model_kind="logistic", use_lstm=False, lite=True,
+                ))
+                _lr.fit(feature_df)
+                _lr_latest = _lr.predict_latest(feature_df)
+                logistic_score = round(float(_lr_latest["direction_prob"]) * 100.0, 2)
+            except Exception:
+                logistic_score = None
+
+        # RNN (GRU) score — computed when PyTorch is available
+        rnn_score: float | None = None
+        if _has_torch():
+            try:
+                _gru_cfg = ModelConfig(
+                    horizon=horizon, seq_len=model.config.seq_len, lite=True,
+                )
+                _gru = GRUPredictor(_gru_cfg)
+                _gru.fit(
+                    feature_df.loc[:, model.feature_cols],
+                    feature_df["target_direction"].astype(int),
+                )
+                _gru_prob = _gru.predict_proba(feature_df.loc[:, model.feature_cols])
+                if len(_gru_prob):
+                    rnn_score = round(float(_gru_prob[-1]) * 100.0, 2)
+            except Exception:
+                rnn_score = None
+
         model_scores = {
             "main": main_score,
             "xgboost": primary_score if backend_kind.startswith("xgb") else None,
-            "logistic": primary_score if backend_kind == "logistic" else None,
+            "logistic": logistic_score,
             "lstm": lstm_score,
-            "rnn": None,
+            "rnn": rnn_score,
         }
 
         return jsonify(

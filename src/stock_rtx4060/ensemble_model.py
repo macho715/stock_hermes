@@ -371,6 +371,108 @@ class LSTMPredictor:
         return self._net.predict(X_seq.astype(np.float32)).flatten().clip(0.0, 1.0)
 
 
+class GRUPredictor:
+    """Gated Recurrent Unit predictor — lightweight RNN alternative to LSTM.
+
+    Uses ``torch.nn.GRU`` when PyTorch is available (GPU-accelerated on CUDA),
+    otherwise raises ``RuntimeError`` with an install hint.  The public interface
+    mirrors :class:`LSTMPredictor` so callers can substitute one for the other.
+    """
+
+    def __init__(self, config: ModelConfig):
+        self.config = config
+        self._net: Any | None = None
+        self.scaler = StandardScaler()
+        self.imputer = SimpleImputer(strategy="median")
+
+    def _build_sequences(self, X: np.ndarray) -> np.ndarray:
+        if len(X) <= self.config.seq_len:
+            return np.empty((0, self.config.seq_len, X.shape[1]), dtype=float)
+        return np.stack([X[i - self.config.seq_len : i] for i in range(self.config.seq_len, len(X))])
+
+    @staticmethod
+    def _torch_device() -> str:
+        try:
+            import torch
+            return "cuda" if torch.cuda.is_available() else "cpu"
+        except ImportError:
+            return "cpu"
+
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> "GRUPredictor":
+        if not _has_torch():
+            raise RuntimeError(
+                "PyTorch not installed — install with: "
+                "pip install torch --index-url https://download.pytorch.org/whl/cu128"
+            )
+        import torch
+        import torch.nn as nn
+        from torch.utils.data import DataLoader, TensorDataset
+
+        clean = self.imputer.fit_transform(X.replace([np.inf, -np.inf], np.nan))
+        scaled = self.scaler.fit_transform(clean)
+        X_seq = self._build_sequences(scaled)
+        y_seq = y.astype(int).to_numpy()[self.config.seq_len :]
+        if len(X_seq) == 0 or len(np.unique(y_seq)) < 2:
+            raise RuntimeError("GRU 학습 데이터 부족")
+
+        device = torch.device(self._torch_device())
+        n_feat = X.shape[1]
+
+        class _GRUNet(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.gru  = nn.GRU(n_feat, 48, num_layers=2, batch_first=True, dropout=0.2)
+                self.drop = nn.Dropout(0.2)
+                self.fc   = nn.Linear(48, 1)
+
+            def forward(self, x: Any) -> Any:
+                out, _ = self.gru(x)
+                return torch.sigmoid(self.fc(self.drop(out[:, -1, :]))).squeeze(1)
+
+        net = _GRUNet().to(device)
+        opt = torch.optim.Adam(net.parameters(), lr=0.001)
+        crit = nn.BCELoss()
+        Xt = torch.tensor(X_seq, dtype=torch.float32).to(device)
+        yt = torch.tensor(y_seq, dtype=torch.float32).to(device)
+        loader = DataLoader(TensorDataset(Xt, yt), batch_size=32, shuffle=False)
+        best_loss, patience, no_improve, best_state = float("inf"), 6, 0, None
+        net.train()
+        for _ in range(35):
+            ep_loss = 0.0
+            for xb, yb in loader:
+                opt.zero_grad()
+                loss = crit(net(xb), yb)
+                loss.backward()
+                opt.step()
+                ep_loss += loss.item()
+            if ep_loss < best_loss:
+                best_loss, no_improve = ep_loss, 0
+                best_state = {k: v.clone() for k, v in net.state_dict().items()}
+            else:
+                no_improve += 1
+                if no_improve >= patience:
+                    break
+        if best_state:
+            net.load_state_dict(best_state)
+        self._net = (net, device)
+        return self
+
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
+        if self._net is None:
+            raise RuntimeError("fit() 먼저 호출 필요")
+        import torch
+        net, device = self._net
+        clean = self.imputer.transform(X.replace([np.inf, -np.inf], np.nan))
+        scaled = self.scaler.transform(clean)
+        X_seq = self._build_sequences(scaled)
+        if len(X_seq) == 0:
+            return np.array([], dtype=float)
+        net.eval()
+        with torch.no_grad():
+            Xt = torch.tensor(X_seq, dtype=torch.float32).to(device)
+            return net(Xt).cpu().numpy().flatten().clip(0.0, 1.0)
+
+
 class EnsemblePredictor:
     """XGBoost/logistic plus optional LSTM with leak-safe walk-forward CV."""
 
