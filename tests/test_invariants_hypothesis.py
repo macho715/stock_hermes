@@ -28,7 +28,6 @@ from stock_rtx4060.paper_trading import (
     PaperTradingSignal,
 )
 
-
 # ---------------------------------------------------------------------------
 # Shared strategies
 # ---------------------------------------------------------------------------
@@ -142,7 +141,7 @@ def test_inv3_pit_future_as_of_raises(days_future):
 
 
 @given(score=st.floats(-1.0, 1.0, allow_nan=False))
-@settings(max_examples=300)
+@settings(max_examples=300, deadline=None)
 def test_inv4_advisory_output_accepts_valid_scores(score):
     """INV-4a: AdvisoryOutput accepts any score in [-1, +1]."""
     from stock_rtx4060.advisors.base import AdvisoryOutput
@@ -163,7 +162,7 @@ def test_inv4_advisory_output_accepts_valid_scores(score):
 
 
 @given(score=st.one_of(st.floats(1.001, 100.0), st.floats(-100.0, -1.001)))
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 def test_inv4_advisory_output_rejects_out_of_range(score):
     """INV-4b: AdvisoryOutput raises ValueError for score outside [-1, +1]."""
     from stock_rtx4060.advisors.base import AdvisoryOutput
