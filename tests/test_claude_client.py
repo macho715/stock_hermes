@@ -351,3 +351,98 @@ def test_minimax_result_strips_think_blocks(monkeypatch: pytest.MonkeyPatch):
     )
 
     assert result.text == "{\"score\":0}"
+
+
+# ---------------------------------------------------------------------------
+# W2-B3: LiteLLM gateway tests
+# ---------------------------------------------------------------------------
+
+
+def test_litellm_disabled_by_default(monkeypatch: pytest.MonkeyPatch):
+    """USE_LITELLM defaults to false — native path must be used."""
+    monkeypatch.delenv("USE_LITELLM", raising=False)
+    import importlib
+    import stock_rtx4060.advisors.claude_client as cc_mod
+
+    importlib.reload(cc_mod)
+    assert cc_mod._USE_LITELLM is False
+
+
+def test_litellm_enabled_by_env(monkeypatch: pytest.MonkeyPatch):
+    """USE_LITELLM=true activates the LiteLLM flag."""
+    monkeypatch.setenv("USE_LITELLM", "true")
+    import importlib
+    import stock_rtx4060.advisors.claude_client as cc_mod
+
+    importlib.reload(cc_mod)
+    assert cc_mod._USE_LITELLM is True
+    monkeypatch.delenv("USE_LITELLM", raising=False)
+    importlib.reload(cc_mod)
+
+
+def test_litellm_has_litellm_flag():
+    """litellm package should be installed in this environment."""
+    import stock_rtx4060.advisors.claude_client as cc_mod
+
+    assert cc_mod._HAS_LITELLM is True, (
+        "_HAS_LITELLM is False — install litellm: pip install litellm>=1.55"
+    )
+
+
+def test_audit_log_includes_provider_field(tmp_path: "pytest.tmp_path_factory"):
+    """W2-B3: log_advisor_call writes provider field to JSONL."""
+    import json
+    from pathlib import Path
+
+    from stock_rtx4060.advisors.audit import log_advisor_call
+    from stock_rtx4060.advisors.base import AdvisoryOutput
+
+    log_path = tmp_path / "test_advisor.jsonl"
+    output = AdvisoryOutput(
+        agent="news_sentiment",
+        ticker="AAPL",
+        score=0.3,
+        confidence=0.8,
+        rationale="test",
+        citations=[],
+        prompt_hash="abc123",
+        tokens_in=100,
+        tokens_out=10,
+        cost_usd=0.001,
+    )
+    log_advisor_call(output, path=log_path, provider="anthropic")
+
+    with log_path.open() as fh:
+        record = json.loads(fh.readline())
+
+    assert "provider" in record, "provider field missing from audit log"
+    assert record["provider"] == "anthropic"
+
+
+def test_audit_log_provider_null_when_not_set(tmp_path: "pytest.tmp_path_factory"):
+    """W2-B3: log_advisor_call writes provider=null when provider not passed."""
+    import json
+
+    from stock_rtx4060.advisors.audit import log_advisor_call
+    from stock_rtx4060.advisors.base import AdvisoryOutput
+
+    log_path = tmp_path / "test_advisor_null.jsonl"
+    output = AdvisoryOutput(
+        agent="macro_regime",
+        ticker="AAPL",
+        score=0.0,
+        confidence=0.5,
+        rationale="neutral",
+        citations=[],
+        prompt_hash="def456",
+        tokens_in=50,
+        tokens_out=5,
+        cost_usd=0.0,
+    )
+    log_advisor_call(output, path=log_path)  # no provider kwarg
+
+    with log_path.open() as fh:
+        record = json.loads(fh.readline())
+
+    assert "provider" in record, "provider field missing"
+    assert record["provider"] is None

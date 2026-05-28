@@ -9,3 +9,5 @@ pre-commit>=3.8
 types-requests
 # Phase 6 — mock anthropic HTTP for advisor tests.
 respx>=0.21
+# W2-B1: Property-based testing — financial invariant verification
+hypothesis>=6.100

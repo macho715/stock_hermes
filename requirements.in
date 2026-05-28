@@ -15,7 +15,7 @@ loguru>=0.7
 mlflow>=3.0
 prometheus-client>=0.20
 # Phase 1 PIT data lake (DuckDB+Parquet default; ArcticDB optional)
-duckdb>=1.1
+duckdb>=1.5.3
 pyarrow>=17
 httpx>=0.27
 # Phase 4 portfolio optimization (all optional — pure-Python HRP fallback works without them)
@@ -33,6 +33,7 @@ statsmodels>=0.14
 # Phase 6 LLM advisor layer (all optional — engine has a deterministic
 # fallback when these are missing).
 anthropic>=0.40
+litellm>=1.55  # W2-B3: unified LLM gateway — Anthropic↔MiniMax fallback routing
 langgraph>=0.2
 feedparser
 sec-edgar-downloader

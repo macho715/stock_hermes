@@ -18,12 +18,30 @@ from .base import AdvisoryOutput
 DEFAULT_PATH = Path("audit_log") / "advisor.jsonl"
 
 
-def log_advisor_call(output: AdvisoryOutput, *, path: Path | None = None) -> Path:
-    """Append ``output`` to the advisor audit log.  Returns the file path."""
+def log_advisor_call(
+    output: AdvisoryOutput,
+    *,
+    path: Path | None = None,
+    provider: str | None = None,
+) -> Path:
+    """Append ``output`` to the advisor audit log.  Returns the file path.
+
+    Parameters
+    ----------
+    output
+        The advisory output to log.
+    path
+        Override log path. Defaults to ``audit_log/advisor.jsonl``.
+    provider
+        Optional LLM provider string (e.g. ``"anthropic"``, ``"minimax"``).
+        Added as ``provider`` field when set; ``null`` otherwise.
+        Populated automatically when the LiteLLM gateway is active.
+    """
     target = Path(path) if path is not None else DEFAULT_PATH
     target.parent.mkdir(parents=True, exist_ok=True)
     record = asdict(output)
     record["timestamp_utc"] = datetime.now(UTC).isoformat(timespec="seconds")
+    record["provider"] = provider  # None serialises to JSON null — additive field
     with target.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, ensure_ascii=False) + "\n")
     return target

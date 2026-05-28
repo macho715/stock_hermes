@@ -44,6 +44,19 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# W2-B3: LiteLLM optional import — graceful degradation when not installed.
+try:
+    from litellm import Router as _LiteLLMRouter  # type: ignore[import-not-found]
+
+    _HAS_LITELLM = True
+except ImportError:
+    _LiteLLMRouter = None  # type: ignore[assignment, misc]
+    _HAS_LITELLM = False
+
+# Feature flag — set USE_LITELLM=true to activate the LiteLLM gateway.
+# Disabled by default so the existing Anthropic/MiniMax path is unaffected.
+_USE_LITELLM: bool = os.environ.get("USE_LITELLM", "false").lower() in ("1", "true", "yes")
+
 DEFAULT_MODEL = "claude-opus-4-7"
 DEFAULT_MINIMAX_MODEL = "MiniMax-M2.7"
 DEFAULT_MINIMAX_BASE_URL = "https://api.minimax.io/v1"
@@ -461,7 +474,14 @@ class ClaudeClient:
         tools: list[dict[str, Any]] | None = None,
         max_tokens: int | None = None,
     ) -> CallResult:
-        """Synchronous wrapper around ``messages.create``."""
+        """Synchronous wrapper around ``messages.create``.
+
+        When ``USE_LITELLM=true`` and litellm is installed, routes through the
+        LiteLLM Router with Anthropic as primary and MiniMax as fallback.
+        Falls back to the native Anthropic/MiniMax path otherwise.
+        """
+        if _USE_LITELLM and _HAS_LITELLM:
+            return self._call_via_litellm(system=system, messages=messages, max_tokens=max_tokens)
         if self._provider() == "minimax":
             return self._call_minimax(system=system, messages=messages, max_tokens=max_tokens)
         client = self._ensure_sync()
@@ -599,6 +619,92 @@ class ClaudeClient:
                 delay = self._sleep_for(attempt)
                 logger.info("MiniMax retryable error (%s); sleeping %.2fs", type(exc).__name__, delay)
                 await asyncio.sleep(delay)
+
+    # ---------- LiteLLM gateway path (W2-B3) -----------------------------------
+
+    def _call_via_litellm(
+        self,
+        *,
+        system: str | list[dict[str, Any]] | None,
+        messages: list[dict[str, Any]],
+        max_tokens: int | None = None,
+    ) -> CallResult:
+        """Route through LiteLLM Router with Anthropic primary + MiniMax fallback.
+
+        Activated only when ``USE_LITELLM=true`` and ``litellm`` is installed.
+        Falls back silently to the native path on any Router construction error.
+        """
+        import litellm  # local import — only reached when _HAS_LITELLM is True
+
+        fallback_models_raw = os.environ.get("LITELLM_FALLBACK_MODELS", "openai/MiniMax-M2.7")
+        fallback_models = [m.strip() for m in fallback_models_raw.split(",") if m.strip()]
+
+        model_list = [
+            {
+                "model_name": "primary",
+                "litellm_params": {
+                    "model": f"anthropic/{self.model}",
+                    "api_key": self.api_key or os.environ.get("ANTHROPIC_API_KEY", ""),
+                },
+            },
+        ]
+        for fb_model in fallback_models:
+            fb_entry: dict[str, Any] = {
+                "model_name": "fallback",
+                "litellm_params": {"model": fb_model},
+            }
+            minimax_key = os.environ.get("MINIMAX_API_KEY", "")
+            minimax_base = os.environ.get("MINIMAX_BASE_URL", DEFAULT_MINIMAX_BASE_URL)
+            if "minimax" in fb_model.lower() or "MiniMax" in fb_model:
+                fb_entry["litellm_params"]["api_key"] = minimax_key
+                fb_entry["litellm_params"]["api_base"] = minimax_base
+            model_list.append(fb_entry)
+
+        # Build an OpenAI-format messages list (litellm expects this)
+        litellm_messages: list[dict[str, Any]] = []
+        if system:
+            sys_text = system if isinstance(system, str) else " ".join(
+                b.get("text", "") if isinstance(b, dict) else str(b) for b in system
+            )
+            litellm_messages.append({"role": "system", "content": sys_text})
+        litellm_messages.extend(messages)
+
+        prompt_hash = self._hash_payload(system=system, messages=messages, tools=None)
+        used_provider = "anthropic"
+        try:
+            router = _LiteLLMRouter(model_list=model_list, fallbacks=[{"primary": ["fallback"]}])
+            response = router.completion(
+                model="primary",
+                messages=litellm_messages,
+                max_tokens=int(max_tokens or self.max_output_tokens),
+            )
+            # Detect which provider actually served the request
+            if hasattr(response, "_hidden_params"):
+                used_provider = str(response._hidden_params.get("model_id", "anthropic"))
+            content = ""
+            if response.choices:
+                content = response.choices[0].message.content or ""
+            usage = response.usage if hasattr(response, "usage") else None
+            tokens_in = int(usage.prompt_tokens) if usage else 0
+            tokens_out = int(usage.completion_tokens) if usage else 0
+            cost = compute_cost_usd(tokens_in, 0, 0, tokens_out, self._resolved_model())
+            result = CallResult(
+                content=content,
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
+                cost_usd=cost,
+                prompt_hash=prompt_hash,
+                model=self._resolved_model(),
+            )
+            logger.debug("LiteLLM call succeeded via provider=%s", used_provider)
+            # Store provider on the result so callers can log it
+            object.__setattr__(result, "_litellm_provider", used_provider)
+            return result
+        except Exception as exc:
+            logger.warning("LiteLLM Router error (%s) — falling back to native path", exc)
+            if self._provider() == "minimax":
+                return self._call_minimax(system=system, messages=messages, max_tokens=max_tokens)
+            return self.call(system=system, messages=messages, max_tokens=max_tokens)
 
     def _sleep_for(self, attempt: int) -> float:
         delay = min(self.base_delay * (2 ** (attempt - 1)), self.max_delay)
