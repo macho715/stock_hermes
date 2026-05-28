@@ -368,6 +368,14 @@ class EnsemblePredictor:
                 )
             except Exception:  # pragma: no cover
                 pass
+            # mlflow 3.x log_input — training dataset reference
+            try:
+                import mlflow  # type: ignore[import-not-found]
+                if hasattr(mlflow, 'log_input'):
+                    input_ds = mlflow.data.from_pandas(X, targets=y, name="ensemble_train")
+                    mlflow.log_input(input_ds, context="training")
+            except Exception:  # pragma: no cover - mlflow 3.x optional
+                pass
             cv_results = self._fit_folds(
                 X, y, oof, splitter, feature_df, log_metrics=log_metrics
             )

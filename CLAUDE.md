@@ -42,7 +42,7 @@ git push -u origin claude/upgrade-investment-system-2Mc7x
 5. **PurgedKFold groups**: `cv.split(X, groups=_groups)` must always receive the `groups` array — never `cv.split(X)`.
 6. **PIT as_of guard**: When `as_of is not None`, falling through to live providers is forbidden (raises `RuntimeError`).
 7. **numpy bounds**: `numpy>=1.26,<3.0` — shap>=0.50 requires numpy>=2; never re-pin to `<2.0`.
-8. **Test coverage**: `pytest --cov=stock_rtx4060 --cov-fail-under=75` must pass. **Current: 85.82%** (1,210 tests). Target ≥85% total.
+8. **Test coverage**: `pytest --cov=stock_rtx4060 --cov-fail-under=75` must pass. **Current: 86.03%** (incl. `test_walk_forward_purged.py` ×3). Target ≥85% total.
 
 ## Critical Files
 
@@ -168,6 +168,7 @@ pip check 2>&1 | grep -v "^No broken"
 
 | Date | Commit | Fix |
 |---|---|---|
+| 2026-05-11 | `26451eb` | P0: TimeSeriesSplit→PurgedKFold, API universe cap 30, top ValueError guard |
 | 2026-05-10 | `717f3a0` | Coverage 78.5%→85.82%, CORS wildcard fix, InterceptHandler isolation |
 | 2026-05-10 | `c6f0928` | Deprecated utcnow×6, broker_bridge parse_args typo |
 | 2026-05-10 | `d1f5a9a` | numpy read-only array (Python 3.14 compat) |

@@ -53,6 +53,14 @@ def hpo_task(universe: list[str], *, n_trials: int = 10) -> dict[str, Any]:
     n = 200
     X = pd.DataFrame(rng.normal(size=(n, 6)), columns=[f"f{i}" for i in range(6)])
     y = pd.Series((X["f0"] + 0.5 * rng.normal(size=n) > 0).astype(int))
+    # mlflow 3.x log_input — synthetic training dataset reference
+    try:
+        import mlflow  # type: ignore[import-not-found]
+        if hasattr(mlflow, 'log_input'):
+            input_ds = mlflow.data.from_pandas(X, targets=y, name="hpo_train_synthetic")
+            mlflow.log_input(input_ds, context="training")
+    except Exception:  # pragma: no cover - mlflow 3.x optional
+        pass
     try:
         result = run_hpo(X, y, n_trials=n_trials)
     except Exception as exc:  # noqa: BLE001
