@@ -2,6 +2,51 @@
 
 All notable changes for `stock_1901` are documented here.
 
+## 2026-05-29 — GAP Surgical Fixes + MLflow 3.x Upgrade (rtqx4060)
+
+### Summary
+
+패러다임 트레이딩 시스템의 5개 GAP(Global Action Plan) 사소한 수정 + MLflow 3.x 로깅 업그레이드. 모든 기존 테스트 유지하며 회귀 없음.
+
+### Added
+- **`src/stock_rtx4060/ensemble_model.py`** — MLflow `log_input(training)` CV 루프에 추가
+  - `_mlflow_ctx` 컨텍스트 내 `mlflow.data.from_pandas(training)` 로깅
+  - MLflow 3.x `log_input()` API 사용 (하위 호환성: `hasattr(mlflow, 'log_input')` 가드)
+- **`src/stock_rtx4060/ml/hpo.py`** — HPO trial objective 내 `log_input(training)` 추가
+  - `mlflow.data.from_numpy(X, y)`로 학습 데이터 로깅
+- **`flows/research_weekly.py`** —合成학습데이터 패널 로깅 추가
+  - `mlflow.log_input(mlflow.data.from_pandas(hpo_train_synthetic), "training")` 호출
+
+### Fixed
+- **`src/stock_rtx4060/paper_trading.py`** — GAP-01~05 5개 surgical fix (이미 구현됨, 검증 완료)
+  - GAP-01: `evaluate_signal` — score < 56 → `buy_score_below_threshold` 리젝트
+  - GAP-02: `PaperDecision.to_record` — timestamp 필드 추가
+  - GAP-03: `_write_run` — max_open_positions >= 10 → `max_open_positions_reached` 리젝트
+  - GAP-04: `_write_run` — daily_new_count >= 3 → `max_daily_new_positions_reached` 리젝트
+  - GAP-05: `run` — `force_rerun=True` + no `rerun_reason` → `ValueError`
+- **`src/stock_rtx4060/paper_trading.py`** (비 inúmer、バグ_fix) — `_validate_bars`의 날짜 비교 로직 개선
+  - `date.today()` → `date.fromisoformat(config.effective_run_date)` 변경
+  - 과거 데이터(예: 2026-05-01) 테스트 시 벽시계 오늘 날짜 기준陈旧判断 문제 해결
+
+### Changed
+- **`requirements.in`** — `mlflow>=2.16` → `mlflow>=3.0` (MLflow 3.x 필수)
+- **`docs/LAYOUT.md`** — 신규 생성: 전체 프로젝트 디렉터리 레이아웃 문서
+- **`docs/SYSTEM_ARCHITECTURE.md`** — 신규 생성: 시스템 아키텍처 다이어그램
+
+### QA
+- 전체 테스트: **346 passed, 0 failed, 5 skipped** (회귀 없음 ✅)
+- GAP-01~05 테스트: 5/5 pass
+- 커밋: `68ebb84` — 브랜치 `claude/upgrade-rtqx4060-20260529`
+- 리뷰: `out/mstack-review/review-report.md` | QA: `out/mstack-qa/report.md` | 회고: `out/mstack-retro/retro-report.md`
+
+### Out of Scope (다음 스프린트)
+- `src/stock_rtx4060/data_lake/ingest/openbb_ingestor.py` — OpenBB MCP macro data ingestor
+- `src/stock_rtx4060/advisors/orchestrator.py` — OpenBB MCP tool 추가
+- `src/stock_rtx4060/advisors/macro_regime.py` — panel_fetcher 추가
+- `tests/test_chaos_paper_trading.py` — Chaos Engineering 테스트 스위트
+
+---
+
 ## 2026-05-10 — LLM Advisor Score Gauge + Test Coverage Boost + Bug Fixes
 
 ### Added
@@ -411,3 +456,73 @@ Full 8-phase upgrade from research prototype to production-grade hedge-fund-styl
 - Dashboard bridge smoke output: `reports/dashboard_bridge_smoke/dashboard_snapshot.json` contains `dashboard_snapshot.v1`, `report_only`, 2 results, and `screening_output_only=True`.
 - Dashboard browser verification output: `reports/dashboard_browser_verification/dashboard_browser_verification.md` records a PASS result from `node dashboard\verify_bridge_smoke.mjs`.
 - Document/code fit review reports: `reports/doc_code_fit_review_round_1.md`, `reports/doc_code_fit_review_round_2.md`, and `reports/doc_code_fit_review_round_3.md`.
+
+
+## Codex Documentation Update — 2026-05-28T20:44:00.663596+00:00
+
+**Update policy:** existing content above this section is preserved. This section was appended after scanning code, documentation, config, and agent profile files.
+
+**Purpose:** This section records the documentation refresh event without altering earlier changelog entries.
+
+### Evidence inventory
+
+**Source/code files sampled:**
+- `api_server.py`
+- `dashboard\stock_pred_v5.jsx`
+- `flows\__init__.py`
+- `flows\daily_krx.py`
+- `flows\daily_us.py`
+- `flows\research_weekly.py`
+- `flows\utils.py`
+- `main.py`
+- `preview_server.py`
+- `reports\dashboard_browser_verification\snapshot_fixture.js`
+- `root_folder_snapshot\KEVPE_final_package\demo_kevpe_v2.py`
+- `root_folder_snapshot\KEVPE_final_package\kevpe.py`
+
+**Documentation files sampled:**
+- `.codex\goals\dashboard-report-bridge.goal.md`
+- `.codex\goals\mcp-openbb-audit-phase1.goal.md`
+- `.continue\checks\01-financial-safety-boundary.md`
+- `.continue\checks\02-backtest-integrity.md`
+- `.continue\checks\03-recommendation-contract.md`
+- `.continue\checks\04-secret-and-pii-safety.md`
+- `.continue\checks\05-gpu-claim-validation.md`
+- `.continue\checks\06-report-contract.md`
+- `.continue\checks\07-architecture-boundary.md`
+- `.continue\checks\08-test-and-verification.md`
+- `20260507_plan-doc.md`
+- `20260510_project-upgrade-report.md`
+
+**Config/build files sampled:**
+- `.claude\launch.json`
+- `.codex\root-docs-dry-run.json`
+- `.codex\root-docs-scan.json`
+- `.github\workflows\ci.yml`
+- `.pre-commit-config.yaml`
+- `config\data_providers.example.json`
+- `config\runtime_environment.json`
+- `config\sector_map.json`
+- `coverage.json`
+- `docker-compose.dev.yml`
+- `docs\AGENTS.md`
+- `examples\kevpe_events_smoke.json`
+
+**Agent profile files sampled:**
+- No agent profile detected; this update records the absence explicitly.
+
+### Mermaid graph
+
+```mermaid
+timeline
+  title Documentation Update Timeline
+  Scan : Code/docs/agent inventory captured
+  Update : Append-only sections generated
+  Verify : Mermaid and code-reflection checks completed
+```
+
+### Verification notes
+
+- Append-only update generated by `root-docs-batch-update`.
+- Code/config/doc/agent inventory counts: code=2337, docs=1091, config=698, agent_profiles=0.
+- Follow-up verification should confirm that newly added text matches actual implementation paths listed above.

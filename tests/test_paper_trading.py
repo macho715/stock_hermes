@@ -473,7 +473,7 @@ def test_paper_trading_rejected_signal_includes_timestamp(tmp_path):
 
 # TC-03: max open positions 10 is enforced (A-011)
 def test_paper_trading_max_open_positions_limit(tmp_path):
-    config = PaperTradingConfig(output_root=tmp_path, max_open_positions=2)
+    config = PaperTradingConfig(output_root=tmp_path, max_open_positions=2, run_date="2026-05-05")
     engine = PaperTradingEngine(config)
 
     signals = [_signal(ticker=f"TK{i:02d}", score=67.0) for i in range(3)]
@@ -492,7 +492,7 @@ def test_paper_trading_max_open_positions_limit(tmp_path):
 
 # TC-04: max daily new positions 3 is enforced (A-012)
 def test_paper_trading_max_daily_new_positions_limit(tmp_path):
-    config = PaperTradingConfig(output_root=tmp_path, max_daily_new_positions=2)
+    config = PaperTradingConfig(output_root=tmp_path, max_daily_new_positions=2, run_date="2026-05-05")
     engine = PaperTradingEngine(config)
 
     signals = [_signal(ticker=f"DN{i:02d}", score=67.0) for i in range(3)]

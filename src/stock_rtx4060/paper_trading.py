@@ -534,24 +534,25 @@ def _validate_bars(bars: list[dict[str, Any]], config: PaperTradingConfig) -> st
         if high < low or high < max(open_, close) or low > min(open_, close):
             invalid_rows += 1
     if invalid_rows / max(len(bars), 1) > config.max_missing_bar_ratio:
-        return "ohlcv_invalid"
-    latest = _parse_day(str(bars[-1].get("date", "")))
+        return 'ohlcv_invalid'
+    latest = _parse_day(str(bars[-1].get('date', '')))
     if latest is not None:
-        days_old = (date.today() - latest).days
+        days_old = (date.fromisoformat(config.effective_run_date) - latest).days
         if days_old > config.stale_days:
-            return "ohlcv_stale"
+            return 'ohlcv_stale'
     return None
 
 
 def _has_nonpositive_ohlcv(bars: list[dict[str, Any]]) -> bool:
     for bar in bars:
-        prices = [_to_float(bar.get(key)) for key in ("open", "high", "low", "close")]
-        volume = _to_float(bar.get("volume"))
+        prices = [_to_float(bar.get(key)) for key in ('open', 'high', 'low', 'close')]
+        volume = _to_float(bar.get('volume'))
         if any(value is None or value <= 0 for value in prices):
             return True
         if volume is None or volume < 0:
             return True
     return False
+
 
 
 def _has_split_uncertainty(bars: list[dict[str, Any]], config: PaperTradingConfig) -> bool:

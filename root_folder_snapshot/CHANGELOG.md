@@ -13,6 +13,31 @@ This file follows the Keep a Changelog section style. Git history was not availa
 
 ## [Unreleased]
 
+### 2026-05-11 — P0 Fix: PurgedKFold 교체 + API universe cap (fix P0)
+
+#### Changed
+
+- **`src/stock_rtx4060/recommendation_engine.py`** — `_fit_walk_forward_model()` 내부
+  `TimeSeriesSplit` → `PurgedKFold` 교체.  `embargo_pct = clip(horizon/len(X), 0.01, 0.10)`,
+  `groups = arange(N) + horizon` 전달.  반환 dict `"gap"` 키는
+  `int(floor(len(X) * embargo_pct))`로 재계산해 backward-compat 유지.
+
+#### Added
+
+- **`api_server.py`** — `/api/recommend` endpoint에 universe 크기 상한 추가:
+  31+ 티커 요청 시 HTTP 400 `{"error": "universe too large: N tickers (max 30)"}` 반환.
+  `top = int(...)` 파싱을 `try` 블록 안으로 이동해 `ValueError` 처리 보완.
+- **`tests/test_walk_forward_purged.py`** (신규) — 3개 테스트:
+  `test_uses_purged_kfold`, `test_oof_no_lookahead`, `test_api_universe_cap`.
+
+#### QA
+
+- `pytest --cov-fail-under=85`: 전체 통과, coverage **86.03%**.
+- Offline smoke SYNTH-A Track-S PASS.
+- 커밋 `26451eb` pushed to `origin/main` (2026-05-11).
+
+---
+
 ### 2026-05-10 — LLM Advisor Toggle + /api/recommend advisor params (feat P6)
 
 This section records the P6 LLM Advisor wiring to the live dashboard API and the corresponding

@@ -5,6 +5,7 @@ __pycache__/
 .ruff_cache/
 .coverage
 htmlcov/
+coverage.json
 
 .venv/
 .venv-*/
@@ -22,9 +23,19 @@ build/
 logs/
 tmp/
 cache/
+out/
+output/playwright/*.png
+
+# Local agent and server runtime noise
+.codex/root-docs-*.json
+/*.log
 
 # Generated runtime report outputs. Tracked audit reports remain tracked.
 reports/dashboard_bridge_smoke/
+reports/api_recommend*/recommendations_algo_v2_*.json
+reports/api_recommend*/recommendations_algo_v2_*.md
+reports/api_recommend*/audit_log.jsonl
+reports/smoke_p0/
 reports/ops_v1_*_smoke*/
 reports/recommendations_*_smoke*/
 reports/recommendations_live_*/

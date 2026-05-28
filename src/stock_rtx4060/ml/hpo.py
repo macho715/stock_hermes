@@ -129,6 +129,14 @@ def run_hpo(
             with MLflowSession(experiment, run_name=f"trial_{trial.number}"):
                 log_params({**params, "model": model})
                 log_metrics({"oos_brier": mean_score})
+                # mlflow 3.x log_input — training fold reference
+                try:
+                    import mlflow  # type: ignore[import-not-found]
+                    if hasattr(mlflow, 'log_input'):
+                        input_ds = mlflow.data.from_numpy(X_arr[tr], targets=y_arr[tr], name="hpo_trial_train")
+                        mlflow.log_input(input_ds, context="training")
+                except Exception:  # pragma: no cover - mlflow 3.x optional
+                    pass
         except Exception:  # pragma: no cover - MLflow optional
             _LOG.debug("mlflow logging failed for trial %d", trial.number)
         return mean_score
