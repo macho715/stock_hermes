@@ -23,7 +23,7 @@ skfolio>=0.4
 cvxpy>=1.5
 PyPortfolioOpt>=1.5
 # Phase 3 ML upgrade (all optional — engine uses XGBoost path when missing)
-optuna>=4.0
+optuna>=4.8  # 4.8.0 is current stable; v5 not yet on PyPI (2026-05-29)
 shap>=0.46
 lightgbm>=4.5
 # Phase 5 backtest hardening (all optional — pure-NumPy fallbacks ship in-repo)

@@ -287,3 +287,61 @@ def test_make_xgb_param_space():
     expected_keys = {"n_estimators", "max_depth", "learning_rate", "subsample",
                      "colsample_bytree", "reg_lambda"}
     assert expected_keys.issubset(set(params.keys()))
+
+
+# ---------------------------------------------------------------------------
+# Optuna 4.8 upgrade — make_journal_storage + version tests
+# ---------------------------------------------------------------------------
+
+
+def test_optuna_version_gte_4_8():
+    """Optuna >=4.8 must be installed (requirements.in bump)."""
+    import optuna
+
+    ver = tuple(int(x) for x in optuna.__version__.split(".")[:2])
+    assert ver >= (4, 8), f"Optuna {optuna.__version__} < 4.8 — run: pip install 'optuna>=4.8'"
+
+
+def test_make_journal_storage_creates_storage(tmp_path):
+    """make_journal_storage returns a JournalStorage usable for a study."""
+    from optuna.storages import JournalStorage
+
+    from stock_rtx4060.ml.hpo import make_journal_storage
+
+    log_path = str(tmp_path / "test_study.log")
+    storage = make_journal_storage(log_path)
+    assert isinstance(storage, JournalStorage)
+
+
+def test_make_journal_storage_study_persists(tmp_path):
+    """A study created with JournalStorage is accessible across study loads."""
+    import optuna
+
+    from stock_rtx4060.ml.hpo import make_journal_storage
+
+    log_path = str(tmp_path / "persist_test.log")
+    storage = make_journal_storage(log_path)
+    study_name = "optuna_journal_test"
+
+    study = optuna.create_study(study_name=study_name, storage=storage, direction="minimize")
+    study.optimize(lambda t: t.suggest_float("x", -1, 1) ** 2, n_trials=3)
+
+    # Reload from same journal file
+    storage2 = make_journal_storage(log_path)
+    loaded = optuna.load_study(study_name=study_name, storage=storage2)
+    assert len(loaded.trials) == 3
+    assert loaded.best_value <= 1.0
+
+
+def test_grpc_storage_proxy_importable():
+    """GrpcStorageProxy must be importable from optuna.storages (4.2+)."""
+    from optuna.storages import GrpcStorageProxy  # noqa: F401 — import check only
+
+    assert GrpcStorageProxy is not None
+
+
+def test_make_journal_storage_exported_in_all():
+    """make_journal_storage must be in hpo.__all__."""
+    from stock_rtx4060.ml import hpo
+
+    assert "make_journal_storage" in hpo.__all__
