@@ -238,10 +238,10 @@ Flask API endpoints from `api_server.py`:
 | `track` | `BOTH` | `S`, `L`, or `BOTH` |
 | `period` | `3y` | yfinance history period |
 | `top` | `5` | Max candidates returned |
-| `advisor_run` | `0` | `1` to enable P6 LLM Advisor blend (requires `ANTHROPIC_API_KEY`) |
+| `advisor_run` | `0` | `1` to enable P6 LLM Advisor blend (requires `ANTHROPIC_API_KEY` or `MINIMAX_API_KEY`) |
 | `advisor_blend_weight` | `0.3` | Blend weight when `advisor_run=1`; ignored otherwise |
 
-> **Note**: when `ANTHROPIC_API_KEY` is absent, `api_server.py` silently forces `advisor_run=False` — the engine runs in deterministic mode and the response will not contain `advisor_score`.
+> **Note**: when both `ANTHROPIC_API_KEY` and `MINIMAX_API_KEY` are absent, `api_server.py` silently forces `advisor_run=False` — the engine runs in deterministic mode and the response will not contain `advisor_score`. Set `LLM_ADVISOR_PROVIDER=minimax` to force MiniMax when both providers are configured.
 
 `dashboard_bridge.py` requires these source result fields before building a dashboard snapshot:
 

@@ -1340,7 +1340,7 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                         LLM ADVISOR
                       </span>
                       <span style={{ color: C.textMuted, marginLeft: "auto" }}>
-                        {advisorEnabled ? "blend_weight=0.30 · requires ANTHROPIC_API_KEY" : "OFF"}
+                        {advisorEnabled ? "blend_weight=0.30 · requires ANTHROPIC_API_KEY or MINIMAX_API_KEY" : "OFF"}
                       </span>
                     </div>
                   )}

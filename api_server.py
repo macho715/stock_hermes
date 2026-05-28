@@ -402,9 +402,10 @@ def api_recommend():
     advisor_run = request.args.get("advisor_run", "0") == "1"
     advisor_blend_weight = float(request.args.get("advisor_blend_weight", "0.3"))
 
-    # Silently disable advisor when ANTHROPIC_API_KEY is absent
-    import os as _os
-    if advisor_run and not _os.getenv("ANTHROPIC_API_KEY"):
+    # Silently disable advisor when no supported live LLM key is available.
+    from stock_rtx4060.advisors.claude_client import has_live_advisor_key
+
+    if advisor_run and not has_live_advisor_key():
         advisor_run = False
 
     _tickers = parse_universe(universe)

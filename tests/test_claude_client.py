@@ -16,10 +16,22 @@ import pytest
 from stock_rtx4060.advisors.claude_client import (
     CACHE_READ_MULTIPLIER,
     CACHE_WRITE_MULTIPLIER,
+    DEFAULT_MINIMAX_BASE_URL,
+    DEFAULT_MINIMAX_MODEL,
     DEFAULT_MODEL,
     ClaudeClient,
     compute_cost_usd,
+    has_live_advisor_key,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("MINIMAX_API_KEY", raising=False)
+    monkeypatch.delenv("MINIMAX_BASE_URL", raising=False)
+    monkeypatch.delenv("MINIMAX_MODEL", raising=False)
+    monkeypatch.delenv("LLM_ADVISOR_PROVIDER", raising=False)
 
 # ─── fake message + client ────────────────────────────────────────────────
 
@@ -62,6 +74,31 @@ class _FakeClient:
         self.calls: list[dict[str, Any]] = []
         self.messages = _SyncMessages(self)
         self.error_queue: list[Exception | None] = []
+
+
+class _MiniMaxResponse:
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self.payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict[str, Any]:
+        return self.payload
+
+
+class _MiniMaxClient:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    def post(self, path: str, **kwargs: Any) -> _MiniMaxResponse:
+        self.calls.append({"path": path, **kwargs})
+        return _MiniMaxResponse(
+            {
+                "choices": [{"message": {"role": "assistant", "content": "{\"ok\": true}"}}],
+                "usage": {"prompt_tokens": 11, "completion_tokens": 7},
+            }
+        )
 
 
 # ─── cost arithmetic ──────────────────────────────────────────────────────
@@ -243,3 +280,50 @@ def test_prompt_hash_is_deterministic():
     assert a.prompt_hash == b.prompt_hash
     c = client.call(system="hello!", messages=[{"role": "user", "content": "x"}])
     assert a.prompt_hash != c.prompt_hash
+
+
+def test_has_live_advisor_key_accepts_minimax(monkeypatch: pytest.MonkeyPatch):
+    assert has_live_advisor_key() is False
+    monkeypatch.setenv("MINIMAX_API_KEY", "sk-cp-test")
+    assert has_live_advisor_key() is True
+
+
+def test_minimax_call_uses_openai_compatible_payload(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LLM_ADVISOR_PROVIDER", "minimax")
+    monkeypatch.setenv("MINIMAX_API_KEY", "sk-cp-test")
+
+    client = ClaudeClient()
+    fake = _MiniMaxClient()
+    client._sync_client = fake
+
+    result = client.call(system="sys", messages=[{"role": "user", "content": "hi"}])
+
+    assert result.text == "{\"ok\": true}"
+    assert result.tokens_in == 11
+    assert result.tokens_out == 7
+    assert result.cache_read_tokens == 0
+    assert result.cache_creation_tokens == 0
+    assert result.cost_usd == 0.0
+    assert result.model == DEFAULT_MINIMAX_MODEL
+    assert fake.calls[0]["path"] == "/chat/completions"
+    assert fake.calls[0]["headers"]["Authorization"] == "Bearer sk-cp-test"
+    assert fake.calls[0]["json"]["model"] == DEFAULT_MINIMAX_MODEL
+    assert fake.calls[0]["json"]["messages"][0] == {"role": "system", "content": "sys"}
+    assert fake.calls[0]["json"]["messages"][1] == {"role": "user", "content": "hi"}
+
+
+def test_minimax_can_reuse_sk_cp_anthropic_env_key(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-cp-test")
+
+    client = ClaudeClient()
+    fake = _MiniMaxClient()
+    client._sync_client = fake
+
+    result = client.call(system=None, messages=[{"role": "user", "content": "hi"}])
+
+    assert result.model == DEFAULT_MINIMAX_MODEL
+    assert fake.calls[0]["headers"]["Authorization"] == "Bearer sk-cp-test"
+
+
+def test_minimax_base_url_default_constant():
+    assert DEFAULT_MINIMAX_BASE_URL == "https://api.minimax.io/v1"

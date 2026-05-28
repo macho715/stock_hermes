@@ -1,18 +1,21 @@
-"""Tests for OpenBB macro ingestor + paper_trading chaos boundaries — RED phase."""
+"""Tests for OpenBB macro ingestor + paper_trading chaos boundaries."""
 from __future__ import annotations
 
-import pytest
-from unittest.mock import MagicMock, patch
+import logging
 import os
 import py_compile
 
+import pytest
+
+from stock_rtx4060.data_lake.ingest import openbb_ingestor
+from stock_rtx4060.paper_trading import PaperTradingConfig, PaperTradingEngine, PaperTradingSignal
 
 # =====================================================================
-# PR-O: OpenBB Macro Ingestor — RED (file doesn't exist yet)
+# PR-O: OpenBB Macro Ingestor
 # =====================================================================
 
 class TestOpenBBIngestor:
-    """TDD RED → GREEN → REFACTOR for openbb_ingestor.py."""
+    """OpenBB ingestor graceful-degradation coverage."""
 
     def test_openbb_module_compiles(self):
         """openbb_ingestor.py must compile without import errors."""
@@ -26,16 +29,24 @@ class TestOpenBBIngestor:
         except py_compile.PyCompileError as exc:
             pytest.fail(f"openbb_ingestor.py does not compile: {exc}")
 
-    def test_ingest_openbb_graceful_degradation_no_openbb(self):
+    def test_ingest_openbb_graceful_degradation_no_openbb(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ):
         """OpenBB unavailable → warning log + return 0, no crash."""
-        # Will fail to import until GREEN
-        with pytest.raises(ImportError):
-            from stock_rtx4060.data_lake.ingest.openbb_ingestor import ingest_openbb_macro
+        monkeypatch.setattr(openbb_ingestor, "_openbb_available", lambda: False)
 
-    def test_ingest_openbb_no_hard_dependency_in_trading_path(self):
+        with caplog.at_level(logging.WARNING):
+            assert openbb_ingestor.ingest_openbb_macro() == 0
+
+        assert "openbb not installed" in caplog.text
+
+    def test_ingest_openbb_no_hard_dependency_in_trading_path(self, monkeypatch: pytest.MonkeyPatch):
         """ingest_openbb_macro must not crash when OpenBB is absent."""
-        with pytest.raises(ImportError):
-            from stock_rtx4060.data_lake.ingest.openbb_ingestor import ingest_openbb_macro
+        monkeypatch.setattr(openbb_ingestor, "_openbb_available", lambda: False)
+
+        assert openbb_ingestor.ingest_openbb_macro(store=None) == 0
 
 
 # =====================================================================
@@ -58,8 +69,6 @@ class TestChaosPaperTradingRealAPI:
 
     def test_chaos_reject_signal_without_model_auc(self):
         """PR-C1: signal with model_auc=None → rejected by engine."""
-        from stock_rtx4060.paper_trading import PaperTradingConfig, PaperTradingSignal, PaperTradingEngine
-
         config = PaperTradingConfig(min_buy_score=56.0)
         signal = PaperTradingSignal(
             ticker="AAPL",
@@ -76,8 +85,6 @@ class TestChaosPaperTradingRealAPI:
 
     def test_chaos_reject_signal_without_model_accuracy(self):
         """PR-C2: signal with model_accuracy=None → rejected."""
-        from stock_rtx4060.paper_trading import PaperTradingConfig, PaperTradingSignal, PaperTradingEngine
-
         config = PaperTradingConfig(min_buy_score=56.0)
         signal = PaperTradingSignal(
             ticker="AAPL",
@@ -94,8 +101,6 @@ class TestChaosPaperTradingRealAPI:
 
     def test_chaos_reject_signal_without_oof_coverage(self):
         """PR-C3: signal with oof_coverage=None → rejected."""
-        from stock_rtx4060.paper_trading import PaperTradingConfig, PaperTradingSignal, PaperTradingEngine
-
         config = PaperTradingConfig(min_buy_score=56.0)
         signal = PaperTradingSignal(
             ticker="AAPL",
@@ -111,8 +116,6 @@ class TestChaosPaperTradingRealAPI:
 
     def test_chaos_accept_valid_signal(self):
         """PR-C4: valid signal with all model evidence + valid bars → accepted."""
-        from stock_rtx4060.paper_trading import PaperTradingConfig, PaperTradingSignal, PaperTradingEngine
-
         config = PaperTradingConfig(min_buy_score=56.0)
         signal = PaperTradingSignal(
             ticker="AAPL",
@@ -133,8 +136,6 @@ class TestChaosPaperTradingRealAPI:
 
     def test_chaos_reject_weak_model_quality_warning(self):
         """PR-C5: signal.warning containing '모델 품질 낮음' → rejected."""
-        from stock_rtx4060.paper_trading import PaperTradingConfig, PaperTradingSignal, PaperTradingEngine
-
         config = PaperTradingConfig(min_buy_score=56.0)
         signal = PaperTradingSignal(
             ticker="AAPL",
@@ -152,8 +153,6 @@ class TestChaosPaperTradingRealAPI:
 
     def test_chaos_reject_krx_ticker_when_us_only(self):
         """PR-C6: KRX ticker (.KS/.KQ suffix) rejected when phase1_us_only=True."""
-        from stock_rtx4060.paper_trading import PaperTradingConfig, PaperTradingSignal, PaperTradingEngine
-
         config = PaperTradingConfig(phase1_us_only=True)
         signal = PaperTradingSignal(
             ticker="005930.KS",   # KRX ticker with .KS suffix
