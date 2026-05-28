@@ -197,8 +197,6 @@ def test_inv5_portfolio_weights_sum_to_one(n_assets, n_rows):
     """INV-5: optimize() always returns weights that sum to 1.0 ± 1e-5."""
     from stock_rtx4060.portfolio.optimizer import optimize
 
-    # max_weight=0.25 requires n_assets >= 4 to be feasible (0.25 * 4 = 1.0).
-    assume(n_assets >= 4)
     rng = np.random.default_rng(seed=42 + n_assets + n_rows)
     returns = pd.DataFrame(
         rng.standard_normal((n_rows, n_assets)),

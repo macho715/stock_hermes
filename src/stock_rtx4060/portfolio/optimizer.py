@@ -493,6 +493,12 @@ def optimize(
     if seed is not None:
         np.random.seed(int(seed))
 
+    n_assets = returns.shape[1]
+    # Clamp max_weight so that max_weight * n_assets >= 1 (simplex feasibility).
+    # A caller passing max_weight=0.25 with only 2 assets would otherwise crash
+    # _project_box with "max_weight 0.25 * n 2 < 1 (infeasible)".
+    effective_max_weight = max(max_weight, 1.0 / n_assets)
+
     method_lc = method  # type: ignore[assignment]
     if method_lc not in ("hrp", "nco", "risk_budgeting", "mv_cvar", "black_litterman"):
         raise ValueError(f"Unknown method: {method}")
@@ -507,7 +513,7 @@ def optimize(
         views=views,
         cov_estimator=cov_estimator,
         cvar_alpha=cvar_alpha,
-        max_weight=max_weight,
+        max_weight=effective_max_weight,
         min_weight=min_weight,
     )
 
@@ -520,7 +526,7 @@ def optimize(
             views=views,
             cov_estimator=cov_estimator,
             cvar_alpha=cvar_alpha,
-            max_weight=max_weight,
+            max_weight=effective_max_weight,
             min_weight=min_weight,
         )
 
@@ -555,5 +561,5 @@ def optimize(
     weights = weights.fillna(0.0)
     if weights.sum() > 0:
         weights = weights / weights.sum()
-    weights = _project_box(weights, min_weight, max_weight)
+    weights = _project_box(weights, min_weight, effective_max_weight)
     return weights
