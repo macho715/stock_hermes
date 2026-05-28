@@ -1,6 +1,6 @@
-# Plan — Optuna 4.8 Upgrade + JournalStorage
+# Plan — PyTorch LSTM/LogReg 패치 (방법 C)
 
-**Session:** auto-20260529-030258
+**Session:** auto-20260529-032629
 **Date:** 2026-05-29
 **Type:** FEATURE
 **Branch:** `claude/openbb-chaos-20260529`

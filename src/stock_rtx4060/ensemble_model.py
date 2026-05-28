@@ -233,70 +233,142 @@ class DirectionModel:
             return pd.Series(dtype=float)
 
 
+def _has_torch() -> bool:
+    """Check whether PyTorch (torch) is importable."""
+    try:
+        import torch  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+class _TorchLSTMNet:
+    """Internal PyTorch LSTM network — only instantiated when torch is available."""
+
+    def __init__(self, n_features: int, seq_len: int, device: str) -> None:
+        import torch
+        import torch.nn as nn
+
+        self.device = torch.device(device)
+        self.seq_len = seq_len
+
+        class _Net(nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.lstm1 = nn.LSTM(n_features, 64, batch_first=True)
+                self.bn    = nn.BatchNorm1d(64)
+                self.drop1 = nn.Dropout(0.25)
+                self.lstm2 = nn.LSTM(64, 32, batch_first=True)
+                self.drop2 = nn.Dropout(0.20)
+                self.fc1   = nn.Linear(32, 16)
+                self.relu  = nn.ReLU()
+                self.fc2   = nn.Linear(16, 1)
+
+            def forward(self, x):  # x: (batch, seq, features)
+                out, _ = self.lstm1(x)
+                out = self.bn(out[:, -1, :])
+                out = self.drop1(out).unsqueeze(1)
+                out, _ = self.lstm2(out)
+                out = self.drop2(out[:, -1, :])
+                return torch.sigmoid(self.fc2(self.relu(self.fc1(out)))).squeeze(1)
+
+        self.net = _Net().to(self.device)
+        self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.001)
+        self.criterion = torch.nn.BCELoss()
+
+    def fit(self, X_seq: "np.ndarray", y_seq: "np.ndarray", epochs: int = 40) -> None:
+        import torch
+        from torch.utils.data import DataLoader, TensorDataset
+
+        Xt = torch.tensor(X_seq, dtype=torch.float32).to(self.device)
+        yt = torch.tensor(y_seq, dtype=torch.float32).to(self.device)
+        ds = TensorDataset(Xt, yt)
+        loader = DataLoader(ds, batch_size=32, shuffle=False)
+        best_loss, patience, no_improve = float("inf"), 6, 0
+        best_state = None
+        self.net.train()
+        for _ in range(epochs):
+            epoch_loss = 0.0
+            for xb, yb in loader:
+                self.optimizer.zero_grad()
+                loss = self.criterion(self.net(xb), yb)
+                loss.backward()
+                self.optimizer.step()
+                epoch_loss += loss.item()
+            if epoch_loss < best_loss:
+                best_loss = epoch_loss
+                best_state = {k: v.clone() for k, v in self.net.state_dict().items()}
+                no_improve = 0
+            else:
+                no_improve += 1
+                if no_improve >= patience:
+                    break
+        if best_state is not None:
+            self.net.load_state_dict(best_state)
+
+    def predict(self, X_seq: "np.ndarray") -> "np.ndarray":
+        import torch
+        self.net.eval()
+        with torch.no_grad():
+            Xt = torch.tensor(X_seq, dtype=torch.float32).to(self.device)
+            return self.net(Xt).cpu().numpy()
+
+
 class LSTMPredictor:
-    """Optional TensorFlow LSTM.  If TensorFlow is unavailable, caller falls back."""
+    """LSTM time-series predictor.
+
+    Backend selection (automatic):
+    - PyTorch + CUDA  when ``torch`` is installed and CUDA is available
+    - PyTorch CPU     when ``torch`` is installed but CUDA is not available
+    - Raises RuntimeError on ``fit()`` when ``torch`` is not installed
+      (``use_lstm=True`` should only be set when torch is present)
+    """
 
     def __init__(self, config: ModelConfig):
         self.config = config
-        self.model = None
+        self._net: _TorchLSTMNet | None = None
         self.scaler = StandardScaler()
         self.imputer = SimpleImputer(strategy="median")
+
+    @staticmethod
+    def _torch_device() -> str:
+        try:
+            import torch
+            return "cuda" if torch.cuda.is_available() else "cpu"
+        except ImportError:
+            return "cpu"
 
     def _build_sequences(self, X: np.ndarray) -> np.ndarray:
         if len(X) <= self.config.seq_len:
             return np.empty((0, self.config.seq_len, X.shape[1]), dtype=float)
         return np.stack([X[i - self.config.seq_len : i] for i in range(self.config.seq_len, len(X))])
 
-    def _build_model(self, n_features: int):
-        from tensorflow.keras.layers import LSTM, BatchNormalization, Dense, Dropout, Input
-        from tensorflow.keras.models import Sequential
-        from tensorflow.keras.optimizers import Adam
-
-        model = Sequential(
-            [
-                Input(shape=(self.config.seq_len, n_features)),
-                LSTM(64, return_sequences=True),
-                BatchNormalization(),
-                Dropout(0.25),
-                LSTM(32),
-                Dropout(0.20),
-                Dense(16, activation="relu"),
-                Dense(1, activation="sigmoid", dtype="float32"),
-            ]
-        )
-        model.compile(optimizer=Adam(learning_rate=0.001), loss="binary_crossentropy", metrics=["accuracy"])
-        return model
-
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> LSTMPredictor:
-        from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau  # type: ignore
-
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> "LSTMPredictor":
+        if not _has_torch():
+            raise RuntimeError(
+                "PyTorch not installed — install with: "
+                "pip install torch --index-url https://download.pytorch.org/whl/cu128"
+            )
         clean = self.imputer.fit_transform(X.replace([np.inf, -np.inf], np.nan))
         scaled = self.scaler.fit_transform(clean)
         X_seq = self._build_sequences(scaled)
         y_seq = y.astype(int).to_numpy()[self.config.seq_len :]
         if len(X_seq) == 0 or len(np.unique(y_seq)) < 2:
             raise RuntimeError("LSTM 학습 데이터 부족")
-        self.model = self._build_model(X.shape[1])
-        self.model.fit(
-            X_seq,
-            y_seq,
-            epochs=40,
-            batch_size=32,
-            validation_split=0.1,
-            callbacks=[EarlyStopping(patience=6, restore_best_weights=True), ReduceLROnPlateau(patience=3, factor=0.5)],
-            verbose=0,
-        )
+        device = self._torch_device()
+        self._net = _TorchLSTMNet(X.shape[1], self.config.seq_len, device)
+        self._net.fit(X_seq.astype(np.float32), y_seq.astype(np.float32))
         return self
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
-        if self.model is None:
+        if self._net is None:
             raise RuntimeError("fit() 먼저 호출 필요")
         clean = self.imputer.transform(X.replace([np.inf, -np.inf], np.nan))
         scaled = self.scaler.transform(clean)
         X_seq = self._build_sequences(scaled)
         if len(X_seq) == 0:
             return np.array([], dtype=float)
-        return self.model.predict(X_seq, verbose=0).flatten().clip(0.0, 1.0)
+        return self._net.predict(X_seq.astype(np.float32)).flatten().clip(0.0, 1.0)
 
 
 class EnsemblePredictor:
