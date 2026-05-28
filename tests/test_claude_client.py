@@ -308,6 +308,7 @@ def test_minimax_call_uses_openai_compatible_payload(monkeypatch: pytest.MonkeyP
     assert fake.calls[0]["path"] == "/chat/completions"
     assert fake.calls[0]["headers"]["Authorization"] == "Bearer sk-cp-test"
     assert fake.calls[0]["json"]["model"] == DEFAULT_MINIMAX_MODEL
+    assert fake.calls[0]["json"]["reasoning_split"] is True
     assert fake.calls[0]["json"]["messages"][0] == {"role": "system", "content": "sys"}
     assert fake.calls[0]["json"]["messages"][1] == {"role": "user", "content": "hi"}
 
@@ -327,3 +328,26 @@ def test_minimax_can_reuse_sk_cp_anthropic_env_key(monkeypatch: pytest.MonkeyPat
 
 def test_minimax_base_url_default_constant():
     assert DEFAULT_MINIMAX_BASE_URL == "https://api.minimax.io/v1"
+
+
+def test_minimax_result_strips_think_blocks(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LLM_ADVISOR_PROVIDER", "minimax")
+    monkeypatch.setenv("MINIMAX_API_KEY", "sk-cp-test")
+
+    client = ClaudeClient()
+    result = client._build_minimax_call_result(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "<think>private reasoning {\"score\": 1}</think>{\"score\":0}",
+                    }
+                }
+            ],
+            "usage": {"prompt_tokens": 3, "completion_tokens": 4},
+        },
+        "hash",
+    )
+
+    assert result.text == "{\"score\":0}"

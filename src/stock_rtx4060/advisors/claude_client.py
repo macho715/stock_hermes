@@ -7,6 +7,8 @@ Design notes
   ``claude-api`` skill bundle.
 * MiniMax is supported through its OpenAI-compatible chat completions
   endpoint.  Set ``MINIMAX_API_KEY`` or ``LLM_ADVISOR_PROVIDER=minimax``.
+  MiniMax thinking output is requested through ``reasoning_split=True`` so
+  advisor agents receive parseable final text instead of ``<think>`` blocks.
 * Up to **four** ``cache_control: {"type": "ephemeral"}`` breakpoints are
   supported — system prompt, factor schema reference, ticker fundamental
   snapshot, and prior conversation.  The Messages API allows at most 4
@@ -367,7 +369,17 @@ class ClaudeClient:
             "model": self._resolved_model(),
             "max_tokens": int(max_tokens or self.max_output_tokens),
             "messages": minimax_messages,
+            "reasoning_split": True,
         }
+
+    @staticmethod
+    def _strip_minimax_thinking(text: str) -> str:
+        import re
+
+        stripped = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        if stripped.startswith("<think>") and "</think>" in stripped:
+            stripped = stripped.split("</think>", 1)[1].strip()
+        return stripped
 
     @staticmethod
     def _extract_minimax_text(payload: dict[str, Any]) -> str:
@@ -377,14 +389,14 @@ class ClaudeClient:
         message = choices[0].get("message") or {}
         content = message.get("content", "")
         if isinstance(content, str):
-            return content
+            return ClaudeClient._strip_minimax_thinking(content)
         if isinstance(content, list):
             chunks: list[str] = []
             for block in content:
                 if isinstance(block, dict) and block.get("type") == "text":
                     chunks.append(str(block.get("text", "")))
-            return "".join(chunks)
-        return str(content or "")
+            return ClaudeClient._strip_minimax_thinking("".join(chunks))
+        return ClaudeClient._strip_minimax_thinking(str(content or ""))
 
     def _build_minimax_call_result(self, payload: dict[str, Any], prompt_hash: str) -> CallResult:
         usage = payload.get("usage") or {}
