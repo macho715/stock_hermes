@@ -57,7 +57,7 @@ def make_journal_storage(path: str) -> Any:
     ``GrpcStorageProxy`` instead — see
     https://optuna.readthedocs.io/en/stable/reference/generated/optuna.storages.GrpcStorageProxy.html
     """
-    optuna = _require_optuna()
+    _require_optuna()
     from optuna.storages import JournalStorage  # type: ignore[import-not-found]
     from optuna.storages.journal import JournalFileBackend  # type: ignore[import-not-found]
 
