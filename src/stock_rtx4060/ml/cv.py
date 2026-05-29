@@ -144,3 +144,116 @@ class PurgedKFold:
 
 
 __all__ = ["PurgedKFold"]
+
+
+class CombinatorialPurgedCV:
+    """Combinatorial Purged Cross-Validation (CPCV) for overfitting diagnostics.
+
+    Generates C(n_splits, n_test_splits) unique test-path combinations, each
+    with full overlap purge and embargo.  Running a backtest on each path
+    yields a distribution of OOS Sharpe ratios from which PBO and DSR can be
+    computed.
+
+    Reference: López de Prado, AFML §12; Bailey et al., Backtest Overfitting
+    in the Machine Learning Era, SSRN 4686376.
+
+    Parameters
+    ----------
+    n_splits:
+        Total number of folds (``k`` in ``C(k, p)``).
+    n_test_splits:
+        Number of folds held out per path (``p`` in ``C(k, p)``).
+        Default 2 → 15 paths for n_splits=6.
+    embargo_pct:
+        Same as :class:`PurgedKFold`.
+
+    Notes
+    -----
+    Use :class:`PurgedKFold` for day-to-day OOF training.  Reserve
+    ``CombinatorialPurgedCV`` for pre-LIVE_REVIEW_CANDIDATE diagnostics
+    only — it is slower (C(k,p) backtests vs k backtests).
+    """
+
+    def __init__(
+        self,
+        n_splits: int = 6,
+        n_test_splits: int = 2,
+        embargo_pct: float = 0.01,
+    ) -> None:
+        if n_splits < 2:
+            raise ValueError(f"n_splits must be >= 2, got {n_splits}")
+        if not (1 <= n_test_splits < n_splits):
+            raise ValueError(f"n_test_splits must be in [1, n_splits), got {n_test_splits}")
+        if not (0.0 <= embargo_pct < 1.0):
+            raise ValueError(f"embargo_pct must be in [0, 1), got {embargo_pct}")
+        self.n_splits = int(n_splits)
+        self.n_test_splits = int(n_test_splits)
+        self.embargo_pct = float(embargo_pct)
+
+    def get_n_splits(self, X=None, y=None, groups=None) -> int:  # noqa: ARG002
+        from math import comb
+        return comb(self.n_splits, self.n_test_splits)
+
+    def split(self, X, y=None, groups=None):
+        """Yield ``(train_idx, test_idx)`` for all C(n_splits, n_test_splits) paths.
+
+        Uses the same full-overlap purge rule as :class:`PurgedKFold`.
+        """
+        from itertools import combinations
+
+        n_samples = len(X)
+        if n_samples < self.n_splits + 1:
+            raise ValueError(
+                f"CombinatorialPurgedCV requires n_samples > n_splits={self.n_splits}, got {n_samples}"
+            )
+
+        positions = np.arange(n_samples)
+        if groups is not None:
+            ends = np.asarray(pd.Series(groups).values)
+            if len(ends) != n_samples:
+                raise ValueError(f"groups length {len(ends)} != X length {n_samples}")
+            if np.any(ends < positions):
+                raise ValueError("groups must contain label end index >= row position")
+        else:
+            ends = positions.copy()
+
+        starts = positions
+        embargo = int(np.floor(n_samples * self.embargo_pct))
+
+        # Build fold boundaries
+        fold_sizes = np.full(self.n_splits, n_samples // self.n_splits, dtype=int)
+        fold_sizes[: n_samples % self.n_splits] += 1
+        fold_bounds: list[tuple[int, int]] = []
+        cur = 0
+        for fs in fold_sizes:
+            fold_bounds.append((cur, cur + int(fs)))
+            cur += int(fs)
+
+        for test_fold_indices in combinations(range(self.n_splits), self.n_test_splits):
+            # Collect test indices from selected folds
+            test_parts = [positions[fold_bounds[fi][0]:fold_bounds[fi][1]] for fi in test_fold_indices]
+            test_idx = np.concatenate(test_parts)
+
+            test_start = int(test_idx.min())
+            test_end = int(np.max(ends[test_idx]))
+
+            train_mask = np.ones(n_samples, dtype=bool)
+            # Remove test positions
+            for fi in test_fold_indices:
+                s, e = fold_bounds[fi]
+                train_mask[s:e] = False
+
+            # Full overlap purge
+            overlap = (starts <= test_end) & (ends >= test_start)
+            train_mask &= ~overlap
+
+            # Embargo after the last test fold's end
+            last_test_stop = fold_bounds[max(test_fold_indices)][1]
+            if embargo > 0:
+                emb_stop = min(last_test_stop + embargo, n_samples)
+                train_mask[last_test_stop:emb_stop] = False
+
+            yield positions[train_mask], test_idx
+
+
+__all__ = ["PurgedKFold", "CombinatorialPurgedCV"]

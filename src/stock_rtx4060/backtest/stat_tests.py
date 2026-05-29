@@ -183,3 +183,29 @@ def min_track_record_length(
         denom = 1e-12
     bound = 1.0 + denom * (z / (sr - sr_benchmark)) ** 2
     return int(math.ceil(bound))
+
+
+def probability_of_backtest_overfitting(sharpe_paths: list[float]) -> float:
+    r"""Probability of Backtest Overfitting (PBO) from CPCV path distribution.
+
+    Simplified estimate: fraction of out-of-sample paths with Sharpe <= 0.
+
+    A rigorous PBO uses the logistic of median rank (Bailey et al., 2014).
+    This implementation uses the simpler path-fraction formulation suitable
+    for screening-level diagnostics.
+
+    Parameters
+    ----------
+    sharpe_paths:
+        List of OOS Sharpe ratios from CombinatorialPurgedCV paths.
+
+    Returns
+    -------
+    float in [0, 1].  ``1.0`` when no paths have positive Sharpe.
+    Lower is better. ``pbo <= 0.20`` required for LIVE_REVIEW_CANDIDATE.
+    """
+    if not sharpe_paths:
+        return 1.0
+    n = len(sharpe_paths)
+    n_negative = sum(1 for s in sharpe_paths if s <= 0.0)
+    return float(n_negative) / float(n)

@@ -1,7 +1,11 @@
-"""Pre-canned historical stress scenarios.
+"""Pre-canned historical stress scenarios and cost stress engine.
 
 Replays a strategy's daily return series across a fixed window of dates
 (GFC, COVID crash, 2022 rate-shock).  Returns standard risk metrics.
+
+Also provides :func:`run_cost_stress` which re-runs a backtest at 1×/2×/3×
+transaction cost and slippage to verify alpha survives realistic adverse
+fee environments (v5.1 spec §5).
 """
 
 from __future__ import annotations
@@ -87,3 +91,69 @@ def run_replay(
         "worst_day": worst_day,
         "n_days": n_days,
     }
+
+
+def run_cost_stress(
+    backtester_cls: "type",
+    prices: "pd.Series | list[float]",
+    signals: "pd.Series | list[float]",
+    base_config: "object",
+    *,
+    multipliers: tuple[int, ...] = (1, 2, 3),
+) -> dict[str, object]:
+    """Re-run backtest at 1x/2x/3x transaction cost and slippage.
+
+    Parameters
+    ----------
+    backtester_cls:
+        The ``Backtester`` class (passed to avoid circular import).
+    prices, signals:
+        Same inputs passed to ``Backtester.run()``.
+    base_config:
+        ``BacktestConfig`` dataclass instance with base cost/slippage.
+    multipliers:
+        Cost multipliers to evaluate.  Default ``(1, 2, 3)``.
+
+    Returns
+    -------
+    Dict with keys:
+
+    - ``"scenarios"``: per-multiplier results (total_return_pct, sharpe, n_trades)
+    - ``"alpha_after_1x_cost"``, ``"alpha_after_2x_cost"``, ``"alpha_after_3x_cost"``
+    - ``"cost_stress_status"``: ``"PASS"`` if 1x alpha > 0 and 3x alpha >= 0,
+      else ``"AMBER"``
+
+    The PASS condition follows v5.1 spec §5:
+      alpha_after_1x_cost > 0  AND  alpha_after_3x_cost >= 0
+    """
+    import dataclasses
+
+    scenarios: dict[str, dict] = {}
+    for mult in multipliers:
+        cfg_scaled = dataclasses.replace(
+            base_config,
+            transaction_cost=base_config.transaction_cost * mult,
+            slippage=base_config.slippage * mult,
+        )
+        bt = backtester_cls(cfg_scaled).run(prices, signals)
+        alpha = float(bt.get("total_return_pct", 0.0))
+        scenarios[f"{mult}x"] = {
+            "multiplier": mult,
+            "transaction_cost": cfg_scaled.transaction_cost,
+            "slippage": cfg_scaled.slippage,
+            "total_return_pct": alpha,
+            "sharpe_ratio": bt.get("sharpe_ratio"),
+            "n_trades": bt.get("n_trades", 0),
+        }
+
+    alpha_1x = float(scenarios.get("1x", {}).get("total_return_pct", 0.0))
+    alpha_3x = float(scenarios.get("3x", {}).get("total_return_pct", 0.0))
+    status = "PASS" if alpha_1x > 0 and alpha_3x >= 0 else "AMBER"
+
+    result: dict[str, object] = {
+        "scenarios": scenarios,
+        "cost_stress_status": status,
+    }
+    for mult in multipliers:
+        result[f"alpha_after_{mult}x_cost"] = scenarios.get(f"{mult}x", {}).get("total_return_pct")
+    return result
