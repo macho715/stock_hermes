@@ -17,7 +17,6 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score
-from .ml.cv import PurgedKFold
 
 from .audit_log import AuditEvent, AuditLogger
 from .backtest_honesty import evaluate_backtest_honesty, summarize_honesty
@@ -26,6 +25,7 @@ from .data_providers import ProviderResult, load_ohlcv_with_provider
 from .ensemble_model import DirectionModel, ModelConfig, _safe_auc
 from .feature_engine import TechnicalIndicators, build_features, feature_columns
 from .kevpe_adapter import get_kevpe_adapter, kevpe_signal_to_supplement
+from .ml.cv import PurgedKFold
 
 Track = Literal["S", "L"]
 Verdict = Literal[

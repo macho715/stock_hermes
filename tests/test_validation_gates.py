@@ -282,7 +282,8 @@ def test_gate_registry_completeness():
     assert len(GATE_REGISTRY) >= 20
     # All 10 G-gates present
     for i in range(1, 11):
-        key = f"G{i:02d}_{'_' * 0}"  # just check prefix pattern
+        key = f"G{i:02d}_"
+        assert any(k.startswith(key) for k in GATE_REGISTRY)
     g_gates = [k for k in GATE_REGISTRY if k.startswith("G")]
     re_gates = [k for k in GATE_REGISTRY if k.startswith("RE")]
     assert len(g_gates) >= 10, f"Expected 10 G-gates, got {len(g_gates)}"
