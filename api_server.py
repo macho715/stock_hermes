@@ -261,6 +261,7 @@ def api_model_scores():
     synthetic = request.args.get("synthetic", "0") == "1"
     use_lstm = request.args.get("use_lstm", "0") == "1"
     horizon = int(request.args.get("horizon", 5))
+    cv_kind = request.args.get("cv_kind", "purged")  # v5.1: default purged (was timeseries)
 
     if not symbol:
         return jsonify({"error": "symbol param required"}), 400
@@ -298,15 +299,19 @@ def api_model_scores():
                 }
             ), 422
 
+        _n_rows = len(feature_df)
+        _embargo_pct = float(max(0.01, min(0.10, horizon / max(_n_rows, 1))))
         model = EnsemblePredictor(
             ModelConfig(
                 horizon=horizon,
-                n_splits=3,
+                n_splits=5,           # v5.1: 5 folds for ~100% OOF (was 3)
                 gap=horizon,
                 model_kind=model_kind,  # type: ignore[arg-type]
                 xgb_device="cpu",
                 use_lstm=use_lstm,
                 lite=True,
+                cv_kind=cv_kind,      # v5.1: "purged" default (was "timeseries")
+                embargo_pct=_embargo_pct,
             )
         )
         cv_results = model.fit(feature_df)
@@ -331,8 +336,9 @@ def api_model_scores():
         else:
             try:
                 _lr = EnsemblePredictor(ModelConfig(
-                    horizon=horizon, n_splits=3, gap=horizon,
+                    horizon=horizon, n_splits=5, gap=horizon,
                     model_kind="logistic", use_lstm=False, lite=True,
+                    cv_kind=cv_kind, embargo_pct=_embargo_pct,  # v5.1: purged
                 ))
                 _lr.fit(feature_df)
                 _lr_latest = _lr.predict_latest(feature_df)
@@ -384,8 +390,15 @@ def api_model_scores():
                     "oof_coverage": round(oof_coverage, 6),
                     "model_accuracy": round(_mean_metric(cv_results, "accuracy", 0.0), 6),
                     "model_auc": round(_mean_metric(cv_results, "auc", 0.5), 6),
-                    "cv_gap": int(model.config.gap or 0),
-                    "training_mode": "walk_forward_refit",
+                    # v5.1: CV provenance fields (replaces opaque cv_gap)
+                    "cv_method": "purged_kfold_oof" if cv_kind == "purged" else "timeseries_kfold",
+                    "cv_kind": cv_kind,
+                    "label_horizon_bars": horizon,
+                    "embargo_pct": round(_embargo_pct, 6),
+                    "embargo_samples": int(_n_rows * _embargo_pct),
+                    "backtest_probability_source": "OOF_ONLY_FILLED_0_5",
+                    "cv_gap": int(model.config.gap or 0),  # legacy — kept for compat
+                    "training_mode": "purged_kfold_oof_refit" if cv_kind == "purged" else "walk_forward_refit",
                     "lstm_requested": use_lstm,
                     "lstm_enabled": bool(latest.get("lstm_enabled")),
                     "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
