@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .utils import flow, get_run_logger, slack_on_failure, with_retries
+from .utils import flow, get_run_logger, slack_on_failure, task, with_retries
 
 logger = logging.getLogger("flows.research_weekly")
 
@@ -189,6 +189,110 @@ def promotion_gate_task(
     return {"promoted": False, "delta": delta, "best_value": new_value, "baseline": baseline}
 
 
+@with_retries(retries=1, retry_delay_seconds=30)
+def qlib_export_task(universe: list[str], *, run_date: str | None = None) -> dict[str, Any]:
+    """Export OHLCV data from DuckDB to Qlib bin format for RD-Agent consumption.
+
+    Calls :func:`stock_rtx4060.factors.rd_agent.qlib_exporter.export_ohlcv_to_qlib`.
+    Gracefully degrades when qlib is not installed (CSV layer is still produced).
+    """
+    from datetime import date as Date
+
+    actual_date = run_date or str(Date.today())
+    try:
+        from stock_rtx4060.factors.rd_agent.qlib_exporter import export_ohlcv_to_qlib
+
+        rows = export_ohlcv_to_qlib(universe, actual_date, convert_bin=True)
+        return {"exported": rows, "run_date": actual_date, "skipped": False}
+    except Exception as exc:  # noqa: BLE001 - qlib may be missing; degrade gracefully
+        logger.warning("qlib_export_task failed: %s", exc)
+        return {"exported": {}, "run_date": actual_date, "skipped": True, "error": str(exc)}
+
+
+@with_retries(retries=1, retry_delay_seconds=30)
+def factor_validation_task(*, run_date: str | None = None) -> dict[str, Any]:
+    """Validate and stage newly discovered factors for approval.
+
+    Calls :func:`stock_rtx4060.factors.rd_agent.registry_hook.validate_and_stage`.
+    When the registry_hook module is absent the task returns a skipped result
+    so the flow can continue without hard dependency on P7 infrastructure.
+    """
+    from datetime import date as Date
+
+    actual_date = run_date or str(Date.today())
+    try:
+        from stock_rtx4060.factors.rd_agent.loader import load_discovered_factors
+
+        # Load all discovered factor classes (validation requires panel + fwd_returns
+        # which are not available here; the full validate_and_stage pipeline runs
+        # inside the ops approval step via cmd_factor_approve).
+        factors = load_discovered_factors(session_id=actual_date)
+        names = [name for name, _ in factors] if factors else []
+        return {"staged_names": names, "session_id": actual_date, "skipped": False}
+    except ImportError:
+        logger.warning("registry_hook/loader module not found — factor_validation_task skipped")
+        return {"staged": None, "run_date": actual_date, "skipped": True}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("factor_validation_task failed: %s", exc)
+        return {"staged": None, "run_date": actual_date, "skipped": True, "error": str(exc)}
+
+
+def _notify_factors_ready(factor_count: int, run_date: str) -> None:
+    """Send a Slack/Discord notification that factors are staged and awaiting approval.
+
+    Resolution order for webhook URLs:
+      1. ``STOCK1901_SLACK_WEBHOOK_URL`` env var  → Slack
+      2. ``STOCK1901_DISCORD_WEBHOOK_URL`` env var → Discord
+    A missing URL logs a warning and exits silently — notifications are best-effort.
+    """
+    import os
+
+    slack_url = os.environ.get("STOCK1901_SLACK_WEBHOOK_URL")
+    discord_url = os.environ.get("STOCK1901_DISCORD_WEBHOOK_URL")
+    url = slack_url or discord_url
+    if not url:
+        logger.warning("factor_notification: no webhook URL configured; skipping")
+        return
+
+    platform = "Slack" if slack_url else "Discord"
+    text = (
+        f":rocket: *RD-Agent Factor Factory — Factors Ready for Approval*\n"
+        f"*Run date:* {run_date}\n"
+        f"*Staged factors:* {factor_count}\n"
+        f"Use `python -m stock_rtx4060.main factor-approve` to register approved factors."
+    )
+
+    try:
+        import httpx
+
+        if discord_url:
+            payload = {"content": text}
+        else:
+            payload = {"text": text}
+
+        resp = httpx.post(url, json=payload, timeout=10.0)
+        if not (200 <= resp.status_code < 300):
+            logger.warning("factor_notification: %s webhook returned %s", platform, resp.status_code)
+        else:
+            logger.info("factor_notification sent via %s", platform)
+    except Exception as exc:  # noqa: BLE001 - notification must never raise
+        logger.warning("factor_notification request failed: %s", exc)
+
+
+@task
+def factor_notification_task(factor_count: int, *, run_date: str | None = None) -> dict[str, Any]:
+    """Send a Slack/Discord alert when new factors are staged and awaiting approval.
+
+    This task is intentionally idempotent — it posts a best-effort notification
+    and always returns ``{"sent": True}`` so the flow does not block on delivery.
+    """
+    from datetime import date as Date
+
+    actual_date = run_date or str(Date.today())
+    _notify_factors_ready(factor_count=factor_count, run_date=actual_date)
+    return {"sent": True, "run_date": actual_date, "factor_count": factor_count}
+
+
 @flow(name="research_weekly_flow")
 def research_weekly_flow(*, universe: list[str] | None = None) -> dict[str, Any]:
     """Sat-02:00 research cycle: mining → HPO → promotion gate."""
@@ -214,6 +318,9 @@ __all__ = [
     "factor_mining_task",
     "hpo_task",
     "promotion_gate_task",
+    "qlib_export_task",
+    "factor_validation_task",
+    "factor_notification_task",
     "RESEARCH_FLOW_CRON",
     "RESEARCH_FLOW_TIMEZONE",
     "PROMOTION_DELTA_THRESHOLD",

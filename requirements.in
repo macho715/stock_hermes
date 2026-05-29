@@ -18,6 +18,10 @@ prometheus-client>=0.20
 duckdb>=1.5.3
 pyarrow>=17
 httpx>=0.27
+# Phase 2 RD-Agent Alpha Factory integration (all optional — graceful degradation when absent)
+rdagent>=0.7,<1.0
+pyqlib>=0.9.7
+
 # Phase 4 portfolio optimization (all optional — pure-Python HRP fallback works without them)
 skfolio>=0.4
 cvxpy>=1.5

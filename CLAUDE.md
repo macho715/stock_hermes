@@ -154,7 +154,43 @@ pip check 2>&1 | grep -v "^No broken"
 | New advisor | `src/stock_rtx4060/advisors/` implementing `Advisor` protocol |
 | New broker | `src/stock_rtx4060/broker/` implementing `BrokerAdapter` ABC |
 | New Prefect flow | `flows/` + cron schedule in deployment config |
+| New RD-Agent factor | `src/stock_rtx4060/factors/rd_agent/` + `tests/test_rd_agent_*.py` |
 | New dashboard field | `recommendation_engine.py` + `dashboard_bridge.py` + `tests/test_dashboard_bridge.py` |
+
+## RD-Agent Integration (P2)
+
+RD-Agent automates factor discovery via Docker subprocess.
+Full docs: see `20260529_plan-doc-rdagent-factory.md`.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `RDAGENT_ENABLED` | `false` | Set `true` to activate Docker-based factor mining |
+| `RDAGENT_DOCKER_IMAGE` | `microsoft/rdagent:latest` | Docker image |
+| `RDAGENT_BUDGET_USD` | `10.0` | Per-cycle LLM budget cap |
+| `RDAGENT_CYCLES` | `2` | Number of discovery cycles |
+| `RDAGENT_TIMEOUT_MIN` | `30` | Docker run timeout (max 60) |
+| `RDAGENT_APPROVAL_REQUIRED` | `true` | `false` = auto-register after validation (dev only) |
+
+### CLI Commands
+
+| Command | Role |
+|---|---|
+| `python -m stock_rtx4060.main factor-mine [--cycles N] [--budget-usd FLOAT]` | Run RD-Agent factor mining |
+| `python -m stock_rtx4060.main factor-list [--status all\|discovered\|staged\|registered]` | List discovered/pending factors |
+| `python -m stock_rtx4060.main factor-approve [--factor-id ID] [--run-date YYYY-MM-DD]` | Approve and register staged factors |
+| `python -m stock_rtx4060.main factor-status` | Show registered discovered factors |
+
+### Modules
+
+- `factors/rd_agent/runner.py` — entry point, delegates to docker_runner
+- `factors/rd_agent/docker_runner.py` — Docker subprocess wrapper
+- `factors/rd_agent/qlib_exporter.py` — DuckDB → Qlib CSV/bin (PIT guard)
+- `factors/rd_agent/loader.py` — dynamic `.py` → Factor instance
+- `factors/rd_agent/provenance.py` — `audit_log/rd_agent.jsonl` JSONL logging
+- `factors/rd_agent/registry_hook.py` — validate → stage → approve → register
+- `factors/rd_agent/validator.py` — IC/IR/correlation/half-life gates
 
 ## Known Issues & Workarounds
 
