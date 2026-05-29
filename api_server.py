@@ -262,13 +262,21 @@ def api_model_scores():
     use_lstm = request.args.get("use_lstm", "0") == "1"
     horizon = int(request.args.get("horizon", 5))
     cv_kind = request.args.get("cv_kind", "purged")  # v5.1: default purged (was timeseries)
+    # contrarian_mode: flip 1-prob for mean-reversion markets.
+    # KRX (*.KS/*.KQ) defaults to True — empirically shows inverse AUC > 0.55 consistently.
+    _contrarian_default = "1" if symbol.strip().upper().endswith((".KS", ".KQ")) else "0"
+    contrarian_mode = request.args.get("contrarian", _contrarian_default) == "1"
 
     if not symbol:
         return jsonify({"error": "symbol param required"}), 400
-    if model_kind not in {"auto", "xgb", "logistic", "rf"}:
-        return jsonify({"error": "model_kind must be auto, xgb, logistic, or rf"}), 400
+    if model_kind not in {"auto", "xgb", "logistic", "rf", "lightgbm"}:
+        return jsonify({"error": "model_kind must be auto, xgb, logistic, rf, or lightgbm"}), 400
     if horizon <= 0:
         return jsonify({"error": "horizon must be positive"}), 400
+
+    # KRX symbols default to LightGBM when model_kind=auto — better for small datasets
+    _is_krx = symbol.endswith((".KS", ".KQ"))
+    _model_kind_effective = "lightgbm" if (_is_krx and model_kind == "auto") else model_kind
 
     try:
         provider_result = load_ohlcv_with_provider(
@@ -304,14 +312,15 @@ def api_model_scores():
         model = EnsemblePredictor(
             ModelConfig(
                 horizon=horizon,
-                n_splits=5,           # v5.1: 5 folds for ~100% OOF (was 3)
+                n_splits=5,
                 gap=horizon,
-                model_kind=model_kind,  # type: ignore[arg-type]
+                model_kind=_model_kind_effective,  # type: ignore[arg-type]
                 xgb_device="cpu",
                 use_lstm=use_lstm,
-                lite=True,
-                cv_kind=cv_kind,      # v5.1: "purged" default (was "timeseries")
+                lite=False,
+                cv_kind=cv_kind,
                 embargo_pct=_embargo_pct,
+                contrarian_mode=contrarian_mode,  # KRX default True
             )
         )
         cv_results = model.fit(feature_df)
@@ -328,6 +337,17 @@ def api_model_scores():
         oof_coverage = 0.0
         if model.oof_probabilities_ is not None:
             oof_coverage = float(model.oof_probabilities_.notna().mean())
+
+        # Fold diagnostics for AUC stability analysis
+        fold_aucs = [float(r.get("auc", 0.5)) for r in cv_results]
+        mean_auc = float(sum(fold_aucs) / len(fold_aucs)) if fold_aucs else 0.5
+        inverse_auc = round(1.0 - mean_auc, 6)
+        folds_above_50_pct = (
+            sum(1 for a in fold_aucs if a > 0.50) / len(fold_aucs) if fold_aucs else 0.0
+        )
+        feature_df_cols = [c for c in feature_df.columns if not c.startswith("target")]
+        train_rows_mean = int(sum(r.get("n_train", 0) for r in cv_results) / max(len(cv_results), 1))
+        sample_feature_ratio = round(train_rows_mean / max(len(feature_df_cols), 1), 2)
 
         # Secondary LogReg score -always computed (fast, no extra deps)
         logistic_score: float | None
@@ -386,23 +406,33 @@ def api_model_scores():
                 "evidence": {
                     "row_count": int(len(provider_result.frame)),
                     "feature_rows": int(len(feature_df)),
+                    "feature_count": len(feature_df_cols),
                     "last_date": _last_date_value(provider_result.frame),
                     "oof_coverage": round(oof_coverage, 6),
                     "model_accuracy": round(_mean_metric(cv_results, "accuracy", 0.0), 6),
-                    "model_auc": round(_mean_metric(cv_results, "auc", 0.5), 6),
-                    # v5.1: CV provenance fields (replaces opaque cv_gap)
+                    "model_auc": round(mean_auc, 6),
+                    # Fold diagnostics (v5.1 — signal quality analysis)
+                    "fold_aucs": [round(a, 4) for a in fold_aucs],
+                    "inverse_auc": inverse_auc,
+                    "folds_above_50_pct": round(folds_above_50_pct, 4),
+                    "train_rows_mean": train_rows_mean,
+                    "sample_feature_ratio": sample_feature_ratio,
+                    # CV provenance
                     "cv_method": "purged_kfold_oof" if cv_kind == "purged" else "timeseries_kfold",
                     "cv_kind": cv_kind,
                     "label_horizon_bars": horizon,
                     "embargo_pct": round(_embargo_pct, 6),
                     "embargo_samples": int(_n_rows * _embargo_pct),
                     "backtest_probability_source": "OOF_ONLY_FILLED_0_5",
-                    "cv_gap": int(model.config.gap or 0),  # legacy — kept for compat
+                    "cv_gap": int(model.config.gap or 0),  # legacy
                     "training_mode": "purged_kfold_oof_refit" if cv_kind == "purged" else "walk_forward_refit",
                     "lstm_requested": use_lstm,
                     "lstm_enabled": bool(latest.get("lstm_enabled")),
+                    "contrarian_mode": contrarian_mode,
                     "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
                 },
+                "requested_model_kind": model_kind,
+                "effective_model_kind": _model_kind_effective,
                 "status": "PASS",
             }
         )
