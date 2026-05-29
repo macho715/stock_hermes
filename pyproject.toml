@@ -2,6 +2,7 @@
 addopts = "-q"
 testpaths = ["tests"]
 pythonpath = [".", "src"]
+asyncio_default_fixture_loop_scope = "function"
 markers = [
     "benchmark: pytest-benchmark micro-benchmarks",
     "slow: integration / live-network tests",

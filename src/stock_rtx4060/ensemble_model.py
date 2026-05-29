@@ -2,7 +2,7 @@
 Walk-forward ensemble model for stock_rtx4060.
 
 Improvements over the previous patch:
-- purged TimeSeriesSplit via ``gap`` to reduce horizon leakage;
+- TimeSeriesSplit ``gap`` or PurgedKFold embargo to reduce horizon leakage;
 - version-aware XGBoost CPU/GPU parameters with CPU fallback;
 - optional LSTM path instead of mandatory TensorFlow dependency;
 - safe AUC calculation for single-class folds;
@@ -585,7 +585,12 @@ class EnsemblePredictor:
         # training rows.  We approximate the horizon from config (default 5 bars).
         horizon = int(getattr(self.config, "horizon", 5))
         _groups = np.arange(len(X)) + horizon
-        for fold, (train_idx, test_idx) in enumerate(splitter.split(X, groups=_groups), start=1):
+        split_iter = (
+            splitter.split(X, groups=_groups)
+            if self.config.cv_kind == "purged"
+            else splitter.split(X)
+        )
+        for fold, (train_idx, test_idx) in enumerate(split_iter, start=1):
             X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
             y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
             model = DirectionModel(self.config).fit(X_tr, y_tr)

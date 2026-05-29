@@ -32,6 +32,8 @@ def test_cli_help_exits_zero(verb: str) -> None:
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=30,
     )
     assert result.returncode == 0, (
@@ -46,6 +48,8 @@ def test_top_level_help_exits_zero() -> None:
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=30,
     )
     assert result.returncode == 0, result.stderr
