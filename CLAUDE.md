@@ -168,6 +168,9 @@ pip check 2>&1 | grep -v "^No broken"
 
 | Date | Commit | Fix |
 |---|---|---|
+| 2026-05-29 | `fd24364` | E2: PBO badge end-to-end fix — fold AUC proxy PBO, `evaluate_backtest_honesty` additive pbo field, `RecommendationCard.jsx PboBadge` |
+| 2026-05-29 | `f5570dd` | Dashboard: LLM Advisor KRX 제한 제거 (3곳 — `advisorRequestEnabled`, onClick, useEffect) |
+| 2026-05-29 | `9664ca5` | Dashboard: XGBoost secondary score (lightgbm 백엔드), LSTM/RNN null 행 숨김, cv_gap 기본값 5 |
 | 2026-05-29 | `ba4e81b` | E1-W3: MLflow LLM span tracing — `_USE_MLFLOW_TRACING` flag + `_wrap_with_mlflow_span()` in `claude_client.py` |
 | 2026-05-29 | `87047c3` | E3: `forward_tracking_task` in `daily_krx_flow` + `record_today()` on `AutoForwardRecorder` |
 | 2026-05-29 | `e485e1b` | Coverage ~83%→~87%: omit dead `reports.py`, pragma on torch classes, 9 new tests |

@@ -2,6 +2,44 @@
 
 All notable changes for `stock_1901` are documented here.
 
+## 2026-05-29 — 대시보드 버그 수정 (XGBoost N/A · PBO Badge · LLM Advisor KRX)
+
+### Summary
+
+로컬 대시보드 직접 확인 중 발견한 3개 버그 수정. 이중 서버 프로세스 문제도 해결.
+
+### Fixed
+- **`api_server.py`** — XGBoost secondary score
+  - KRX는 lightgbm 사용 → `xgboost=None` 반환되던 문제 수정
+  - primary가 lightgbm이면 보조로 XGBoost도 계산: `EnsemblePredictor(model_kind='xgb', lite=True)`
+- **`api_server.py`** — `/api/recommend` `cv_gap` 기본값 0 → 5
+  - CPCV 활성화로 `pbo_status` 채워짐
+- **`StockPredV5.jsx`** — LSTM/RNN null 시 행 숨김
+  - `{scores.xgb != null && <ModelBar .../>}` 조건부 렌더링
+- **`StockPredV5.jsx`** — LLM Advisor KRX 제한 제거
+  - `advisorRequestEnabled = advisorEnabled && market !== 'KRX'` → `advisorEnabled`
+  - onClick KRX guard 제거, KRX 전환 시 자동 비활성화 effect 제거
+- **`RecommendationCard.jsx`** — PBO badge 추가
+  - `PboBadge` 컴포넌트 + `result.backtest_honesty_summary.pbo_status` 조건 렌더링
+  - `PASS(초록)·AMBER(노랑)·RED(빨강)·N/A(회색)` 4가지 상태, WCAG AA 준수
+- **`recommendation_engine.py`** — fold AUC proxy PBO 계산
+  - `_fit_walk_forward_model()`: fold AUC → `(auc-0.5)` Sharpe proxy → `probability_of_backtest_overfitting()`
+  - `evaluate_backtest_honesty(cpcv_result=_cpcv_result)` 전달
+- **`backtest_honesty.py`** — `evaluate_backtest_honesty()` 반환값에 `pbo`/`pbo_status` 추가
+  - E2 패치 누락: `result["pbo"]`, `result["pbo_status"]` additive 추가
+- **`dashboard_config.json`** — KRX REC 기본값 `period=5y` → `3y`, `top=9` → `5`
+  - Vite 프록시 타임아웃 방지
+
+### Infrastructure Fix
+- 이중 서버 프로세스(PID 28416, Python 3.12 구버전 서버)가 포트 5151을 점거해
+  수정된 코드가 실행되지 않던 문제 발견 및 제거
+
+### QA
+- 커밋: `fd24364`, `f5570dd`, `9664ca5`
+- 대시보드 직접 확인: PBO badge `66.7% ✕ RED` (005930.KS), XGBoost `80.48` 표시 확인
+
+---
+
 ## 2026-05-29 — Wave 3 업그레이드 완료 (E1/E2/E3)
 
 ### Summary

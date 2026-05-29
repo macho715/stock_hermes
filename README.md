@@ -492,6 +492,9 @@ PYTHONPATH=.:src python main.py paper --help
 | Pandas 4.x `pd.Timestamp.utcnow()` deprecated | `pd.Timestamp.now('UTC')` 사용 — `data_providers.py`, `recommendation_engine.py` 패치됨 |
 | `_TorchLSTMNet` · `LSTMPredictor` · `GRUPredictor` CI 미커버 | `torch` 미설치 CI 환경 — `# pragma: no cover` 처리됨 |
 | `reports.py` 커버리지 0% | `reports/` 패키지에 가려진 dead code — `pyproject.toml` omit 처리됨 |
+| 이중 api_server 프로세스 (포트 5151 점거) | 구버전 Python 3.12 프로세스가 5151에 남아 수정 코드가 실행 안 됨 — `Get-NetTCPConnection -LocalPort 5151`로 PID 확인 후 `Stop-Process -Force` |
+| KRX REC 로딩 타임아웃 | `period=5y` + 9개 종목 → Vite 프록시 초과 — `dashboard_config.json`의 `api_defaults.recommend_krx.period=3y` 로 해결됨 |
+| PBO badge 미표시 (CPCV 미실행) | `api_server.py`의 `cv_gap` 기본값을 5로 변경 완료. fold AUC proxy PBO 계산으로 `pbo_status` 채워짐 |
 
 ---
 
@@ -499,6 +502,9 @@ PYTHONPATH=.:src python main.py paper --help
 
 | 날짜 | 커밋 | 내용 |
 |---|---|---|
+| 2026-05-29 | `fd24364` | E2: PBO badge end-to-end (fold AUC proxy PBO + RecommendationCard.jsx PboBadge) |
+| 2026-05-29 | `f5570dd` | Dashboard: LLM Advisor KRX 제한 3곳 제거 |
+| 2026-05-29 | `9664ca5` | Dashboard: XGBoost secondary score + LSTM/RNN null 숨김 + cv_gap=5 |
 | 2026-05-29 | `ba4e81b` | E1-W3: MLflow LLM span tracing (`_USE_MLFLOW_TRACING` flag) |
 | 2026-05-29 | `87047c3` | E3: `forward_tracking_task` + `record_today()` Prefect 자동화 |
 | 2026-05-29 | `e485e1b` | 커버리지 ~83%→~87% (pragma + omit + 9개 테스트) |
