@@ -178,11 +178,45 @@ def run_hpo(
 
     study.optimize(_objective, n_trials=n_trials, show_progress_bar=False)
 
+    _write_trial_log(study, experiment=experiment, model=model)
+
     return {
         "best_params": dict(study.best_params),
         "best_value": float(study.best_value),
         "study": study,
     }
+
+
+def _write_trial_log(study: Any, *, experiment: str, model: str) -> None:
+    """Append HPO trial summary to ``audit_log/hpo_trials.jsonl``.
+
+    Logged fields prevent backtest overfitting analysis: knowing how many
+    parameter combinations were tried is essential for adjusting confidence
+    in reported metrics (see Bailey et al., Probability of Backtest Overfitting).
+    Best-effort — never raises.
+    """
+    import json
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    try:
+        completed = [t for t in study.trials if t.state.name == "COMPLETE"]
+        record = {
+            "ts": datetime.now(UTC).isoformat(timespec="seconds"),
+            "experiment": experiment,
+            "model": model,
+            "n_trials_total": len(study.trials),
+            "n_trials_complete": len(completed),
+            "n_trials_pruned": sum(1 for t in study.trials if t.state.name == "PRUNED"),
+            "best_value": float(study.best_value),
+            "best_params": dict(study.best_params),
+        }
+        log_path = Path("audit_log") / "hpo_trials.jsonl"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception:  # pragma: no cover - best-effort
+        _LOG.debug("hpo trial log write failed")
 
 
 def _clone(estimator: Any) -> Any:

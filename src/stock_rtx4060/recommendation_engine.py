@@ -746,6 +746,26 @@ def _apply_advisor_blend(
         f"[{out.agent}] {out.rationale}" for out in result.outputs if out.rationale
     )[:240] or None
 
+    # Advisor audit strict gate: if score is non-zero, the call MUST appear
+    # in audit_log/advisor.jsonl. Missing audit → reset score to 0.0 so the
+    # LLM cannot silently influence the final score without a traceable record.
+    if abs(advisory_score) > 1e-9:
+        try:
+            from .advisors.audit import check_completeness
+
+            ok, _missing = check_completeness([(ticker, advisory_score)])
+            if not ok:
+                import logging as _logging_mod
+                _logging_mod.getLogger(__name__).warning(
+                    "Advisor audit missing for %s - resetting advisory_score to 0.0 "
+                    "(ADVISOR_AUDIT_FAIL: score was %.4f)",
+                    ticker,
+                    advisory_score,
+                )
+                advisory_score = 0.0
+        except Exception:  # pragma: no cover - audit check best-effort
+            pass
+
     weight = float(cfg.advisor_blend_weight)
     weight = max(0.0, min(1.0, weight))
     deterministic = float(deterministic_score)

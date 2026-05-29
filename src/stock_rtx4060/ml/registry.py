@@ -62,17 +62,50 @@ def promote(name: str, version: int, stage: Stage) -> None:
         client.set_registered_model_alias(name=name, alias=alias, version=str(version))
 
 
+def _write_registry_audit(event: str, name: str, *, success: bool, detail: str = "") -> None:
+    """Append a model registry event to ``audit_log/model_registry.jsonl``.
+
+    Tracks register/load/promote success and failure so missing or corrupt
+    model versions are discoverable without re-running training.
+    Best-effort — never raises.
+    """
+    import json
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    try:
+        record = {
+            "ts": datetime.now(UTC).isoformat(timespec="seconds"),
+            "event": event,
+            "name": name,
+            "success": success,
+            "detail": detail,
+        }
+        log_path = Path("audit_log") / "model_registry.jsonl"
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception:  # pragma: no cover - best-effort
+        pass
+
+
 def load_production(name: str = "direction_v1") -> Any:
     """Load the Production-stage model. Returns ``None`` when unavailable."""
     if not _HAS_MLFLOW:
+        _write_registry_audit("load", name, success=False, detail="mlflow not installed")
         return None
     try:
-        return mlflow.pyfunc.load_model(f"models:/{name}/Production")
-    except Exception:
+        model = mlflow.pyfunc.load_model(f"models:/{name}/Production")
+        _write_registry_audit("load", name, success=True, detail="Production stage")
+        return model
+    except Exception as e1:
         # Fall back to alias lookup for newer MLflow versions
         try:
-            return mlflow.pyfunc.load_model(f"models:/{name}@production")
-        except Exception:
+            model = mlflow.pyfunc.load_model(f"models:/{name}@production")
+            _write_registry_audit("load", name, success=True, detail="production alias")
+            return model
+        except Exception as e2:
+            _write_registry_audit("load", name, success=False, detail=f"stage: {e1!r}; alias: {e2!r}")
             return None
 
 
