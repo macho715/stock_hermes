@@ -553,7 +553,7 @@ export default function StockPredV5() {
   const universeLabel = universeIsLoading ? "LOADING" : (universeIsFallback ? "FALLBACK" : "API");
   const effectiveRecSource = recSource;
   const recApiReady = effectiveRecSource === "api" && !universeIsLoading && recUniverse.length > 0;
-  const advisorRequestEnabled = advisorEnabled && market !== "KRX";
+  const advisorRequestEnabled = advisorEnabled;
   const recApiUrl = useMemo(() => {
     const params = new URLSearchParams({
       universe: recUniverse,
@@ -598,11 +598,7 @@ export default function StockPredV5() {
     };
   }, []);
 
-  useEffect(() => {
-    if (market === "KRX" && advisorEnabled) {
-      setAdvisorEnabled(false);
-    }
-  }, [market, advisorEnabled]);
+  // KRX advisor restriction removed — has_live_advisor_key() gate on backend is sufficient
 
   /* runtime dashboard config */
   useEffect(() => {
@@ -1384,7 +1380,7 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                       userSelect: "none",
                     }}
                       onClick={() => {
-                        if (market !== "KRX") setAdvisorEnabled((v) => !v);
+                        setAdvisorEnabled((v) => !v);
                       }}
                     >
                       <div style={{
@@ -1403,11 +1399,9 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                         LLM ADVISOR
                       </span>
                       <span style={{ color: C.textMuted, marginLeft: "auto" }}>
-                        {market === "KRX"
-                          ? "OFF for KRX full-universe scan"
-                          : advisorRequestEnabled
-                            ? "blend_weight=0.30 · requires ANTHROPIC_API_KEY or MINIMAX_API_KEY"
-                            : "OFF"}
+                        {advisorRequestEnabled
+                          ? "blend_weight=0.30 · requires ANTHROPIC_API_KEY or MINIMAX_API_KEY"
+                          : "OFF"}
                       </span>
                     </div>
                   )}
