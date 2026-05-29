@@ -2,9 +2,157 @@
 
 <!-- root-pinned: keep this file at C:\Users\jichu\Downloads\주식\README.md -->
 
-이 문서는 `C:\Users\jichu\Downloads\주식` 루트에 있는 주식 프로그램 전체를 처음 보는 사람이 한 번에 이해하도록 만든 시작 문서입니다.
+Local stock research, recommendation screening, and dashboard evidence system.
 
-하위 폴더 문서의 핵심 내용을 이 문서 안에 흡수했습니다. 하위 문서는 추가 근거와 세부 감사 기록으로 남아 있으며, 이 문서를 읽기 위해 하위 문서를 먼저 열 필요는 없습니다.
+This repository is not a live auto-buy system. The current operating posture is research, watchlist, paper trading, and dashboard monitoring until investment-readiness gates pass.
+
+## Current Operating Verdict
+
+| Field | Current policy |
+|---|---|
+| Live investment status | `AMBER WATCHLIST` |
+| New capital | `new_capital_allowed=false` |
+| Execution mode | `paper_trading_only=true` |
+| Raw model score | Preserved for audit and research |
+| Investment readiness score | Capped at 44 when model quality or honesty gates fail |
+| Allowed use | Research, watchlist, paper trading, dashboard monitoring |
+| Blocked use | Live capital, broker order execution, automatic buy/sell |
+
+The system can rank candidates and explain why a symbol belongs on a watchlist. It must not be treated as permission to deploy new live capital when Accuracy, AUC, Alpha, completed-trade count, backtest honesty, cost survival, embargo stress, or advisor audit consistency gates fail.
+
+## What It Does
+
+| Area | Capability |
+|---|---|
+| Recommendation engine | Builds candidate recommendations from OHLCV, features, model scores, risk rules, and optional advisor evidence |
+| Investment readiness | Applies `backtest_honesty`, 3x cost survival, embargo stress, advisor audit consistency, and model quality gates |
+| Dashboard | Shows READY, READINESS, LIVE, PAPER, blocking reasons, model evidence, and advisor state |
+| Model scores | Computes ensemble, LogReg, XGBoost, GRU/RNN, and optional LSTM evidence |
+| Advisor layer | Supports LiteLLM gateway, MiniMax API key, and MiniMax JSON-strict normalization |
+| Data and validation | Supports synthetic, yfinance, optional OpenBB macro ingest, chaos tests, Hypothesis PBT, DuckDB 1.5.3, and DuckLake feature flag |
+| Reliability fixes | Includes GAP-01 through GAP-05 paper-trading checks, MLflow 3.x `log_input()`, Windows CP949 print fix, `/api/model-scores` 90s timeout, optimizer `max_weight` clamp, and Optuna journal storage |
+
+## Operating Flow
+
+```mermaid
+flowchart LR
+  Data[OHLCV / Macro / Provider Data] --> Engine[Recommendation Engine]
+  Engine --> Backtest[Backtest Honesty]
+  Engine --> Advisor[LLM Advisor Audit]
+  Backtest --> Readiness[Investment Readiness Gate]
+  Advisor --> Readiness
+  Readiness --> Snapshot[Dashboard Snapshot]
+  Snapshot --> Dashboard[GitHub / Local Dashboard]
+  Readiness --> Paper[Paper Trading Only]
+  Readiness -. blocks .-> Live[Live Capital Disabled]
+```
+
+## Data Contract Type Graph
+
+```mermaid
+classDiagram
+  class RecommendationRun {
+    string schema_version
+    string generated_at
+    BacktestHonestySummary backtest_honesty_summary
+    Candidate[] results
+  }
+
+  class Candidate {
+    string symbol
+    string signal
+    float raw_score
+    ModelScores model_scores
+    BacktestHonesty backtest_honesty
+    ReadinessResult investment_readiness
+  }
+
+  class ModelScores {
+    float ensemble
+    float logistic
+    float xgboost
+    float rnn
+    float lstm
+  }
+
+  class ReadinessResult {
+    string status
+    bool investable
+    bool new_capital_allowed
+    bool paper_trading_only
+    int investment_readiness_score
+    string[] blocking_reasons
+  }
+
+  class AdvisorAudit {
+    string provider
+    float advisor_score
+    bool json_strict
+    string evidence_path
+  }
+
+  class DashboardSnapshot {
+    string schema_version
+    Candidate[] candidates
+    ReadinessResult readiness
+  }
+
+  RecommendationRun --> Candidate
+  Candidate --> ModelScores
+  Candidate --> BacktestHonesty
+  Candidate --> ReadinessResult
+  Candidate --> AdvisorAudit
+  DashboardSnapshot --> Candidate
+  DashboardSnapshot --> ReadinessResult
+```
+
+This classDiagram is a README-level type map for readers. It explains the data contract relationships and does not claim a one-to-one match with every Python class.
+
+## Quick Start
+
+Run commands from `C:\Users\jichu\Downloads\주식\stock_1901`.
+
+```powershell
+py -3.12 main.py --help
+py -3.12 main.py self-test
+```
+
+Preview the local API and dashboard:
+
+```powershell
+py -3.12 preview_server.py
+```
+
+Generate a recommendation report and dashboard snapshot:
+
+```powershell
+.\run.ps1 recommend --synthetic --universe "SYNTH-A,SYNTH-B" --top 2 --model-kind logistic --output-dir reports\quickstart_recommend
+.\run.ps1 dashboard-export --recommendation-json reports\quickstart_recommend\recommendations_algo_v2_*.json --output reports\quickstart_recommend\dashboard_snapshot.json
+```
+
+Run the investment readiness benchmark:
+
+```powershell
+py -3.12 tools\investment_readiness_benchmark.py --input recommendations_algo_v2_*.json --output reports\investment_readiness --format json
+```
+
+Targeted verification:
+
+```powershell
+py -3.12 -m pytest tests\test_investment_readiness_benchmark.py tests\test_dashboard_bridge.py tests\test_api_model_scores.py -q
+py -3.12 -m ruff check src\stock_rtx4060\dashboard_bridge.py tests\test_dashboard_bridge.py
+```
+
+Release verification is heavier and should be run before publishing a release:
+
+```powershell
+py -3.12 -m pytest -q
+py -3.12 -m ruff check .
+```
+
+## Evidence and Historical Notes
+
+The remaining sections preserve the longer root overview, architecture notes, and append-only documentation evidence generated during previous repository scans.
 
 ## 1. One-page Summary
 
