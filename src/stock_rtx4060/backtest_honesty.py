@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from math import isfinite
+from pathlib import Path
 from typing import Any, Literal
+
+from .backtest.stat_tests import deflated_sharpe
 
 HonestyStatus = Literal["PASS", "AMBER", "FAIL"]
 
@@ -210,3 +214,37 @@ def _fmt(value: float | None, unit: str) -> str:
     if unit == "ratio":
         return f"{float(value):.2%}"
     return f"{float(value):.3f}"
+
+
+def build_dsr_report(
+    *,
+    ticker: str,
+    sharpe: float,
+    n_trials: int,
+    n_obs: int,
+    min_deflated_sharpe: float = 0.0,
+    skew: float = 0.0,
+    kurt: float = 3.0,
+) -> dict[str, Any]:
+    """Build a report-only Deflated Sharpe evidence record."""
+
+    dsr = deflated_sharpe(sharpe, n_trials=n_trials, n_obs=n_obs, skew=skew, kurt=kurt)
+    return {
+        "schema_version": "dsr_report.v1",
+        "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
+        "ticker": ticker,
+        "sharpe": float(sharpe),
+        "n_trials": int(n_trials),
+        "n_obs": int(n_obs),
+        "deflated_sharpe": dsr,
+        "min_deflated_sharpe": min_deflated_sharpe,
+        "status": "PASS" if dsr > min_deflated_sharpe else "AMBER",
+        "report_only": True,
+    }
+
+
+def write_dsr_report(path: str | Path, **kwargs: Any) -> Path:
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(build_dsr_report(**kwargs), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return output

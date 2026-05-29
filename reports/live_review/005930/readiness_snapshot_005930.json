@@ -1,0 +1,140 @@
+{
+  "schema_version": "live_review_snapshot.v1",
+  "generated_at_utc": "2026-05-29T05:02:46+00:00",
+  "ticker": "005930",
+  "decision": {
+    "ticker": "005930",
+    "status": "PAPER_PASS",
+    "live_review_candidate": false,
+    "paper_pass": true,
+    "blocking_reasons": [
+      "FORWARD_PAPER_DAYS 0 < 30",
+      "FORWARD_PAPER_ALPHA None < 0.0",
+      "RULE_VIOLATIONS None > 0"
+    ],
+    "passed_gates": [
+      "CPCV_PATH_RATE",
+      "PBO",
+      "DEFLATED_SHARPE",
+      "MODEL_CARD_PRESENT",
+      "DASHBOARD_SAFETY_FLAGS"
+    ],
+    "failed_gates": [
+      "FORWARD_PAPER_DAYS",
+      "FORWARD_PAPER_ALPHA",
+      "RULE_VIOLATIONS"
+    ],
+    "safety_flags": {
+      "screening_output_only": true,
+      "manual_approval_required": true,
+      "broker_order_execution_false": true,
+      "new_capital_allowed_false": true
+    }
+  },
+  "evidence": {
+    "cpcv": {
+      "schema_version": "cpcv_report.v1",
+      "generated_at_utc": "2026-05-29T05:00:37+00:00",
+      "ticker": "005930",
+      "path_count": 25,
+      "pass_threshold": 0.0,
+      "passed_paths": 20,
+      "failed_paths": 5,
+      "pass_rate": 0.8,
+      "min_pass_rate": 0.6,
+      "status": "PASS",
+      "sharpe_paths": [
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        -0.2,
+        -0.2,
+        -0.2,
+        -0.2,
+        -0.2
+      ],
+      "report_only": true
+    },
+    "pbo": {
+      "schema_version": "pbo_report.v1",
+      "generated_at_utc": "2026-05-29T05:00:37+00:00",
+      "ticker": "005930",
+      "pbo": 0.08,
+      "max_pbo": 0.2,
+      "status": "PASS",
+      "sharpe_paths": [
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        0.8,
+        -0.2,
+        -0.2
+      ],
+      "report_only": true
+    },
+    "dsr": {
+      "schema_version": "dsr_report.v1",
+      "generated_at_utc": "2026-05-29T05:00:37+00:00",
+      "ticker": "005930",
+      "sharpe": 0.1,
+      "n_trials": 1,
+      "n_obs": 252,
+      "deflated_sharpe": 0.9429868610243624,
+      "min_deflated_sharpe": 0.0,
+      "status": "PASS",
+      "report_only": true
+    },
+    "paper": {
+      "forward_paper_days": 0,
+      "forward_paper_alpha": null,
+      "rule_violations": null
+    },
+    "model_card_path": "reports\\model_cards\\model_card_005930.md",
+    "model_card_present": true,
+    "dashboard_safety_flags": {
+      "screening_output_only": true,
+      "manual_approval_required": true,
+      "broker_order_execution": false,
+      "new_capital_allowed": false
+    }
+  },
+  "report_only": true,
+  "broker_order_execution": false,
+  "manual_approval_required": true
+}
