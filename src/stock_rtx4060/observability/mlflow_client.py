@@ -31,21 +31,35 @@ def MLflowSession(experiment: str, *, run_name: str | None = None, tags: Mapping
     uri = _tracking_uri()
     if uri:
         mlflow.set_tracking_uri(uri)
-    mlflow.set_experiment(experiment)
-    with mlflow.start_run(run_name=run_name, tags=dict(tags or {})) as run:
-        yield run
+    try:
+        mlflow.set_experiment(experiment)
+        with mlflow.start_run(run_name=run_name, tags=dict(tags or {})) as run:
+            yield run
+    except Exception:
+        # MLflow is optional observability. A bad global tracking URI must not
+        # break tests or trading/research workflows.
+        yield None
 
 
 def log_params(params: Mapping[str, Any]) -> None:
     if _HAS_MLFLOW:
-        mlflow.log_params(dict(params))
+        try:
+            mlflow.log_params(dict(params))
+        except Exception:
+            return
 
 
 def log_metrics(metrics: Mapping[str, float], *, step: int | None = None) -> None:
     if _HAS_MLFLOW:
-        mlflow.log_metrics(dict(metrics), step=step)
+        try:
+            mlflow.log_metrics(dict(metrics), step=step)
+        except Exception:
+            return
 
 
 def log_artifact(local_path: str | os.PathLike[str], *, artifact_path: str | None = None) -> None:
     if _HAS_MLFLOW:
-        mlflow.log_artifact(str(local_path), artifact_path=artifact_path)
+        try:
+            mlflow.log_artifact(str(local_path), artifact_path=artifact_path)
+        except Exception:
+            return

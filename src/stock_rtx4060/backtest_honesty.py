@@ -86,11 +86,44 @@ def evaluate_backtest_honesty(
     return result
 
 
-def summarize_honesty(items: list[dict[str, Any]]) -> dict[str, Any]:
-    """Aggregate result-level honesty evidence into a run-level summary."""
+def _compute_pbo_status(pbo: float | None) -> str:
+    """[E2] Map a raw PBO float to PASS / AMBER / RED / NO_DATA.
 
+    Thresholds align with LIVE_REVIEW_RULES in readiness/classifier.py:
+    ≤0.20 → PASS, 0.20–0.50 → AMBER, >0.50 → RED, None → NO_DATA.
+    """
+    if pbo is None:
+        return "NO_DATA"
+    val = float(pbo)
+    if val <= 0.20:
+        return "PASS"
+    if val <= 0.50:
+        return "AMBER"
+    return "RED"
+
+
+def summarize_honesty(items: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate result-level honesty evidence into a run-level summary.
+
+    [E2] Includes pbo (worst = max across candidates) and pbo_status so that
+    dashboard_snapshot.backtest_honesty_summary exposes PBO for the REC tab.
+    """
     statuses = [str(item.get("status", "AMBER")) for item in items]
     checks = [check for item in items for check in item.get("checks", []) if isinstance(check, dict)]
+
+    # [E2] Worst-case PBO: highest value = most overfitting risk
+    pbo_values: list[float] = []
+    for item in items:
+        raw = item.get("pbo")
+        if raw is not None:
+            try:
+                v = float(raw)
+                if 0.0 <= v <= 1.0:
+                    pbo_values.append(v)
+            except (TypeError, ValueError):
+                pass
+    worst_pbo: float | None = max(pbo_values) if pbo_values else None
+
     return {
         "status": _worst_status(statuses),
         "result_count": len(items),
@@ -98,6 +131,8 @@ def summarize_honesty(items: list[dict[str, Any]]) -> dict[str, Any]:
         "amber": sum(1 for check in checks if check.get("status") == "AMBER"),
         "failed": sum(1 for check in checks if check.get("status") == "FAIL"),
         "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
+        "pbo": worst_pbo,
+        "pbo_status": _compute_pbo_status(worst_pbo),
     }
 
 

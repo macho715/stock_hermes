@@ -234,3 +234,43 @@ def test_dashboard_snapshot_blocks_live_queue_when_backtest_honesty_is_amber():
     assert row["new_capital_allowed"] is False
     assert row["paper_trading_only"] is True
     assert "Backtest honesty AMBER != PASS" in row["blocking_reasons"]
+
+
+# ---------------------------------------------------------------------------
+# E2 (Wave 3 Gap — PR-P2): per-candidate backtest_honesty_summary with pbo
+# ---------------------------------------------------------------------------
+
+
+def test_dashboard_candidate_has_pbo_summary_when_cpcv_provided():
+    """Per-candidate backtest_honesty_summary.pbo_status is present when pbo in backtest_honesty."""
+    payload = _recommendation_payload()
+    payload["results"][0]["backtest_honesty"]["pbo"] = 0.18
+    payload["results"][0]["backtest_honesty"]["pbo_status"] = "PASS"
+
+    candidate = build_dashboard_snapshot(payload)["results"][0]
+
+    assert "backtest_honesty_summary" in candidate
+    assert candidate["backtest_honesty_summary"]["pbo_status"] == "PASS"
+    assert abs(candidate["backtest_honesty_summary"]["pbo"] - 0.18) < 1e-9
+
+
+def test_dashboard_candidate_pbo_summary_none_without_pbo():
+    """backtest_honesty_summary is None when backtest_honesty has no pbo_status."""
+    payload = _recommendation_payload()
+    # backtest_honesty has no pbo or pbo_status key
+
+    candidate = build_dashboard_snapshot(payload)["results"][0]
+
+    assert candidate.get("backtest_honesty_summary") is None
+
+
+def test_dashboard_candidate_backtest_honesty_key_preserved():
+    """Original backtest_honesty key is preserved (additive change)."""
+    payload = _recommendation_payload()
+    payload["results"][0]["backtest_honesty"]["pbo"] = 0.10
+    payload["results"][0]["backtest_honesty"]["pbo_status"] = "PASS"
+
+    candidate = build_dashboard_snapshot(payload)["results"][0]
+
+    assert "backtest_honesty" in candidate
+    assert candidate["backtest_honesty"]["status"] == "PASS"

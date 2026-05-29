@@ -1,3 +1,5 @@
+import pytest
+
 from stock_rtx4060.backtest_honesty import (
     build_dsr_report,
     evaluate_backtest_honesty,
@@ -115,3 +117,52 @@ def test_merge_cpcv_dsr_evidence_normalizes_reports():
     assert merged["pbo"] == 0.08
     assert merged["deflated_sharpe"] == 0.94
     assert merged["report_only"] is True
+
+
+# ---------------------------------------------------------------------------
+# E2 (Wave 3 Gap): summarize_honesty pbo aggregation — PR-P1
+# ---------------------------------------------------------------------------
+
+
+def test_summarize_honesty_includes_pbo_worst_case():
+    """summarize_honesty returns worst (max) pbo and pbo_status."""
+    items = [
+        {"status": "PASS", "pbo": 0.10, "checks": []},
+        {"status": "AMBER", "pbo": 0.35, "checks": []},
+    ]
+    result = summarize_honesty(items)
+    assert result["pbo"] == pytest.approx(0.35)
+    assert result["pbo_status"] == "AMBER"
+
+
+def test_summarize_honesty_pbo_none_when_no_cpcv():
+    """pbo=None and pbo_status=NO_DATA when items have no pbo key."""
+    items = [{"status": "AMBER", "checks": []}]
+    result = summarize_honesty(items)
+    assert result["pbo"] is None
+    assert result["pbo_status"] == "NO_DATA"
+
+
+@pytest.mark.parametrize("pbos,expected_worst,expected_status", [
+    ([0.05, 0.10], 0.10, "PASS"),
+    ([0.10, 0.25], 0.25, "AMBER"),
+    ([0.10, 0.60], 0.60, "RED"),
+    ([], None, "NO_DATA"),
+])
+def test_summarize_honesty_pbo_thresholds(pbos, expected_worst, expected_status):
+    items = [{"status": "PASS", "pbo": p, "checks": []} for p in pbos]
+    result = summarize_honesty(items)
+    if expected_worst is None:
+        assert result["pbo"] is None
+    else:
+        assert result["pbo"] == pytest.approx(expected_worst)
+    assert result["pbo_status"] == expected_status
+
+
+def test_summarize_honesty_existing_fields_preserved():
+    """Existing fields unchanged — additive only."""
+    items = [{"status": "PASS", "pbo": 0.10, "checks": [{"status": "PASS"}]}]
+    result = summarize_honesty(items)
+    assert result["status"] == "PASS"
+    assert result["result_count"] == 1
+    assert result["passed"] == 1

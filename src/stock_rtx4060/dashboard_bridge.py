@@ -253,6 +253,23 @@ def _first_int(result: dict[str, Any], *keys: str) -> int | None:
     return None
 
 
+def _pbo_summary_for_card(backtest_honesty: dict[str, Any] | None) -> dict[str, Any] | None:
+    """[E2] Extract per-candidate PBO fields for RecommendationCard badge.
+
+    Returns a minimal dict {pbo, pbo_status} when pbo_status is present,
+    otherwise None so the badge stays hidden (hasPbo = false in JSX).
+    """
+    if not isinstance(backtest_honesty, dict):
+        return None
+    pbo_status = backtest_honesty.get("pbo_status")
+    if pbo_status is None:
+        return None
+    return {
+        "pbo": backtest_honesty.get("pbo"),
+        "pbo_status": str(pbo_status),
+    }
+
+
 def _has_failed_validation(result: dict[str, Any], names: set[str]) -> bool:
     validations = result.get("validations")
     if not isinstance(validations, list):
@@ -464,6 +481,8 @@ def _normalize_result(result: Any, *, rank: int, provider_summary: Any = None) -
         "screening_output_only": result["screening_output_only"],
         "validations": result["validations"],
         "backtest_honesty": result.get("backtest_honesty"),
+        # [E2] Per-candidate PBO summary for RecommendationCard badge
+        "backtest_honesty_summary": _pbo_summary_for_card(result.get("backtest_honesty")),
         "reasons": result.get("reasons", []),
         "generated_at_utc": result.get("generated_at_utc"),
         # KEVPE overlay (optional — only present when kevpe_adapter was used)
