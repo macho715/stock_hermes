@@ -1,5 +1,5 @@
 """
-Flask API server for stock_rtx4060 unified — provides /api/recommend endpoint.
+Flask API server for stock_rtx4060 unified -provides /api/recommend endpoint.
 
 Run: python api_server.py [--port 5151]
 Serves dashboard_snapshot.v1 JSON for Vite dashboard integration.
@@ -201,7 +201,7 @@ def api_symbol():
                         command="symbol_chart",
                     )
                 except Exception:
-                    # Both pykrx and yfinance failed — use synthetic
+                    # Both pykrx and yfinance failed -use synthetic
                     provider_result = load_ohlcv_with_provider(
                         symbol,
                         period,
@@ -324,7 +324,7 @@ def api_model_scores():
         if model.oof_probabilities_ is not None:
             oof_coverage = float(model.oof_probabilities_.notna().mean())
 
-        # Secondary LogReg score — always computed (fast, no extra deps)
+        # Secondary LogReg score -always computed (fast, no extra deps)
         logistic_score: float | None
         if backend_kind == "logistic":
             logistic_score = primary_score
@@ -340,7 +340,7 @@ def api_model_scores():
             except Exception:
                 logistic_score = None
 
-        # RNN (GRU) score — computed when PyTorch is available
+        # RNN (GRU) score -computed when PyTorch is available
         rnn_score: float | None = None
         if _has_torch():
             try:
@@ -416,14 +416,14 @@ def api_model_scores():
 def api_recommend():
     """
     Query params:
-      universe  — comma-separated tickers (default: built-in sample)
-      track     — S | L | BOTH (default: BOTH)
-      period    — yfinance period (default: 3y)
-      top       — top N candidates (default: 5)
-      synthetic — 1 to use synthetic data (default: 0)
-      data_provider — auto | synthetic | yfinance | openbb | pykrx | fdr (default: auto)
-      model_kind — auto | xgb | logistic (default: logistic)
-      output_dir — directory for JSON output (default: reports/api_recommend)
+      universe  -comma-separated tickers (default: built-in sample)
+      track     -S | L | BOTH (default: BOTH)
+      period    -yfinance period (default: 3y)
+      top       -top N candidates (default: 5)
+      synthetic -1 to use synthetic data (default: 0)
+      data_provider -auto | synthetic | yfinance | openbb | pykrx | fdr (default: auto)
+      model_kind -auto | xgb | logistic (default: logistic)
+      output_dir -directory for JSON output (default: reports/api_recommend)
     Returns: dashboard_snapshot.v1 JSON
     """
     universe = request.args.get("universe")
@@ -530,14 +530,14 @@ def main(port: int = 5151):
     print(f"Starting stock_rtx4060 unified API server on http://0.0.0.0:{args.port}")
     print(f"Dashboard: {dashboard_url}/")
     print("Endpoints:")
-    print("  GET /                     — React dashboard (built static)")
-    print("  GET /api/health           — health check")
-    print("  GET /api/universe         — dashboard-selectable symbols")
-    print("  GET /api/symbol           — latest OHLCV for dashboard charts")
-    print("  GET /api/model-scores     — backend model evidence for one symbol")
-    print("  GET /api/paper-status     — latest paper-only virtual trading status")
-    print("  GET /api/recommend        — run recommendation + return snapshot")
-    print("  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot")
+    print("  GET /                     -React dashboard (built static)")
+    print("  GET /api/health           -health check")
+    print("  GET /api/universe         -dashboard-selectable symbols")
+    print("  GET /api/symbol           -latest OHLCV for dashboard charts")
+    print("  GET /api/model-scores     -backend model evidence for one symbol")
+    print("  GET /api/paper-status     -latest paper-only virtual trading status")
+    print("  GET /api/recommend        -run recommendation + return snapshot")
+    print("  GET /api/snapshot?path=X  -serve existing recommendation JSON as snapshot")
     app.run(host=args.host, port=args.port, debug=False, use_reloader=False)
 
 
