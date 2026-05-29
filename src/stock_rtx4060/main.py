@@ -74,7 +74,7 @@ def build_parser() -> argparse.ArgumentParser:
     recommend.add_argument("--full", action="store_true", help="use non-lite model settings")
     recommend.add_argument("--model-kind", choices=["auto", "xgb", "logistic", "rf"], default="logistic")
     recommend.add_argument("--xgb-device", choices=["cpu", "cuda"], default="cpu")
-    recommend.add_argument("--cv-gap", type=int, help="gap between train/test folds for leak-safe walk-forward CV")
+    recommend.add_argument("--cv-gap", type=int, help="PurgedKFold embargo gap (rows); must be >= horizon")
     recommend.add_argument("--output-dir", default="reports/recommendations")
 
     paper = sub.add_parser("paper-run", help="paper-only virtual trading — no broker orders (screening only)")
@@ -122,7 +122,7 @@ def build_parser() -> argparse.ArgumentParser:
     ops.add_argument("--full", action="store_true", help="use non-lite model settings")
     ops.add_argument("--model-kind", choices=["auto", "xgb", "logistic", "rf"], default="logistic")
     ops.add_argument("--xgb-device", choices=["cpu", "cuda"], default="cpu")
-    ops.add_argument("--cv-gap", type=int, help="gap between train/test folds for leak-safe walk-forward CV")
+    ops.add_argument("--cv-gap", type=int, help="PurgedKFold embargo gap (rows); must be >= horizon")
     ops.add_argument("--output-dir", default="reports/ops_v1")
 
     dashboard = sub.add_parser("dashboard-export", help="convert recommendation JSON into a dashboard snapshot")
