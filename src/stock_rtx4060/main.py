@@ -146,6 +146,23 @@ def build_parser() -> argparse.ArgumentParser:
     journal.add_argument("--quantity", type=int, default=0)
 
     sub.add_parser("self-test", help="run internal smoke tests")
+
+    # ── PR-8: RD-Agent Alpha Factory — factor subcommands ──────────────────────
+    factor = sub.add_parser("factor-mine", help="run RD-Agent factor mining (produces new .py factor modules)")
+    factor.add_argument("--universe", help="comma-separated ticker list; defaults to built-in sample universe")
+    factor.add_argument("--cycles", type=int, default=1, help="number of RD-Agent evolution cycles (default: 1)")
+    factor.add_argument("--budget-usd", type=float, default=1.0, help="LLM spend cap in USD (default: 1.0)")
+
+    factor_list = sub.add_parser("factor-list", help="list discovered / pending factors from the audit log")
+    factor_list.add_argument("--status", choices=["all", "discovered", "staged", "registered"], default="all", help="filter by factor status (default: all)")
+
+    factor_approve = sub.add_parser("factor-approve", help="approve and register staged factors via registry_hook")
+    factor_approve.add_argument("--factor-id", action="append", help="specific factor ID to approve (repeatable); if omitted all staged factors are approved)")
+    factor_approve.add_argument("--run-date", help="ISO date string for the approval run (YYYY-MM-DD); defaults to today")
+
+    factor_status = sub.add_parser("factor-status", help="show status of all registered discovered factors")
+    factor_status.add_argument("--ticker", help="show only factors for this ticker")
+
     return parser
 
 
@@ -178,6 +195,14 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_journal(args)
             case "self-test":
                 return cmd_self_test()
+            case "factor-mine":
+                return cmd_factor_mine(args)
+            case "factor-list":
+                return cmd_factor_list(args)
+            case "factor-approve":
+                return cmd_factor_approve(args)
+            case "factor-status":
+                return cmd_factor_status(args)
             case _:
                 parser.print_help()
                 return 2
@@ -491,6 +516,148 @@ def cmd_demo(args: argparse.Namespace) -> int:
 def cmd_journal(args: argparse.Namespace) -> int:
     path = ReportWriter(args.output_dir).journal_append({"ticker": args.ticker, "track": args.track, "action": args.action, "entry": args.entry, "stop": args.stop, "target": args.target, "quantity": args.quantity, "reason": args.reason})
     print(f"saved: {path}")
+    return 0
+
+
+# ── PR-8: RD-Agent Alpha Factory handlers ────────────────────────────────────
+
+def _default_universe() -> list[str]:
+    """Return the built-in sample universe used by research_weekly."""
+    return ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL"]
+
+
+def cmd_factor_mine(args: argparse.Namespace) -> int:
+    """Run RD-Agent factor mining via ``rd_agent.runner.run_factor_mining``."""
+    from stock_rtx4060.factors.rd_agent.runner import run_factor_mining
+
+    universe = parse_universe(args.universe) if args.universe else _default_universe()
+    new_files = run_factor_mining(universe, cycles=args.cycles, budget_usd=args.budget_usd)
+    result = {
+        "new_factor_files": [str(p) for p in new_files],
+        "count": len(new_files),
+        "universe": universe,
+        "cycles": args.cycles,
+        "budget_usd": args.budget_usd,
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_factor_list(args: argparse.Namespace) -> int:
+    """List discovered / pending factors from ``audit_log/*.jsonl``."""
+    import json as _json
+    from pathlib import Path
+
+    audit_dir = Path("audit_log")
+    candidates: list[dict[str, Any]] = []
+
+    # Scan all .jsonl files in the audit log directory
+    if audit_dir.is_dir():
+        for fpath in sorted(audit_dir.glob("*.jsonl")):
+            try:
+                with open(fpath, encoding="utf-8") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            event = _json.loads(line)
+                        except Exception:
+                            continue
+                        # Accept any event that carries factor metadata
+                        if "factor_id" in event or event.get("event") in (
+                            "factor_discovered",
+                            "factor_staged",
+                            "factor_registered",
+                        ):
+                            status = (
+                                "registered"
+                                if event.get("event") == "factor_registered"
+                                else "staged"
+                                if event.get("event") == "factor_staged"
+                                else "discovered"
+                            )
+                            if args.status != "all" and status != args.status:
+                                continue
+                            candidates.append({"event": event, "status": status})
+            except Exception as exc:  # noqa: BLE001
+                print(f"WARNING: could not read {fpath}: {exc}", file=sys.stderr)
+
+    # Also check the discovered factors directory for orphan files
+    discovered_dir = Path("src/stock_rtx4060/factors/discovered")
+    if discovered_dir.is_dir():
+        for fpath in sorted(discovered_dir.rglob("*.py")):
+            fname = fpath.name
+            if fname.startswith("_") or fname == "placeholder.py":
+                continue
+            # Skip if already in candidates
+            if any(c["event"].get("factor_file") == str(fpath) for c in candidates):
+                continue
+            if args.status == "registered":
+                continue
+            candidates.append({
+                "event": {"factor_id": None, "factor_file": str(fpath), "source": "discovered_dir"},
+                "status": "discovered",
+            })
+
+    print(json.dumps(candidates, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_factor_approve(args: argparse.Namespace) -> int:
+    """Approve and register staged factors via ``registry_hook.approve_and_register``."""
+    from datetime import date as Date
+
+    run_date = args.run_date or str(Date.today())
+    factor_ids = args.factor_id or []  # empty list = approve all staged
+
+    try:
+        from stock_rtx4060.factors.rd_agent.registry_hook import approve_and_register
+    except ImportError:
+        print("ERROR: registry_hook module not found — ensure P7 infrastructure is installed", file=sys.stderr)
+        return 1
+
+    try:
+        registered = approve_and_register(
+            session_id=run_date,
+            factor_names=factor_ids,
+        )
+        print(json.dumps({"approved": registered, "count": len(registered)}, ensure_ascii=False, indent=2))
+        return 0
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"approved": False, "error": str(exc)}, ensure_ascii=False, indent=2), file=sys.stderr)
+        return 1
+
+
+def cmd_factor_status(args: argparse.Namespace) -> int:
+    """Show status of all registered discovered factors."""
+    import json as _json
+    from pathlib import Path
+
+    # Pull from the audit log the registered factors
+    audit_dir = Path("audit_log")
+    registered: list[dict[str, Any]] = []
+    if audit_dir.is_dir():
+        for fpath in sorted(audit_dir.glob("*.jsonl")):
+            try:
+                with open(fpath, encoding="utf-8") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            event = _json.loads(line)
+                        except Exception:
+                            continue
+                        if event.get("event") == "factor_registered":
+                            ticker = event.get("ticker") or ""
+                            if args.ticker and ticker != args.ticker:
+                                continue
+                            registered.append(event)
+            except Exception:  # noqa: BLE001
+                pass
+
+    print(json.dumps(registered, ensure_ascii=False, indent=2))
     return 0
 
 

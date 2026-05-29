@@ -39,6 +39,9 @@ FactorCategory = Literal[
 OHLCV_FIELDS = ("Open", "High", "Low", "Close", "Volume")
 
 
+SourceType = Literal["rd_agent", "builtin", "manual"]
+
+
 @dataclass(frozen=True)
 class FactorMeta:
     """Static description of a factor.
@@ -55,6 +58,21 @@ class FactorMeta:
         a non-NaN value at any single date.  Used to validate input length.
     description:
         Free-text description / formula citation.
+    source:
+        Origin of the factor: "builtin" (ships with the package),
+        "rd_agent" (discovered by the RD-Agent pipeline), or "manual"
+        (user-registered outside the RD-Agent flow).
+    discovery_session_id:
+        RD-Agent session ID that produced this factor.  Empty for built-in
+        and manual factors.
+    discovery_date:
+        ISO-8601 date string when the factor was discovered.  Empty for
+        built-in and manual factors.
+    budget_usd:
+        Approximate cloud compute budget spent discovering this factor.
+    ic_at_discovery:
+        IC observed on the discovery run.  Used as a baseline to detect
+        degradation over time.
     """
 
     name: str
@@ -62,6 +80,32 @@ class FactorMeta:
     lookback: int
     description: str = ""
     tags: tuple[str, ...] = field(default_factory=tuple)
+    source: SourceType = "builtin"
+    discovery_session_id: str = ""
+    discovery_date: str = ""
+    budget_usd: float = 0.0
+    ic_at_discovery: float = field(default_factory=lambda: float("nan"))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, FactorMeta):
+            return NotImplemented
+        import math
+        for f in self.__dataclass_fields__:  # type: ignore[attr-defined]
+            a, b = getattr(self, f), getattr(other, f)
+            if isinstance(a, float) and isinstance(b, float):
+                if math.isnan(a) and math.isnan(b):
+                    continue
+            if a != b:
+                return False
+        return True
+
+    def __hash__(self) -> int:
+        import math
+        parts = []
+        for f in self.__dataclass_fields__:  # type: ignore[attr-defined]
+            v = getattr(self, f)
+            parts.append(None if (isinstance(v, float) and math.isnan(v)) else v)
+        return hash(tuple(parts))
 
     def __post_init__(self) -> None:
         if not self.name or not isinstance(self.name, str):
@@ -76,6 +120,8 @@ class FactorMeta:
             "discovered",
         ):
             raise ValueError(f"FactorMeta.category invalid: {self.category!r}")
+        if self.source not in ("rd_agent", "builtin", "manual"):
+            raise ValueError(f"FactorMeta.source invalid: {self.source!r}")
 
 
 def is_panel(panel: pd.DataFrame) -> bool:

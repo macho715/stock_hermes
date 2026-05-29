@@ -1,29 +1,20 @@
 """Wrapper around Microsoft RD-Agent for automated factor mining.
 
-If ``rdagent`` is not installed in the active environment, ``run_factor_mining``
-returns an empty list and emits a single warning log line so CI can carry on
-without the heavy dependency.  When ``rdagent`` *is* available, we hand off to
-its ``factor_loop`` interface and collect the produced Python source files
-from ``output_dir``.
+Delegates to ``docker_runner.run_docker_factor_mining()`` for execution.
+Returns an empty list and emits a warning when RDAGENT_ENABLED=false or
+Docker is unavailable, so CI can carry on without the heavy dependency.
 """
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable
 from pathlib import Path
 
 from ...observability import get_logger
+from .docker_runner import run_docker_factor_mining
 
 _LOGGER = get_logger("factors.rd_agent.runner")
-
-
-def _try_import_rdagent() -> object | None:
-    try:
-        import rdagent  # type: ignore[import-not-found]
-
-        return rdagent
-    except Exception:  # noqa: BLE001 - surface optional dep absence gracefully
-        return None
 
 
 def run_factor_mining(
@@ -32,64 +23,55 @@ def run_factor_mining(
     budget_usd: float,
     output_dir: Path = Path("src/stock_rtx4060/factors/discovered"),
 ) -> list[Path]:
-    """Run RD-Agent factor mining and return paths of newly produced factor modules.
+    """Run RD-Agent factor mining via Docker and return paths of newly produced factor modules.
 
     Parameters
     ----------
     universe:
-        Tickers RD-Agent should mine factors for.  Forwarded to its config.
+        Tickers RD-Agent should mine factors for.  Passed through to the Docker runner.
     cycles:
         Number of evolution cycles to run (each cycle == hypothesis -> factor ->
         backtest -> feedback loop in RD-Agent terminology).
     budget_usd:
         Hard cap on LLM spend — RD-Agent honours this via its accountant.
     output_dir:
-        Directory into which the wrapper expects RD-Agent to drop generated
-        ``.py`` factor modules.  Created if missing.
+        Ignored (kept for API compatibility).  The Docker runner uses its own
+        session-based output directory under ``discovered/{session_id}/``.
 
     Returns
     -------
     list[Path]
-        Newly created files (compared against the directory snapshot taken
-        before the run).  Empty list if RD-Agent is not installed.
+        Paths to newly created factor ``.py`` modules.  Empty list if
+        RDAGENT_ENABLED=false or Docker is unavailable.
     """
+    # Check RDAGENT_ENABLED flag for graceful degradation
+    # Ensure output directory exists (delegated runner also creates it, but we
+    # guarantee it here so callers can rely on the directory being present)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    universe_list = list(universe)
 
-    rdagent = _try_import_rdagent()
-    if rdagent is None:
+    enabled = os.environ.get("RDAGENT_ENABLED", "").lower()
+    if enabled not in ("1", "true", "yes"):
+        universe_list = list(universe)
         _LOGGER.warning(
-            "rdagent not installed — skipping factor mining "
-            "(install with `pip install rdagent` to enable). "
+            "RDAGENT_ENABLED=%s — skipping factor mining. "
+            "Set RDAGENT_ENABLED=true to enable. "
             "universe=%s cycles=%d budget=%.2f",
+            enabled,
             universe_list,
             cycles,
             budget_usd,
         )
         return []
 
-    pre_existing = {p.resolve() for p in output_dir.glob("*.py")}
+    # Delegate to Docker-based runner (handles Docker availability check internally)
     try:
-        # NOTE: RD-Agent's public API has evolved; we use the documented
-        # factor-loop entrypoint.  When it changes, only this block needs
-        # to be updated — the rest of our pipeline reads files off disk.
-        factor_loop = getattr(rdagent, "factor_loop", None)
-        if factor_loop is None:
-            # TODO: fall back to the CLI driver `python -m rdagent.app.qlib_rd_loop.factor`
-            _LOGGER.warning("rdagent.factor_loop missing in installed version; consider updating rdagent")
-            return []
-        factor_loop(
-            universe=universe_list,
-            cycles=int(cycles),
-            budget_usd=float(budget_usd),
-            output_dir=str(output_dir),
+        new_files = run_docker_factor_mining(
+            budget_usd=budget_usd,
+            cycles=cycles,
         )
+        _LOGGER.info("RD-Agent produced %d new factor module(s)", len(new_files))
+        return new_files
     except Exception as exc:  # noqa: BLE001 - the wrapper must never crash callers
         _LOGGER.exception("RD-Agent factor mining failed: %s", exc)
         return []
-
-    after = {p.resolve() for p in output_dir.glob("*.py")}
-    new_files = sorted(after - pre_existing)
-    _LOGGER.info("RD-Agent produced %d new factor module(s)", len(new_files))
-    return new_files

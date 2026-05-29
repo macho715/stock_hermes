@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock, patch
+
 import numpy as np
 import pandas as pd
 
@@ -87,9 +89,11 @@ def test_run_factor_mining_no_rdagent_returns_empty(tmp_path) -> None:  # type: 
     assert out == []
 
 
-def test_run_factor_mining_creates_output_dir(tmp_path) -> None:  # type: ignore[no-untyped-def]
+def test_run_factor_mining_creates_output_dir(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("RDAGENT_ENABLED", "true")
     target = tmp_path / "discovered"
-    out = run_factor_mining(["AAPL", "MSFT"], cycles=2, budget_usd=10.0, output_dir=target)
+    with patch("stock_rtx4060.factors.rd_agent.runner.run_docker_factor_mining", return_value=[]):
+        out = run_factor_mining(["AAPL", "MSFT"], cycles=2, budget_usd=10.0, output_dir=target)
     assert out == []
     assert target.exists()
     assert target.is_dir()
@@ -108,19 +112,24 @@ def test_run_factor_mining_handles_stub_rdagent(monkeypatch, tmp_path) -> None: 
 
 def test_run_factor_mining_invokes_factor_loop(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
     """Simulate rdagent.factor_loop being present and creating a file."""
-    import sys
-    import types
 
-    fake = types.ModuleType("rdagent")
+    monkeypatch.setenv("RDAGENT_ENABLED", "true")
 
-    def factor_loop(universe, cycles, budget_usd, output_dir):  # type: ignore[no-untyped-def]
-        out = tmp_path / "auto_factor_1.py"
-        out.write_text("# generated\n")
+    # rdagent is imported inside the function body (lazy), so patch at docker_runner level
+    # But run_docker_factor_mining is imported into runner.py via "from .docker_runner import",
+    # so we must patch where runner.py binds it
+    monkeypatch.setenv("RDAGENT_ENABLED", "true")
+    fake_factor_loop = MagicMock(return_value=[
+        (tmp_path / "auto_factor_1.py").write_text("# generated\n") or tmp_path / "auto_factor_1.py"
+    ])
+    # Patch the function *where it is called* (runner.run_docker_factor_mining)
+    monkeypatch.setattr(
+        "stock_rtx4060.factors.rd_agent.runner.run_docker_factor_mining", fake_factor_loop
+    )
 
-    fake.factor_loop = factor_loop  # type: ignore[attr-defined]
-    monkeypatch.setitem(sys.modules, "rdagent", fake)
     out = run_factor_mining(["AAPL"], cycles=1, budget_usd=1.0, output_dir=tmp_path)
-    assert any(p.name == "auto_factor_1.py" for p in out)
+    assert len(out) == 1
+    assert (tmp_path / "auto_factor_1.py").exists()
 
 
 def test_run_factor_mining_swallows_factor_loop_errors(monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]

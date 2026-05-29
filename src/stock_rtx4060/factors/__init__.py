@@ -25,7 +25,7 @@ from .analytics import (
     quintile_pnl,
     rank_autocorr,
 )
-from .base import OHLCV_FIELDS, Factor, FactorMeta, is_panel, slice_as_of
+from .base import OHLCV_FIELDS, Factor, FactorMeta, SourceType, is_panel, slice_as_of
 from .cross_sectional import CROSS_SECTIONAL_FACTORS, attach_fundamentals
 from .factor_zoo import FactorRegistry, register_factor
 from .technical import TECHNICAL_FACTORS
@@ -40,6 +40,7 @@ __all__ = [
     "Factor",
     "FactorMeta",
     "FactorRegistry",
+    "SourceType",
     "register_factor",
     "OHLCV_FIELDS",
     "is_panel",
