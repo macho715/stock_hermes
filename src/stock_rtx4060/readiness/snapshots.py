@@ -27,13 +27,13 @@ def build_readiness_snapshot(
     dsr = _load_mapping(dsr_report)
     paper = _load_mapping(paper_status)
     equity_curve = paper.get("equity_curve") if isinstance(paper.get("equity_curve"), list) else []
-    paper_days = paper.get("forward_paper_days")
+    paper_days = _first_present(paper, "forward_paper_days", "days")
     if paper_days is None:
         paper_days = len(equity_curve)
-    paper_alpha = paper.get("forward_paper_alpha")
+    paper_alpha = _first_present(paper, "forward_paper_alpha", "alpha_pct")
     if paper_alpha is None:
         paper_alpha = _paper_alpha_from_equity(equity_curve)
-    rule_violations = paper.get("rule_violations")
+    rule_violations = _first_present(paper, "rule_violations", "rule_violation_count")
     if rule_violations is None:
         details = paper.get("rule_violations_detail")
         rule_violations = len(details) if isinstance(details, list) else None
@@ -71,6 +71,7 @@ def build_readiness_snapshot(
         "report_only": True,
         "broker_order_execution": False,
         "manual_approval_required": True,
+        "new_capital_allowed": False,
     }
 
 
@@ -99,6 +100,13 @@ def _first_number(data: dict[str, Any], *keys: str) -> float | None:
         value = _to_float(data.get(key))
         if value is not None:
             return value
+    return None
+
+
+def _first_present(data: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        if key in data and data.get(key) is not None:
+            return data.get(key)
     return None
 
 

@@ -1,4 +1,16 @@
-from stock_rtx4060.backtest_honesty import evaluate_backtest_honesty, summarize_honesty
+from stock_rtx4060.backtest_honesty import (
+    build_dsr_report,
+    evaluate_backtest_honesty,
+    load_dsr_report,
+    merge_cpcv_dsr_evidence,
+    summarize_honesty,
+    write_dsr_report,
+)
+
+
+def test_backtest_honesty_legacy_api_still_exists():
+    assert evaluate_backtest_honesty
+    assert summarize_honesty
 
 
 def test_backtest_honesty_passes_with_strong_evidence():
@@ -72,3 +84,34 @@ def test_summarize_honesty_keeps_worst_status_and_counts():
     assert summary["passed"] == 1
     assert summary["amber"] == 1
     assert summary["failed"] == 1
+
+
+def test_dsr_report_supports_direct_evidence_and_load(tmp_path):
+    report = build_dsr_report(
+        symbol="005930",
+        deflated_sharpe=0.94,
+        sharpe=1.2,
+        psr_vs_zero=0.73,
+        mc_drawdown_p95=0.18,
+        path_count=5,
+    )
+    path = write_dsr_report(report, "005930", reports_root=tmp_path)
+    loaded = load_dsr_report("005930", reports_root=tmp_path)
+
+    assert path.exists()
+    assert report["status"] == "PASS"
+    assert loaded["deflated_sharpe"] == 0.94
+    assert loaded["symbol"] == "005930"
+
+
+def test_merge_cpcv_dsr_evidence_normalizes_reports():
+    merged = merge_cpcv_dsr_evidence(
+        cpcv_result={"pass_rate": 0.8, "status": "PASS"},
+        pbo_report={"pbo": 0.08, "status": "PASS"},
+        dsr_report={"deflated_sharpe": 0.94, "status": "PASS"},
+    )
+
+    assert merged["path_pass_rate"] == 0.8
+    assert merged["pbo"] == 0.08
+    assert merged["deflated_sharpe"] == 0.94
+    assert merged["report_only"] is True

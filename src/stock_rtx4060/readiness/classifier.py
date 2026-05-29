@@ -7,7 +7,7 @@ queue.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import isfinite
 from typing import Any
 
@@ -31,17 +31,27 @@ class LiveReviewDecision:
     passed_gates: list[str]
     failed_gates: list[str]
     safety_flags: dict[str, bool]
+    readiness_status: str = ""
+    remaining_blocks: list[str] = field(default_factory=list)
+    new_capital_allowed: bool = False
+    broker_order_execution: bool = False
+    manual_approval_required: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "ticker": self.ticker,
             "status": self.status,
+            "readiness_status": self.readiness_status or self.status,
             "live_review_candidate": self.live_review_candidate,
             "paper_pass": self.paper_pass,
             "blocking_reasons": self.blocking_reasons,
+            "remaining_blocks": self.remaining_blocks,
             "passed_gates": self.passed_gates,
             "failed_gates": self.failed_gates,
             "safety_flags": self.safety_flags,
+            "new_capital_allowed": self.new_capital_allowed,
+            "broker_order_execution": self.broker_order_execution,
+            "manual_approval_required": self.manual_approval_required,
         }
 
 
@@ -128,10 +138,13 @@ def classify_live_review(
     live = not failed
     if live:
         status = "LIVE_REVIEW_CANDIDATE"
+        readiness_status = "LIVE_REVIEW_CANDIDATE"
     elif paper_pass:
         status = "PAPER_PASS"
+        readiness_status = "FORWARD_PAPER_RUNNING" if _has_forward_gate_failure(failed) else "PAPER_PASS"
     else:
         status = "AMBER_WATCHLIST"
+        readiness_status = "AMBER_WATCHLIST"
 
     return LiveReviewDecision(
         ticker=ticker,
@@ -142,6 +155,11 @@ def classify_live_review(
         passed_gates=passed,
         failed_gates=failed,
         safety_flags=safety,
+        readiness_status=readiness_status,
+        remaining_blocks=list(failed),
+        new_capital_allowed=False,
+        broker_order_execution=False,
+        manual_approval_required=True,
     ).to_dict()
 
 
@@ -208,3 +226,7 @@ def _normalize_safety_flags(flags: dict[str, Any] | None) -> dict[str, bool]:
         "broker_order_execution_false": data.get("broker_order_execution") is False,
         "new_capital_allowed_false": data.get("new_capital_allowed") is False,
     }
+
+
+def _has_forward_gate_failure(failed: list[str]) -> bool:
+    return any(name in failed for name in ("FORWARD_PAPER_DAYS", "FORWARD_PAPER_ALPHA", "RULE_VIOLATIONS"))

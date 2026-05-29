@@ -360,7 +360,31 @@ def _evaluate_investment_readiness(result: dict[str, Any], *, provider_summary: 
             "readiness_gate_failures": readiness_reasons,
         }
 
-    live_review_candidate = result.get("live_review_candidate") is True
+    live_review_candidate = (
+        result.get("live_review_candidate") is True
+        or str(result.get("readiness_status", "")).upper() == "LIVE_REVIEW_CANDIDATE"
+        or str(result.get("investment_readiness_status", "")).upper() == "LIVE_REVIEW_CANDIDATE"
+    )
+    if live_review_candidate:
+        safety_flags = _readiness_safety_flags(result, new_capital_allowed=False)
+        return {
+            "readiness_status": "LIVE_REVIEW_CANDIDATE",
+            "investment_readiness_status": "LIVE_REVIEW_CANDIDATE",
+            "investment_readiness_score": round(score, 2),
+            "live_review_candidate": True,
+            "live_queue_action": "MANUAL_REVIEW_REQUIRED",
+            "research_queue_action": "MONITOR",
+            "live_investable": False,
+            "new_capital_allowed": False,
+            "paper_trading_only": False,
+            "safety_flags": safety_flags,
+            "ready_for_manual_review": True,
+            "dashboard_warning": False,
+            "dashboard_warning_message": None,
+            "blocking_reasons": result.get("remaining_blocks") or [],
+            "readiness_gate_failures": result.get("remaining_blocks") or [],
+        }
+
     safety_flags = _readiness_safety_flags(result, new_capital_allowed=True)
     return {
         "readiness_status": "READY_FOR_MANUAL_REVIEW",

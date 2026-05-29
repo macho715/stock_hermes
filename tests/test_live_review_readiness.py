@@ -34,8 +34,12 @@ def test_live_review_classifier_blocks_until_forward_paper_gates_pass():
     )
 
     assert decision["status"] == "PAPER_PASS"
+    assert decision["readiness_status"] == "FORWARD_PAPER_RUNNING"
     assert decision["paper_pass"] is True
     assert decision["live_review_candidate"] is False
+    assert decision["new_capital_allowed"] is False
+    assert decision["broker_order_execution"] is False
+    assert decision["manual_approval_required"] is True
     assert "FORWARD_PAPER_DAYS" in decision["failed_gates"]
     assert "FORWARD_PAPER_ALPHA" in decision["failed_gates"]
     assert "RULE_VIOLATIONS" in decision["failed_gates"]
@@ -55,7 +59,11 @@ def test_live_review_classifier_promotes_only_when_all_gates_pass():
     )
 
     assert decision["status"] == "LIVE_REVIEW_CANDIDATE"
+    assert decision["readiness_status"] == "LIVE_REVIEW_CANDIDATE"
     assert decision["live_review_candidate"] is True
+    assert decision["new_capital_allowed"] is False
+    assert decision["broker_order_execution"] is False
+    assert decision["manual_approval_required"] is True
     assert decision["blocking_reasons"] == []
 
 
@@ -155,6 +163,44 @@ def test_dashboard_snapshot_adds_live_review_fields():
     assert row["safety_flags"]["broker_order_execution"] is False
 
 
+def test_dashboard_live_review_never_allows_new_capital():
+    payload = {
+        "disclaimer": "screening_output_only; manual approval required; no broker order execution; not financial advice",
+        "provider_summary": {"status": "PASS"},
+        "results": [
+            {
+                "ticker": "SYNTH-A",
+                "track": "S",
+                "verdict": "AMBER_REVIEW_ONLY",
+                "recommendation_rank_score": 88.0,
+                "screening_output_only": True,
+                "direction_prob": 0.55,
+                "expected_value_pct": 2.0,
+                "entry": 100.0,
+                "stop": 96.0,
+                "tp2": 110.0,
+                "risk_reward": 2.5,
+                "validations": [],
+                "model_accuracy": 0.51,
+                "model_auc": 0.55,
+                "alpha_pct": 1.0,
+                "completed_trades": 60,
+                "backtest_honesty": {"status": "PASS", "checks": []},
+                "readiness_status": "LIVE_REVIEW_CANDIDATE",
+                "live_review_candidate": True,
+            }
+        ],
+    }
+
+    row = build_dashboard_snapshot(payload)["results"][0]
+
+    assert row["readiness_status"] == "LIVE_REVIEW_CANDIDATE"
+    assert row["new_capital_allowed"] is False
+    assert row["safety_flags"]["new_capital_allowed"] is False
+    assert row["safety_flags"]["broker_order_execution"] is False
+    assert row["safety_flags"]["manual_approval_required"] is True
+
+
 def test_readiness_snapshot_accepts_dict_reports(tmp_path):
     card = tmp_path / "model_card.md"
     card.write_text("# card\n", encoding="utf-8")
@@ -171,3 +217,23 @@ def test_readiness_snapshot_accepts_dict_reports(tmp_path):
 
     assert snapshot["evidence"]["model_card_present"] is True
     assert snapshot["decision"]["status"] == "PAPER_PASS"
+    assert snapshot["new_capital_allowed"] is False
+
+
+def test_readiness_snapshot_accepts_forward_paper_summary_keys(tmp_path):
+    card = tmp_path / "model_card.md"
+    card.write_text("# card\n", encoding="utf-8")
+
+    snapshot = build_readiness_snapshot(
+        ticker="005930",
+        cpcv_report=build_cpcv_report(ticker="005930", sharpe_paths=[1.0] * 20 + [-0.1] * 5),
+        pbo_report=build_pbo_report(ticker="005930", sharpe_paths=[1.0] * 23 + [-0.1] * 2),
+        dsr_report=build_dsr_report(ticker="005930", sharpe=1.0, n_trials=1, n_obs=252),
+        paper_status={"days": 30, "alpha_pct": 0.2, "rule_violation_count": 0},
+        model_card_path=card,
+        dashboard_safety_flags=_safety_flags(),
+    )
+
+    assert snapshot["decision"]["readiness_status"] == "LIVE_REVIEW_CANDIDATE"
+    assert snapshot["decision"]["new_capital_allowed"] is False
+    assert snapshot["evidence"]["paper"]["forward_paper_days"] == 30

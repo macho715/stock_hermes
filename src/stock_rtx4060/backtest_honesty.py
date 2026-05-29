@@ -8,7 +8,7 @@ from math import isfinite
 from pathlib import Path
 from typing import Any, Literal
 
-from .backtest.stat_tests import deflated_sharpe
+from .backtest.stat_tests import deflated_sharpe as _deflated_sharpe
 
 HonestyStatus = Literal["PASS", "AMBER", "FAIL"]
 
@@ -218,33 +218,128 @@ def _fmt(value: float | None, unit: str) -> str:
 
 def build_dsr_report(
     *,
-    ticker: str,
-    sharpe: float,
-    n_trials: int,
-    n_obs: int,
+    ticker: str | None = None,
+    symbol: str | None = None,
+    sharpe: float | None = None,
+    n_trials: int | None = None,
+    n_obs: int | None = None,
     min_deflated_sharpe: float = 0.0,
     skew: float = 0.0,
     kurt: float = 3.0,
+    deflated_sharpe: float | None = None,
+    psr_vs_zero: float | None = None,
+    mc_drawdown_p95: float | None = None,
+    path_count: int | None = None,
+    details: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a report-only Deflated Sharpe evidence record."""
 
-    dsr = deflated_sharpe(sharpe, n_trials=n_trials, n_obs=n_obs, skew=skew, kurt=kurt)
-    return {
+    normalized_ticker = ticker or symbol
+    if not normalized_ticker:
+        raise ValueError("ticker or symbol is required")
+    if deflated_sharpe is None:
+        if sharpe is None or n_trials is None or n_obs is None:
+            raise ValueError("sharpe, n_trials, and n_obs are required when deflated_sharpe is not supplied")
+        dsr = _deflated_sharpe(float(sharpe), n_trials=int(n_trials), n_obs=int(n_obs), skew=skew, kurt=kurt)
+    else:
+        dsr = float(deflated_sharpe)
+
+    report = {
         "schema_version": "dsr_report.v1",
         "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
-        "ticker": ticker,
-        "sharpe": float(sharpe),
-        "n_trials": int(n_trials),
-        "n_obs": int(n_obs),
+        "ticker": normalized_ticker,
+        "symbol": normalized_ticker,
+        "sharpe": float(sharpe) if sharpe is not None else None,
+        "n_trials": int(n_trials) if n_trials is not None else None,
+        "n_obs": int(n_obs) if n_obs is not None else None,
         "deflated_sharpe": dsr,
         "min_deflated_sharpe": min_deflated_sharpe,
         "status": "PASS" if dsr > min_deflated_sharpe else "AMBER",
         "report_only": True,
     }
+    if psr_vs_zero is not None:
+        report["psr_vs_zero"] = float(psr_vs_zero)
+    if mc_drawdown_p95 is not None:
+        report["mc_drawdown_p95"] = float(mc_drawdown_p95)
+    if path_count is not None:
+        report["path_count"] = int(path_count)
+    if details:
+        report["details"] = details
+    return report
 
 
-def write_dsr_report(path: str | Path, **kwargs: Any) -> Path:
-    output = Path(path)
+def write_dsr_report(
+    path_or_report: str | Path | dict[str, Any],
+    symbol: str | None = None,
+    *,
+    reports_root: str | Path = Path("reports"),
+    **kwargs: Any,
+) -> Path:
+    """Write DSR evidence.
+
+    Supports the original API ``write_dsr_report(path, **kwargs)`` and the
+    backup prototype style ``write_dsr_report(report, symbol)``.
+    """
+
+    if isinstance(path_or_report, dict):
+        payload = dict(path_or_report)
+        normalized = symbol or payload.get("ticker") or payload.get("symbol")
+        if not normalized:
+            raise ValueError("symbol is required when writing a prebuilt DSR report")
+        output = Path(reports_root) / "live_review" / str(normalized) / f"dsr_report_{normalized}.json"
+    else:
+        output = Path(path_or_report)
+        payload = build_dsr_report(**kwargs)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(build_dsr_report(**kwargs), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return output
+
+
+def load_dsr_report(
+    symbol_or_path: str | Path,
+    *,
+    reports_root: str | Path = Path("reports"),
+) -> dict[str, Any] | None:
+    """Load a DSR evidence report by symbol or explicit path."""
+
+    raw = Path(symbol_or_path)
+    path = raw if raw.exists() and raw.is_file() else Path(reports_root) / "live_review" / str(symbol_or_path) / f"dsr_report_{symbol_or_path}.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def merge_cpcv_dsr_evidence(
+    *,
+    cpcv_result: dict[str, Any] | None = None,
+    pbo_report: dict[str, Any] | None = None,
+    dsr_report: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Normalize CPCV, PBO, and DSR reports into one honesty evidence block."""
+
+    cpcv = cpcv_result or {}
+    pbo = pbo_report or cpcv
+    dsr = dsr_report or cpcv
+    return {
+        "path_pass_rate": _first_number(cpcv, "path_pass_rate", "pass_rate"),
+        "pbo": _first_number(pbo, "pbo", "probability_of_backtest_overfitting"),
+        "deflated_sharpe": _first_number(dsr, "deflated_sharpe", "dsr"),
+        "cpcv_status": cpcv.get("status"),
+        "pbo_status": pbo.get("status"),
+        "dsr_status": dsr.get("status"),
+        "report_only": True,
+    }
+
+
+def _first_number(data: dict[str, Any], *keys: str) -> float | None:
+    for key in keys:
+        value = data.get(key)
+        if value is None:
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
