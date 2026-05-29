@@ -142,9 +142,20 @@ def test_daily_krx_recommend_task_scheduled_krx_resolves_krx_final(monkeypatch):
     ) == "krx_final"
 
 
+def test_broker_final_preflight_skips_when_provider_config_not_set(monkeypatch):
+    monkeypatch.delenv("STOCK1901_PROVIDER_CONFIG", raising=False)
+
+    result = daily_krx.preflight_broker_final_config()
+
+    assert result["status"] == "SKIPPED"
+    assert result["provider_config"] is None
+    assert result["broker_final_ohlcv_path"] is None
+
+
 def test_daily_krx_recommend_task_prefers_broker_final_export_config(tmp_path, monkeypatch):
     provider_config = tmp_path / "provider_config.json"
     broker_export = tmp_path / "broker_final.csv"
+    broker_export.write_text("Date,Open,High,Low,Close,Volume\n2026-05-29,1,1,1,1,1\n", encoding="utf-8")
     provider_config.write_text(f'{{"broker_final_ohlcv_path": "{broker_export.as_posix()}"}}', encoding="utf-8")
     captured: dict[str, object] = {}
 
@@ -170,6 +181,64 @@ def test_daily_krx_recommend_task_prefers_broker_final_export_config(tmp_path, m
         after_market_close=cfg.after_market_close,
         provider_config={"broker_final_ohlcv_path": str(broker_export)},
     ) == "broker_final"
+
+
+def test_broker_final_preflight_passes_with_existing_config_and_csv(tmp_path, monkeypatch):
+    provider_config = tmp_path / "provider_config.json"
+    broker_export = tmp_path / "broker_final.csv"
+    broker_export.write_text("Date,Open,High,Low,Close,Volume\n2026-05-29,1,1,1,1,1\n", encoding="utf-8")
+    provider_config.write_text(f'{{"broker_final_ohlcv_path": "{broker_export.as_posix()}"}}', encoding="utf-8")
+    monkeypatch.setenv("STOCK1901_PROVIDER_CONFIG", str(provider_config))
+
+    result = daily_krx.preflight_broker_final_config()
+
+    assert result["status"] == "PASS"
+    assert result["provider_config"] == str(provider_config)
+    assert result["broker_final_ohlcv_path"] == str(broker_export)
+
+
+def test_broker_final_preflight_raises_for_missing_provider_config(tmp_path, monkeypatch):
+    provider_config = tmp_path / "missing_provider_config.json"
+    monkeypatch.setenv("STOCK1901_PROVIDER_CONFIG", str(provider_config))
+
+    with pytest.raises(RuntimeError, match="BROKER_FINAL_PROVIDER_CONFIG_MISSING"):
+        daily_krx.preflight_broker_final_config()
+
+
+def test_broker_final_preflight_raises_for_missing_broker_path(tmp_path, monkeypatch):
+    provider_config = tmp_path / "provider_config.json"
+    provider_config.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("STOCK1901_PROVIDER_CONFIG", str(provider_config))
+
+    with pytest.raises(RuntimeError, match="BROKER_FINAL_PATH_MISSING"):
+        daily_krx.preflight_broker_final_config()
+
+
+def test_broker_final_preflight_raises_for_missing_broker_csv(tmp_path, monkeypatch):
+    provider_config = tmp_path / "provider_config.json"
+    broker_export = tmp_path / "missing_broker_final.csv"
+    provider_config.write_text(f'{{"broker_final_ohlcv_path": "{broker_export.as_posix()}"}}', encoding="utf-8")
+    monkeypatch.setenv("STOCK1901_PROVIDER_CONFIG", str(provider_config))
+
+    with pytest.raises(RuntimeError, match="BROKER_FINAL_CSV_MISSING"):
+        daily_krx.preflight_broker_final_config()
+
+
+def test_daily_krx_recommend_task_runs_preflight_before_engine(tmp_path, monkeypatch):
+    provider_config = tmp_path / "provider_config.json"
+    broker_export = tmp_path / "missing_broker_final.csv"
+    provider_config.write_text(f'{{"broker_final_ohlcv_path": "{broker_export.as_posix()}"}}', encoding="utf-8")
+    monkeypatch.setenv("STOCK1901_PROVIDER_CONFIG", str(provider_config))
+
+    import stock_rtx4060.recommendation_engine as rec_mod
+
+    def _unexpected_engine(*args, **kwargs):
+        raise AssertionError("RecommendationEngine must not run when broker final preflight fails")
+
+    monkeypatch.setattr(rec_mod, "RecommendationEngine", _unexpected_engine)
+
+    with pytest.raises(RuntimeError, match="BROKER_FINAL_CSV_MISSING"):
+        daily_krx.recommend_task(["005930.KS"], dry_run=True)
 
 
 def test_daily_krx_recommend_task_us_ticker_keeps_requested_provider(monkeypatch):

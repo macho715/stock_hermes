@@ -13,9 +13,11 @@ are still emitted but at LOW priority.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from .utils import flow, get_run_logger, slack_on_failure, with_retries
@@ -51,6 +53,49 @@ def _resolve_provider_config() -> str | None:
         return None
     value = value.strip()
     return value or None
+
+
+def preflight_broker_final_config() -> dict[str, str | None]:
+    """Validate broker final CSV config before post-close recommendations.
+
+    No config means the flow will use the normal KRX final provider fallback.
+    When config is present, fail before RecommendationEngine runs if either
+    the JSON config or the broker final CSV is missing.
+    """
+    config_value = _resolve_provider_config()
+    if config_value is None:
+        return {
+            "status": "SKIPPED",
+            "provider_config": None,
+            "broker_final_ohlcv_path": None,
+            "reason": "STOCK1901_PROVIDER_CONFIG not set; krx_final fallback remains active",
+        }
+
+    config_path = Path(config_value)
+    if not config_path.exists():
+        raise RuntimeError(f"BROKER_FINAL_PROVIDER_CONFIG_MISSING: {config_path}")
+
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"BROKER_FINAL_PROVIDER_CONFIG_INVALID_JSON: {config_path}") from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"BROKER_FINAL_PROVIDER_CONFIG_NOT_OBJECT: {config_path}")
+
+    broker_path_value = str(payload.get("broker_final_ohlcv_path") or "").strip()
+    if not broker_path_value:
+        raise RuntimeError(f"BROKER_FINAL_PATH_MISSING: {config_path}")
+
+    broker_path = Path(broker_path_value)
+    if not broker_path.exists():
+        raise RuntimeError(f"BROKER_FINAL_CSV_MISSING: {broker_path}")
+
+    return {
+        "status": "PASS",
+        "provider_config": str(config_path),
+        "broker_final_ohlcv_path": str(broker_path),
+        "reason": None,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -161,6 +206,7 @@ def recommend_task(universe: list[str], *, dry_run: bool = False) -> dict[str, A
     """Run the report-only RecommendationEngine over ``universe``."""
     from stock_rtx4060.recommendation_engine import RecommendationConfig, RecommendationEngine
 
+    broker_preflight = preflight_broker_final_config()
     cfg = RecommendationConfig(
         universe=list(universe),
         data_provider=_resolve_recommend_provider(),
@@ -174,6 +220,7 @@ def recommend_task(universe: list[str], *, dry_run: bool = False) -> dict[str, A
         "result_count": len(results),
         "verdicts": [getattr(r, "verdict", "UNKNOWN") for r in results],
         "dry_run": dry_run,
+        "broker_final_preflight": broker_preflight,
     }
 
 
