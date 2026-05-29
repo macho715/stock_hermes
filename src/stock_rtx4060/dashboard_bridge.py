@@ -321,14 +321,18 @@ def _evaluate_investment_readiness(result: dict[str, Any], *, provider_summary: 
         readiness_reasons.append(f"Completed trades {completed_trades} < 50")
 
     if hard_reasons:
+        safety_flags = _readiness_safety_flags(result, new_capital_allowed=False)
         return {
+            "readiness_status": "HARD_FAIL",
             "investment_readiness_status": "HARD_FAIL",
             "investment_readiness_score": 0.0,
+            "live_review_candidate": False,
             "live_queue_action": "HARD_BLOCK",
             "research_queue_action": "EXCLUDE_UNTIL_FIXED",
             "live_investable": False,
             "new_capital_allowed": False,
             "paper_trading_only": True,
+            "safety_flags": safety_flags,
             "ready_for_manual_review": False,
             "dashboard_warning": True,
             "dashboard_warning_message": "HARD FAIL\n" + "\n".join(hard_reasons),
@@ -337,14 +341,18 @@ def _evaluate_investment_readiness(result: dict[str, Any], *, provider_summary: 
         }
 
     if readiness_reasons:
+        safety_flags = _readiness_safety_flags(result, new_capital_allowed=False)
         return {
+            "readiness_status": "AMBER_WATCHLIST",
             "investment_readiness_status": "AMBER_WATCHLIST",
             "investment_readiness_score": round(min(score, READINESS_SCORE_CAP), 2),
+            "live_review_candidate": False,
             "live_queue_action": "HARD_BLOCK",
             "research_queue_action": "AMBER_WATCHLIST",
             "live_investable": False,
             "new_capital_allowed": False,
             "paper_trading_only": True,
+            "safety_flags": safety_flags,
             "ready_for_manual_review": False,
             "dashboard_warning": True,
             "dashboard_warning_message": READINESS_WARNING_MESSAGE,
@@ -352,19 +360,33 @@ def _evaluate_investment_readiness(result: dict[str, Any], *, provider_summary: 
             "readiness_gate_failures": readiness_reasons,
         }
 
+    live_review_candidate = result.get("live_review_candidate") is True
+    safety_flags = _readiness_safety_flags(result, new_capital_allowed=True)
     return {
+        "readiness_status": "READY_FOR_MANUAL_REVIEW",
         "investment_readiness_status": "READY_FOR_MANUAL_REVIEW",
         "investment_readiness_score": round(score, 2),
+        "live_review_candidate": live_review_candidate,
         "live_queue_action": "MANUAL_REVIEW_REQUIRED",
         "research_queue_action": "MONITOR",
         "live_investable": True,
         "new_capital_allowed": True,
         "paper_trading_only": False,
+        "safety_flags": safety_flags,
         "ready_for_manual_review": True,
         "dashboard_warning": False,
         "dashboard_warning_message": None,
         "blocking_reasons": [],
         "readiness_gate_failures": [],
+    }
+
+
+def _readiness_safety_flags(result: dict[str, Any], *, new_capital_allowed: bool) -> dict[str, bool]:
+    return {
+        "screening_output_only": result.get("screening_output_only") is True,
+        "manual_approval_required": True,
+        "broker_order_execution": False,
+        "new_capital_allowed": bool(new_capital_allowed),
     }
 
 

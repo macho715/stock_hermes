@@ -1,0 +1,239 @@
+{
+  "schema_version": "1.0",
+  "generated_at_utc": "2026-05-29T00:23:18+00:00",
+  "input_path": "reports\\api_recommend_krx\\recommendations_algo_v2_20260529_041945.json",
+  "run_verdict": "NOT_INVESTMENT_READY",
+  "candidate_count": 5,
+  "ready_count": 0,
+  "candidates": [
+    {
+      "ticker": "006400.KS",
+      "track": "L",
+      "ready_for_manual_review": false,
+      "new_capital_allowed": false,
+      "paper_trading_only": true,
+      "raw_score": 97.6,
+      "investment_score": 44.0,
+      "status": "AMBER_WATCHLIST",
+      "blocking_reasons": [
+        "accuracy=0.2066 < 0.50",
+        "backtest_honesty=AMBER",
+        "COST_STRESS_3X=FAIL",
+        "EMBARGO_STRESS=FAIL"
+      ],
+      "checks": {
+        "BACKTEST_HONESTY": {
+          "status": "AMBER",
+          "evidence": "backtest_honesty.status=AMBER"
+        },
+        "COST_STRESS_1X": {
+          "status": "FAIL",
+          "evidence": "return=-1.02% does not exceed 1x threshold=0.50%"
+        },
+        "COST_STRESS_2X": {
+          "status": "FAIL",
+          "evidence": "return=-1.02% does not exceed 2x threshold=1.00%"
+        },
+        "COST_STRESS_3X": {
+          "status": "FAIL",
+          "evidence": "return=-1.02% does not exceed 3x threshold=1.50%"
+        },
+        "EMBARGO_STRESS": {
+          "status": "FAIL",
+          "evidence": "cv_gap=41 < horizon=63"
+        },
+        "ADVISOR_AUDIT": {
+          "status": "NOT_APPLICABLE",
+          "evidence": "advisor_score is null; advisor audit not applicable"
+        },
+        "MODEL_QUALITY": {
+          "status": "AMBER_WATCHLIST",
+          "evidence": "accuracy=0.2066, auc=0.5133, alpha=None, completed_trades=None"
+        }
+      }
+    },
+    {
+      "ticker": "000660.KS",
+      "track": "S",
+      "ready_for_manual_review": false,
+      "new_capital_allowed": false,
+      "paper_trading_only": true,
+      "raw_score": 95.38,
+      "investment_score": 44.0,
+      "status": "AMBER_WATCHLIST",
+      "blocking_reasons": [
+        "accuracy=0.4228 < 0.50",
+        "COST_STRESS_3X=FAIL"
+      ],
+      "checks": {
+        "BACKTEST_HONESTY": {
+          "status": "PASS",
+          "evidence": "backtest_honesty.status=PASS"
+        },
+        "COST_STRESS_1X": {
+          "status": "PASS",
+          "evidence": "return=0.81% exceeds 1x threshold=0.50%"
+        },
+        "COST_STRESS_2X": {
+          "status": "FAIL",
+          "evidence": "return=0.81% does not exceed 2x threshold=1.00%"
+        },
+        "COST_STRESS_3X": {
+          "status": "FAIL",
+          "evidence": "return=0.81% does not exceed 3x threshold=1.50%"
+        },
+        "EMBARGO_STRESS": {
+          "status": "PASS",
+          "evidence": "cv_gap=20 >= horizon=20"
+        },
+        "ADVISOR_AUDIT": {
+          "status": "NOT_APPLICABLE",
+          "evidence": "advisor_score is null; advisor audit not applicable"
+        },
+        "MODEL_QUALITY": {
+          "status": "AMBER_WATCHLIST",
+          "evidence": "accuracy=0.4228, auc=0.6247, alpha=None, completed_trades=None"
+        }
+      }
+    },
+    {
+      "ticker": "005380.KS",
+      "track": "L",
+      "ready_for_manual_review": false,
+      "new_capital_allowed": false,
+      "paper_trading_only": true,
+      "raw_score": 90.69,
+      "investment_score": 44.0,
+      "status": "AMBER_WATCHLIST",
+      "blocking_reasons": [
+        "accuracy=0.1750 < 0.50",
+        "auc=0.4771 < 0.50",
+        "backtest_honesty=AMBER",
+        "COST_STRESS_3X=FAIL",
+        "EMBARGO_STRESS=FAIL"
+      ],
+      "checks": {
+        "BACKTEST_HONESTY": {
+          "status": "AMBER",
+          "evidence": "backtest_honesty.status=AMBER"
+        },
+        "COST_STRESS_1X": {
+          "status": "FAIL",
+          "evidence": "return=-0.78% does not exceed 1x threshold=0.50%"
+        },
+        "COST_STRESS_2X": {
+          "status": "FAIL",
+          "evidence": "return=-0.78% does not exceed 2x threshold=1.00%"
+        },
+        "COST_STRESS_3X": {
+          "status": "FAIL",
+          "evidence": "return=-0.78% does not exceed 3x threshold=1.50%"
+        },
+        "EMBARGO_STRESS": {
+          "status": "FAIL",
+          "evidence": "cv_gap=41 < horizon=63"
+        },
+        "ADVISOR_AUDIT": {
+          "status": "NOT_APPLICABLE",
+          "evidence": "advisor_score is null; advisor audit not applicable"
+        },
+        "MODEL_QUALITY": {
+          "status": "AMBER_WATCHLIST",
+          "evidence": "accuracy=0.175, auc=0.4771, alpha=None, completed_trades=None"
+        }
+      }
+    },
+    {
+      "ticker": "005930.KS",
+      "track": "S",
+      "ready_for_manual_review": false,
+      "new_capital_allowed": false,
+      "paper_trading_only": true,
+      "raw_score": 88.85,
+      "investment_score": 44.0,
+      "status": "AMBER_WATCHLIST",
+      "blocking_reasons": [
+        "accuracy=0.3073 < 0.50",
+        "auc=0.4559 < 0.50",
+        "backtest_honesty=AMBER",
+        "COST_STRESS_3X=FAIL"
+      ],
+      "checks": {
+        "BACKTEST_HONESTY": {
+          "status": "AMBER",
+          "evidence": "backtest_honesty.status=AMBER"
+        },
+        "COST_STRESS_1X": {
+          "status": "FAIL",
+          "evidence": "return=-1.34% does not exceed 1x threshold=0.50%"
+        },
+        "COST_STRESS_2X": {
+          "status": "FAIL",
+          "evidence": "return=-1.34% does not exceed 2x threshold=1.00%"
+        },
+        "COST_STRESS_3X": {
+          "status": "FAIL",
+          "evidence": "return=-1.34% does not exceed 3x threshold=1.50%"
+        },
+        "EMBARGO_STRESS": {
+          "status": "PASS",
+          "evidence": "cv_gap=20 >= horizon=20"
+        },
+        "ADVISOR_AUDIT": {
+          "status": "NOT_APPLICABLE",
+          "evidence": "advisor_score is null; advisor audit not applicable"
+        },
+        "MODEL_QUALITY": {
+          "status": "AMBER_WATCHLIST",
+          "evidence": "accuracy=0.3073, auc=0.4559, alpha=None, completed_trades=None"
+        }
+      }
+    },
+    {
+      "ticker": "003670.KS",
+      "track": "L",
+      "ready_for_manual_review": false,
+      "new_capital_allowed": false,
+      "paper_trading_only": true,
+      "raw_score": 88.75,
+      "investment_score": 44.0,
+      "status": "AMBER_WATCHLIST",
+      "blocking_reasons": [
+        "accuracy=0.3259 < 0.50",
+        "backtest_honesty=AMBER",
+        "COST_STRESS_3X=FAIL",
+        "EMBARGO_STRESS=FAIL"
+      ],
+      "checks": {
+        "BACKTEST_HONESTY": {
+          "status": "AMBER",
+          "evidence": "backtest_honesty.status=AMBER"
+        },
+        "COST_STRESS_1X": {
+          "status": "FAIL",
+          "evidence": "return=-1.40% does not exceed 1x threshold=0.50%"
+        },
+        "COST_STRESS_2X": {
+          "status": "FAIL",
+          "evidence": "return=-1.40% does not exceed 2x threshold=1.00%"
+        },
+        "COST_STRESS_3X": {
+          "status": "FAIL",
+          "evidence": "return=-1.40% does not exceed 3x threshold=1.50%"
+        },
+        "EMBARGO_STRESS": {
+          "status": "FAIL",
+          "evidence": "cv_gap=41 < horizon=63"
+        },
+        "ADVISOR_AUDIT": {
+          "status": "NOT_APPLICABLE",
+          "evidence": "advisor_score is null; advisor audit not applicable"
+        },
+        "MODEL_QUALITY": {
+          "status": "AMBER_WATCHLIST",
+          "evidence": "accuracy=0.3259, auc=0.518, alpha=None, completed_trades=None"
+        }
+      }
+    }
+  ]
+}

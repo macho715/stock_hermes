@@ -1,0 +1,231 @@
+{
+  "generated_at_utc": "2026-05-28T22:27:49+00:00",
+  "config": {
+    "universe": [
+      "AAPL"
+    ],
+    "track": "BOTH",
+    "period": "3y",
+    "horizon_s": 20,
+    "horizon_l": 63,
+    "top_n": 1,
+    "synthetic": false,
+    "min_rows": 260,
+    "min_avg_dollar_volume": 10000000.0,
+    "short_green_score": 75.0,
+    "short_amber_score": 65.0,
+    "long_green_score": 80.0,
+    "long_amber_score": 70.0,
+    "stop_loss_pct_s": 0.04,
+    "hard_stop_loss_pct_s": 0.05,
+    "take_profit_1_pct_s": 0.05,
+    "take_profit_2_pct_s": 0.1,
+    "stop_loss_pct_l": 0.12,
+    "max_stop_loss_pct_l": 0.18,
+    "target_return_pct_l": 0.2,
+    "risk_per_trade_pct_s": 0.0075,
+    "risk_per_trade_pct_l": 0.005,
+    "max_position_pct_s": 0.2,
+    "max_position_pct_l": 0.12,
+    "max_mdd_pct_s": 25.0,
+    "max_mdd_pct_l": 35.0,
+    "min_risk_reward": 2.0,
+    "model_kind": "logistic",
+    "xgb_device": "cpu",
+    "xgb_estimators": 120,
+    "xgb_splits": 3,
+    "cv_gap": null,
+    "min_oof_coverage": 0.45,
+    "min_backtest_sharpe": -0.25,
+    "transaction_cost_buffer_pct": 0.5,
+    "capital": 100000.0,
+    "prefer_gpu": false,
+    "lite": true,
+    "output_dir": "reports/api_investment_readiness_minimax_advisor_yfinance_20260529_022500",
+    "data_provider": "yfinance",
+    "provider_config": null,
+    "kevpe_events": null,
+    "audit_command": "recommend",
+    "factor_set": "technical",
+    "model_uri": null,
+    "advisor_run": true,
+    "advisor_blend_weight": 0.3
+  },
+  "disclaimer": "screening_output_only; manual approval required; no broker order execution; not financial advice",
+  "algorithm_patch": "v2 leak-safe CV + ATR risk plan + fixed-risk sizing + OOF backtest",
+  "audit_log_path": "reports\\api_investment_readiness_minimax_advisor_yfinance_20260529_022500\\audit_log.jsonl",
+  "provider_summary": {
+    "status": "AMBER",
+    "providers_used": [
+      "yfinance"
+    ],
+    "event_count": 1,
+    "row_count_min": null,
+    "last_date_max": null,
+    "freshness_days_max": null,
+    "fallbacks": []
+  },
+  "backtest_honesty_summary": {
+    "status": "AMBER",
+    "result_count": 1,
+    "passed": 4,
+    "amber": 1,
+    "failed": 0,
+    "generated_at_utc": "2026-05-28T22:27:49+00:00"
+  },
+  "errors": [],
+  "results": [
+    {
+      "ticker": "AAPL",
+      "track": "S",
+      "verdict": "ELIGIBLE_RECOMMENDATION",
+      "recommendation_rank_score": 75.25,
+      "candidate_label": "Track-S 추천 후보: 수동 승인 필요",
+      "screening_output_only": true,
+      "latest_close": 312.51,
+      "entry": 312.51,
+      "stop": 300.0096,
+      "tp1": 328.1355,
+      "tp2": 343.761,
+      "stop_pct": 0.04,
+      "tp2_pct": 0.1,
+      "risk_reward": 2.5,
+      "risk_budget_pct": 0.0075,
+      "max_position_pct": 0.2,
+      "suggested_quantity": 59.9981,
+      "suggested_position_value": 18750.0,
+      "direction_prob": 0.9405,
+      "expected_value_pct": 9.167,
+      "model_accuracy": 0.5553,
+      "model_auc": 0.6134,
+      "oof_coverage": 1.0,
+      "backtest_return_pct": 0.19,
+      "backtest_sharpe": 0.114,
+      "backtest_sortino": 0.127,
+      "backtest_mdd_pct": 1.71,
+      "profit_factor": 1.069,
+      "avg_dollar_volume_20d": 14671628396.53,
+      "volume_ratio_20d": 0.89,
+      "market_regime_score": 100.0,
+      "return_20d_pct": 15.78,
+      "return_60d_pct": 18.6,
+      "drawdown_252d_pct": -0.24,
+      "confirmations_passed": 9,
+      "confirmations_total": 9,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=752, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=14671628396.53"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=100.00, atr_pct=0.0178"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "PASS",
+          "evidence": "prob=0.9405, acc=0.5553, auc=0.6134, models=logistic"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=100.00%, gap=20"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "PASS",
+          "evidence": "return=0.19%, sharpe=0.114, mdd=1.71%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=4.00%, tp2_pct=10.00%, rr=2.50, risk_budget=0.75%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "PASS",
+          "evidence": "score=100.00, green_threshold=75.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "reasons": [
+        "data_source=yfinance:cache",
+        "cv_gap=20",
+        "모델 상승확률 94.05%",
+        "단기/중기 추세 확인",
+        "20일 고점권/돌파 후보",
+        "백테스트 MDD 1.71%",
+        "R/R 2.50 통과",
+        "기대값 9.17%",
+        "Track-S 추천 후보: 수동 승인 필요",
+        "advisor_score=-0.650"
+      ],
+      "generated_at_utc": "2026-05-28T22:27:27+00:00",
+      "backtest_honesty": {
+        "status": "AMBER",
+        "checks": [
+          {
+            "name": "OOF_COVERAGE",
+            "status": "PASS",
+            "value": 1.0,
+            "threshold": 0.45,
+            "reason": "oof_coverage=100.00%, threshold=45.00%"
+          },
+          {
+            "name": "SHARPE_FLOOR",
+            "status": "PASS",
+            "value": 0.114,
+            "threshold": -0.25,
+            "reason": "sharpe_floor=11.40%, threshold=-25.00%"
+          },
+          {
+            "name": "MAX_DRAWDOWN",
+            "status": "PASS",
+            "value": 1.71,
+            "threshold": 25.0,
+            "reason": "mdd=1.71%, max=25.00%"
+          },
+          {
+            "name": "TRANSACTION_COST_BUFFER",
+            "status": "AMBER",
+            "value": 0.19,
+            "threshold": 0.5,
+            "reason": "return=0.19%, buffer=0.50%"
+          },
+          {
+            "name": "WALK_FORWARD_GAP",
+            "status": "PASS",
+            "value": 20,
+            "threshold": 20,
+            "reason": "gap=20, horizon=20"
+          }
+        ],
+        "passed": 4,
+        "amber": 1,
+        "failed": 0,
+        "generated_at_utc": "2026-05-28T22:27:01+00:00"
+      },
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null,
+      "target_weight": 0.0,
+      "advisor_score": -0.65,
+      "advisor_rationale": "[news_sentiment] no news data; [devils_advocate] Three critical risks invalidate the bullish AAPL thesis: (1) VALUATION STRETCH — price at 312.51 is ~14% above the 50-day SMA (273.86), signaling extreme mean-reversion risk; historically, de"
+    }
+  ]
+}
