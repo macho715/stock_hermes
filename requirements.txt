@@ -14,7 +14,7 @@ flask>=3.0
 flask-cors>=4.0
 # Phase 0 observability stack (loguru/mlflow/prometheus). All optional but recommended.
 loguru>=0.7
-mlflow>=2.16
+mlflow>=3.0,<4.0
 prometheus-client>=0.20
 # Phase 1 PIT data lake (DuckDB+Parquet default backend). ArcticDB optional.
 duckdb>=1.1
