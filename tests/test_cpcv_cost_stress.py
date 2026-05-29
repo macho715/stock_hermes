@@ -13,6 +13,7 @@ import pytest
 def test_cpcv_n_paths():
     """C(6, 2) = 15 paths."""
     from math import comb
+
     from stock_rtx4060.ml.cv import CombinatorialPurgedCV
 
     cv = CombinatorialPurgedCV(n_splits=6, n_test_splits=2, embargo_pct=0.01)

@@ -94,10 +94,10 @@ def run_replay(
 
 
 def run_cost_stress(
-    backtester_cls: "type",
-    prices: "pd.Series | list[float]",
-    signals: "pd.Series | list[float]",
-    base_config: "object",
+    backtester_cls: type,
+    prices: pd.Series | list[float],
+    signals: pd.Series | list[float],
+    base_config: object,
     *,
     multipliers: tuple[int, ...] = (1, 2, 3),
 ) -> dict[str, object]:
