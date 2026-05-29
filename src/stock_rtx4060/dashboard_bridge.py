@@ -217,6 +217,11 @@ READINESS_WARNING_MESSAGE = (
     "New capital is not allowed.\n"
     "Paper trading and monitoring only."
 )
+SOURCE_CONFLICT_WARNING_MESSAGE = (
+    "AMBER SOURCE CONFLICT\n"
+    "REC, Signal, Backtest, or model evidence does not share a consistent source/mode/timestamp.\n"
+    "Live review and new capital are blocked. Paper recording only."
+)
 
 
 def _to_float(value: Any) -> float | None:
@@ -251,6 +256,145 @@ def _first_int(result: dict[str, Any], *keys: str) -> int | None:
         if value is not None:
             return value
     return None
+
+
+def _first_text(result: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = result.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return None
+
+
+def _normalized_text(value: Any) -> str:
+    return str(value or "").strip().upper().replace("-", "_").replace(" ", "_")
+
+
+def _coerce_model_score(value: Any) -> float | None:
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if 0.0 <= numeric <= 1.0:
+        return numeric * 100.0
+    return numeric
+
+
+def _model_score_spread(result: dict[str, Any]) -> float | None:
+    scores: list[float] = []
+    model_scores = result.get("model_scores")
+    if isinstance(model_scores, dict):
+        for value in model_scores.values():
+            score = _coerce_model_score(value)
+            if score is not None:
+                scores.append(score)
+    for key in (
+        "main_score",
+        "main_model_score",
+        "backend_model_score",
+        "logreg_score",
+        "logistic_score",
+        "xgboost_score",
+        "xgb_score",
+        "rnn_score",
+        "lstm_score",
+    ):
+        score = _coerce_model_score(result.get(key))
+        if score is not None:
+            scores.append(score)
+    if len(scores) < 2:
+        return None
+    return max(scores) - min(scores)
+
+
+def _source_mode_timestamp_conflict_reasons(result: dict[str, Any]) -> tuple[list[str], float | None]:
+    reasons: list[str] = []
+
+    rec_mode = _normalized_text(_first_text(result, "rec_mode", "recommendation_mode", "rec_source_mode"))
+    if rec_mode in {"FILE", "FILE_STATIC", "STATIC", "STATIC_FILE", "SNAPSHOT", "FILE_SNAPSHOT"}:
+        reasons.append("REC_USES_FILE_STATIC_SNAPSHOT")
+
+    signal = _normalized_text(_first_text(result, "signal", "backend_signal", "signal_panel_signal"))
+    rec_signal = _normalized_text(_first_text(result, "rec_signal", "recommendation_signal"))
+    benchmark_signal = _normalized_text(_first_text(result, "benchmark_signal", "benchmark_sig"))
+    if signal and rec_signal and signal != rec_signal:
+        reasons.append("SIGNAL_REC_SOURCE_MISMATCH")
+    if signal and benchmark_signal and signal != benchmark_signal:
+        reasons.append("SIGNAL_BENCHMARK_MISMATCH")
+
+    for label, keys in {
+        "SOURCE": ("signal_source", "rec_source", "backtest_source"),
+        "MODE": ("signal_mode", "rec_mode", "backtest_mode"),
+        "TIMESTAMP": ("signal_timestamp", "rec_timestamp", "backtest_timestamp"),
+    }.items():
+        values = {
+            _normalized_text(result.get(key))
+            for key in keys
+            if result.get(key) is not None and str(result.get(key)).strip()
+        }
+        if len(values) > 1:
+            reasons.append(f"SIGNAL_REC_BACKTEST_{label}_MISMATCH")
+
+    spread = _model_score_spread(result)
+    if spread is not None and spread >= 50.0:
+        reasons.append("MODEL_DISAGREEMENT")
+
+    return reasons, spread
+
+
+def _is_true(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().upper() in {"1", "TRUE", "YES", "Y", "PASS"}
+    return value == 1
+
+
+def _is_false(value: Any) -> bool:
+    if isinstance(value, bool):
+        return not value
+    if isinstance(value, str):
+        return value.strip().upper() in {"0", "FALSE", "NO", "N", "FAIL"}
+    return value == 0
+
+
+def _data_lag_event_conflict_reasons(result: dict[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    after_market_close = _is_true(result.get("after_market_close")) or _is_true(result.get("market_closed"))
+    eod_confirmed = _is_true(result.get("eod_confirmed"))
+    bar_type = _normalized_text(result.get("bar_type"))
+    source = _normalized_text(result.get("source"))
+    cache_like_source = "CACHE" in source or "CACHE" in bar_type or "INTRADAY" in bar_type
+    final_bar_locked = eod_confirmed and bar_type in {"EOD_FINAL", "FINAL_EOD"}
+
+    if after_market_close and (not final_bar_locked or cache_like_source):
+        reasons.append("EOD_FINAL_BAR_NOT_LOCKED")
+
+    has_external_candidates = any(
+        result.get(key) is not None
+        for key in (
+            "external_close_candidate",
+            "external_volume_candidate",
+            "external_target_price_candidate",
+            "close_final_candidate",
+            "volume_final_candidate",
+            "target_price_candidate",
+        )
+    )
+    if has_external_candidates and not _is_true(result.get("source_evidence_lock")):
+        reasons.append("EXTERNAL_MARKET_VALUES_NOT_LOCKED")
+
+    signal = _normalized_text(_first_text(result, "signal", "backend_signal", "model_signal"))
+    if _is_true(result.get("event_shock")) and signal == "SELL":
+        reasons.append("EVENT_SHOCK_SIGNAL_CONFLICT")
+
+    if _is_true(result.get("volume_breakout")) and "EOD_FINAL_BAR_NOT_LOCKED" in reasons:
+        reasons.append("VOLUME_BREAKOUT_REQUIRES_FINAL_BAR")
+
+    return reasons
 
 
 def _pbo_summary_for_card(backtest_honesty: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -343,11 +487,14 @@ def _evaluate_investment_readiness(result: dict[str, Any], *, provider_summary: 
             "readiness_status": "HARD_FAIL",
             "investment_readiness_status": "HARD_FAIL",
             "investment_readiness_score": 0.0,
+            "investment_execution_ready": False,
             "live_review_candidate": False,
+            "auto_promote": False,
             "live_queue_action": "HARD_BLOCK",
             "research_queue_action": "EXCLUDE_UNTIL_FIXED",
             "live_investable": False,
             "new_capital_allowed": False,
+            "broker_order_execution": False,
             "paper_trading_only": True,
             "safety_flags": safety_flags,
             "ready_for_manual_review": False,
@@ -357,17 +504,100 @@ def _evaluate_investment_readiness(result: dict[str, Any], *, provider_summary: 
             "readiness_gate_failures": readiness_reasons,
         }
 
+    data_lag_event_reasons = _data_lag_event_conflict_reasons(result)
+    if data_lag_event_reasons:
+        safety_flags = _readiness_safety_flags(result, new_capital_allowed=False)
+        badges = ["DATA NOT FINAL", "REPORT ONLY", "PAPER ONLY"]
+        if "EVENT_SHOCK_SIGNAL_CONFLICT" in data_lag_event_reasons:
+            badges.append("EVENT SHOCK")
+        if "VOLUME_BREAKOUT_REQUIRES_FINAL_BAR" in data_lag_event_reasons:
+            badges.append("VOLUME BREAKOUT UNLOCKED")
+        if "EXTERNAL_MARKET_VALUES_NOT_LOCKED" in data_lag_event_reasons:
+            badges.append("EVIDENCE LOCK REQUIRED")
+        return {
+            "readiness_status": "AMBER_DATA_LAG_EVENT_CONFLICT",
+            "investment_readiness_status": "AMBER_DATA_LAG_EVENT_CONFLICT",
+            "investment_readiness_score": round(min(score, READINESS_SCORE_CAP), 2),
+            "investment_execution_ready": False,
+            "live_review_candidate": False,
+            "auto_promote": False,
+            "live_queue_action": "HARD_BLOCK",
+            "research_queue_action": "PAPER_RECORDING_ALLOWED",
+            "live_investable": False,
+            "new_capital_allowed": False,
+            "broker_order_execution": False,
+            "paper_trading_only": True,
+            "paper_recording_allowed": True,
+            "safety_flags": safety_flags,
+            "ready_for_manual_review": False,
+            "manual_approval_required": True,
+            "dashboard_warning": True,
+            "dashboard_warning_message": (
+                "AMBER_DATA_LAG_EVENT_CONFLICT\n"
+                "Final market data or event evidence is not source-locked. "
+                "This candidate is blocked from live review and remains paper-only."
+            ),
+            "display_badges": badges,
+            "blocking_reasons": data_lag_event_reasons + readiness_reasons,
+            "readiness_gate_failures": readiness_reasons,
+        }
+
+    source_conflict_reasons, model_score_spread = _source_mode_timestamp_conflict_reasons(result)
+    if source_conflict_reasons:
+        if alpha is not None and alpha < 0:
+            source_conflict_reasons.append("BACKTEST_ALPHA_NEGATIVE")
+        if completed_trades is not None and completed_trades < 50:
+            source_conflict_reasons.append("COMPLETED_TRADES_BELOW_50")
+        safety_flags = _readiness_safety_flags(result, new_capital_allowed=False)
+        badges = ["SOURCE CONFLICT", "REPORT ONLY"]
+        if "REC_USES_FILE_STATIC_SNAPSHOT" in source_conflict_reasons:
+            badges.append("STATIC SNAPSHOT")
+        if any(reason in source_conflict_reasons for reason in ("SIGNAL_REC_SOURCE_MISMATCH", "SIGNAL_BENCHMARK_MISMATCH")):
+            badges.append("SIGNAL != REC")
+        if "MODEL_DISAGREEMENT" in source_conflict_reasons:
+            badges.append("MODEL DISAGREEMENT")
+        if "BACKTEST_ALPHA_NEGATIVE" in source_conflict_reasons:
+            badges.append("BACKTEST ALPHA NEGATIVE")
+        if "COMPLETED_TRADES_BELOW_50" in source_conflict_reasons:
+            badges.append("INSUFFICIENT TRADES")
+        return {
+            "readiness_status": "AMBER_SOURCE_CONFLICT",
+            "investment_readiness_status": "AMBER_SOURCE_CONFLICT",
+            "investment_readiness_score": round(min(score, READINESS_SCORE_CAP), 2),
+            "investment_execution_ready": False,
+            "live_review_candidate": False,
+            "auto_promote": False,
+            "live_queue_action": "HARD_BLOCK",
+            "research_queue_action": "PAPER_RECORDING_ALLOWED",
+            "live_investable": False,
+            "new_capital_allowed": False,
+            "broker_order_execution": False,
+            "paper_trading_only": True,
+            "paper_recording_allowed": True,
+            "safety_flags": safety_flags,
+            "ready_for_manual_review": False,
+            "dashboard_warning": True,
+            "dashboard_warning_message": SOURCE_CONFLICT_WARNING_MESSAGE,
+            "display_badges": badges,
+            "model_score_spread": round(model_score_spread, 2) if model_score_spread is not None else None,
+            "blocking_reasons": source_conflict_reasons + readiness_reasons,
+            "readiness_gate_failures": readiness_reasons,
+        }
+
     if readiness_reasons:
         safety_flags = _readiness_safety_flags(result, new_capital_allowed=False)
         return {
             "readiness_status": "AMBER_WATCHLIST",
             "investment_readiness_status": "AMBER_WATCHLIST",
             "investment_readiness_score": round(min(score, READINESS_SCORE_CAP), 2),
+            "investment_execution_ready": False,
             "live_review_candidate": False,
+            "auto_promote": False,
             "live_queue_action": "HARD_BLOCK",
             "research_queue_action": "AMBER_WATCHLIST",
             "live_investable": False,
             "new_capital_allowed": False,
+            "broker_order_execution": False,
             "paper_trading_only": True,
             "safety_flags": safety_flags,
             "ready_for_manual_review": False,
@@ -388,11 +618,14 @@ def _evaluate_investment_readiness(result: dict[str, Any], *, provider_summary: 
             "readiness_status": "LIVE_REVIEW_CANDIDATE",
             "investment_readiness_status": "LIVE_REVIEW_CANDIDATE",
             "investment_readiness_score": round(score, 2),
+            "investment_execution_ready": False,
             "live_review_candidate": True,
+            "auto_promote": False,
             "live_queue_action": "MANUAL_REVIEW_REQUIRED",
             "research_queue_action": "MONITOR",
             "live_investable": False,
             "new_capital_allowed": False,
+            "broker_order_execution": False,
             "paper_trading_only": False,
             "safety_flags": safety_flags,
             "ready_for_manual_review": True,
@@ -407,11 +640,14 @@ def _evaluate_investment_readiness(result: dict[str, Any], *, provider_summary: 
         "readiness_status": "READY_FOR_MANUAL_REVIEW",
         "investment_readiness_status": "READY_FOR_MANUAL_REVIEW",
         "investment_readiness_score": round(score, 2),
+        "investment_execution_ready": False,
         "live_review_candidate": live_review_candidate,
+        "auto_promote": False,
         "live_queue_action": "MANUAL_REVIEW_REQUIRED",
         "research_queue_action": "MONITOR",
         "live_investable": True,
         "new_capital_allowed": True,
+        "broker_order_execution": False,
         "paper_trading_only": False,
         "safety_flags": safety_flags,
         "ready_for_manual_review": True,

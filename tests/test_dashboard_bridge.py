@@ -254,6 +254,113 @@ def test_dashboard_snapshot_blocks_live_queue_when_backtest_honesty_is_amber():
     assert "Backtest honesty AMBER != PASS" in row["blocking_reasons"]
 
 
+def test_dashboard_snapshot_blocks_source_conflict_static_rec_vs_signal():
+    payload = _recommendation_payload()
+    result = payload["results"][0]
+    result.update(
+        {
+            "ticker": "005930.KS",
+            "recommendation_rank_score": 99.0,
+            "rec_mode": "FILE_STATIC",
+            "signal": "SELL",
+            "rec_signal": "BUY",
+            "benchmark_signal": "BUY",
+            "signal_source": "PYKRX:CACHE",
+            "rec_source": "FILE_STATIC",
+            "backtest_source": "PYKRX:CACHE",
+            "signal_mode": "API",
+            "backtest_mode": "API",
+            "model_scores": {
+                "main": 7.27,
+                "logreg": 95.96,
+                "xgboost": 80.48,
+                "rnn": 99.61,
+                "lstm": 7.09,
+            },
+            "alpha_pct": -186.65,
+            "completed_trades": 32,
+            "live_review_candidate": True,
+        }
+    )
+
+    row = build_dashboard_snapshot(payload)["results"][0]
+
+    assert row["score"] == 99.0
+    assert row["dashboard_status"] == "AMBER_SOURCE_CONFLICT"
+    assert row["investment_readiness_status"] == "AMBER_SOURCE_CONFLICT"
+    assert row["investment_readiness_score"] == 44.0
+    assert row["live_review_candidate"] is False
+    assert row["live_queue_action"] == "HARD_BLOCK"
+    assert row["research_queue_action"] == "PAPER_RECORDING_ALLOWED"
+    assert row["new_capital_allowed"] is False
+    assert row["paper_trading_only"] is True
+    assert row["paper_recording_allowed"] is True
+    assert row["safety_flags"]["broker_order_execution"] is False
+    assert row["model_score_spread"] == 92.52
+    assert "SOURCE CONFLICT" in row["display_badges"]
+    assert "STATIC SNAPSHOT" in row["display_badges"]
+    assert "MODEL DISAGREEMENT" in row["display_badges"]
+    assert "BACKTEST ALPHA NEGATIVE" in row["display_badges"]
+    assert "INSUFFICIENT TRADES" in row["display_badges"]
+    assert "REC_USES_FILE_STATIC_SNAPSHOT" in row["blocking_reasons"]
+    assert "SIGNAL_REC_SOURCE_MISMATCH" in row["blocking_reasons"]
+    assert "SIGNAL_BENCHMARK_MISMATCH" in row["blocking_reasons"]
+    assert "SIGNAL_REC_BACKTEST_SOURCE_MISMATCH" in row["blocking_reasons"]
+    assert "SIGNAL_REC_BACKTEST_MODE_MISMATCH" in row["blocking_reasons"]
+    assert "MODEL_DISAGREEMENT" in row["blocking_reasons"]
+    assert "BACKTEST_ALPHA_NEGATIVE" in row["blocking_reasons"]
+    assert "COMPLETED_TRADES_BELOW_50" in row["blocking_reasons"]
+    assert "Alpha -186.65% < 0.00%" in row["blocking_reasons"]
+    assert "Completed trades 32 < 50" in row["blocking_reasons"]
+
+
+def test_dashboard_snapshot_blocks_unlocked_final_bar_event_conflict():
+    payload = _recommendation_payload()
+    result = payload["results"][0]
+    result.update(
+        {
+            "ticker": "005930.KS",
+            "recommendation_rank_score": 91.0,
+            "signal": "SELL",
+            "bar_type": "INTRADAY_CACHE",
+            "source": "PYKRX:CACHE",
+            "eod_confirmed": False,
+            "after_market_close": True,
+            "source_evidence_lock": False,
+            "external_close_candidate": 317000,
+            "external_volume_candidate": 37241537,
+            "external_target_price_candidate": "530000-550000",
+            "event_shock": True,
+            "event_keywords": ["HBM4E", "AI", "target price upgrade"],
+            "volume_breakout": True,
+            "live_review_candidate": True,
+        }
+    )
+
+    row = build_dashboard_snapshot(payload)["results"][0]
+
+    assert row["score"] == 91.0
+    assert row["dashboard_status"] == "AMBER_DATA_LAG_EVENT_CONFLICT"
+    assert row["investment_readiness_status"] == "AMBER_DATA_LAG_EVENT_CONFLICT"
+    assert row["investment_readiness_score"] == 44.0
+    assert row["investment_execution_ready"] is False
+    assert row["paper_recording_allowed"] is True
+    assert row["live_review_candidate"] is False
+    assert row["auto_promote"] is False
+    assert row["new_capital_allowed"] is False
+    assert row["paper_trading_only"] is True
+    assert row["safety_flags"]["broker_order_execution"] is False
+    assert row["safety_flags"]["manual_approval_required"] is True
+    assert "DATA NOT FINAL" in row["display_badges"]
+    assert "EVENT SHOCK" in row["display_badges"]
+    assert "VOLUME BREAKOUT UNLOCKED" in row["display_badges"]
+    assert "PAPER ONLY" in row["display_badges"]
+    assert "EOD_FINAL_BAR_NOT_LOCKED" in row["blocking_reasons"]
+    assert "EXTERNAL_MARKET_VALUES_NOT_LOCKED" in row["blocking_reasons"]
+    assert "EVENT_SHOCK_SIGNAL_CONFLICT" in row["blocking_reasons"]
+    assert "VOLUME_BREAKOUT_REQUIRES_FINAL_BAR" in row["blocking_reasons"]
+
+
 # ---------------------------------------------------------------------------
 # E2 (Wave 3 Gap — PR-P2): per-candidate backtest_honesty_summary with pbo
 # ---------------------------------------------------------------------------

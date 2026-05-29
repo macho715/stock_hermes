@@ -1295,12 +1295,17 @@ function BackendTab({ snapshot, currentResult, backendError, accent }) {
 
       {selected && (
         <Panel title={`BACKEND · ${selected.ticker} · TRACK-${selected.track}`} right={selected.verdict} rightColor={verdictColor(selected.verdict)}>
+          {isSourceConflict(selected) && (
+            <SourceConflictBanner row={selected} />
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, padding: 4 }}>
             <BackendKV label="SCORE" value={fmtNum(selected.score)} color={accent} />
             <BackendKV label="READY" value={selected.investment_readiness_status || selected.dashboard_status || "—"} color={readinessColor(selected)} />
             <BackendKV label="READINESS" value={fmtNum(selected.investment_readiness_score)} color={readinessColor(selected)} />
             <BackendKV label="LIVE" value={selected.new_capital_allowed ? "ALLOWED" : "BLOCKED"} color={selected.new_capital_allowed ? C.green : C.red} />
-            <BackendKV label="PAPER" value={selected.paper_trading_only ? "ONLY" : "OPTIONAL"} color={selected.paper_trading_only ? C.amber : C.textDim} />
+            <BackendKV label="CAPITAL" value={selected.new_capital_allowed ? "ALLOWED" : "BLOCKED"} color={selected.new_capital_allowed ? C.green : C.red} />
+            <BackendKV label="BROKER" value={selected.safety_flags?.broker_order_execution ? "ENABLED" : "NO EXEC"} color={selected.safety_flags?.broker_order_execution ? C.red : C.amber} />
+            <BackendKV label="PAPER" value={selected.paper_recording_allowed || selected.paper_trading_only ? "ONLY" : "OPTIONAL"} color={selected.paper_recording_allowed || selected.paper_trading_only ? C.amber : C.textDim} />
             <BackendKV label="PROB" value={`${fmtNum((selected.probability || 0) * 100)}%`} color={C.lr} />
             <BackendKV label="EV" value={`${fmtNum(selected.expected_value_pct)}%`} color={selected.expected_value_pct >= 0 ? C.green : C.red} />
             <BackendKV label="R/R" value={fmtNum(selected.risk_reward)} color={C.xgb} />
@@ -1309,7 +1314,7 @@ function BackendTab({ snapshot, currentResult, backendError, accent }) {
             <BackendKV label="TP2" value={fmtNum(selected.tp2)} color={C.green} />
             <BackendKV label="QTY" value={fmtNum(selected.suggested_quantity)} />
           </div>
-          {selected.dashboard_warning && (
+          {selected.dashboard_warning && !isSourceConflict(selected) && (
             <ReadinessWarning
               message={selected.dashboard_warning_message}
               reasons={selected.blocking_reasons}
@@ -1375,6 +1380,11 @@ function BackendKV({ label, value, color }) {
   );
 }
 
+function isSourceConflict(row) {
+  const status = String(row?.investment_readiness_status || row?.dashboard_status || row?.readiness_status || "");
+  return status === "AMBER_SOURCE_CONFLICT";
+}
+
 function verdictColor(verdict) {
   if (String(verdict).startsWith("ELIGIBLE") || String(verdict).startsWith("ACCUMULATE")) return C.green;
   if (String(verdict).startsWith("AMBER")) return C.amber;
@@ -1389,6 +1399,115 @@ function readinessColor(row) {
   if (status === "AMBER_WATCHLIST") return C.amber;
   if (status === "HARD_FAIL") return C.red;
   return verdictColor(status);
+}
+
+function SourceConflictBanner({ row }) {
+  const badges = Array.isArray(row?.display_badges) ? row.display_badges : [];
+  const reasons = Array.isArray(row?.blocking_reasons) ? row.blocking_reasons : [];
+  const paperOnly = row?.paper_recording_allowed === true || row?.paper_trading_only === true;
+  const brokerBlocked = row?.safety_flags?.broker_order_execution === false || row?.broker_order_execution === false;
+  const capitalBlocked = row?.new_capital_allowed === false;
+
+  return (
+    <div
+      style={{
+        margin: "4px 4px 10px",
+        padding: "10px",
+        background: "#241104",
+        border: `1px solid ${C.amber}`,
+        borderLeft: `4px solid ${C.red}`,
+      }}
+    >
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 7 }}>
+        <span
+          style={{
+            color: "#050A0E",
+            background: C.amber,
+            padding: "3px 7px",
+            borderRadius: 3,
+            fontSize: 10,
+            fontWeight: 800,
+            letterSpacing: 1,
+          }}
+        >
+          AMBER_SOURCE_CONFLICT
+        </span>
+        <StatusChip label="LIVE REVIEW BLOCKED" color={C.red} />
+        {paperOnly && <StatusChip label="PAPER RECORDING ONLY" color={C.amber} />}
+        {capitalBlocked && <StatusChip label="NEW CAPITAL BLOCKED" color={C.red} />}
+        {brokerBlocked && <StatusChip label="NO BROKER EXECUTION" color={C.amber} />}
+      </div>
+      <div style={{ color: C.text, fontSize: 11, lineHeight: 1.5, fontWeight: 600 }}>
+        Signal, recommendation, and backtest evidence are not aligned.
+      </div>
+      <div style={{ color: C.textDim, fontSize: 10, lineHeight: 1.5, marginTop: 2 }}>
+        This candidate is blocked from live review. Score remains visible for audit only.
+      </div>
+      {badges.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8 }}>
+          {badges.map((badge) => (
+            <span
+              key={badge}
+              style={{
+                color: badgeColor(badge),
+                border: `1px solid ${badgeColor(badge)}66`,
+                background: `${badgeColor(badge)}18`,
+                padding: "2px 6px",
+                borderRadius: 3,
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: 0.8,
+                lineHeight: 1.4,
+              }}
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+      )}
+      {reasons.length > 0 && (
+        <details style={{ marginTop: 8 }}>
+          <summary style={{ color: C.text, cursor: "pointer", fontSize: 10, minHeight: 24, lineHeight: "24px" }}>
+            Blocking reasons ({reasons.length})
+          </summary>
+          <div style={{ marginTop: 4, display: "grid", gap: 3 }}>
+            {reasons.map((reason) => (
+              <div key={reason} style={{ color: C.textDim, fontSize: 9, lineHeight: 1.45, overflowWrap: "anywhere" }}>
+                {reason}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function StatusChip({ label, color }) {
+  return (
+    <span
+      style={{
+        color,
+        border: `1px solid ${color}77`,
+        background: `${color}14`,
+        padding: "2px 6px",
+        borderRadius: 3,
+        fontSize: 9,
+        fontWeight: 700,
+        letterSpacing: 0.7,
+        lineHeight: 1.4,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function badgeColor(label) {
+  const text = String(label || "").toUpperCase();
+  if (text.includes("MODEL") || text.includes("SOURCE") || text.includes("STATIC")) return C.amber;
+  if (text.includes("BACKTEST") || text.includes("BLOCK") || text.includes("INSUFFICIENT")) return C.red;
+  return C.textDim;
 }
 
 function ReadinessWarning({ message, reasons, status }) {
