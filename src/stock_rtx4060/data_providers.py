@@ -14,6 +14,7 @@ import pandas as pd
 
 from .audit_log import AuditEvent, AuditLogger, mask_secret
 from .data_cache import DataCache
+from .data_quality.final_bar_lock import provider_final_bar_metadata
 from .feature_engine import normalize_ohlcv
 from .provider_validation import validate_provider_frame
 
@@ -70,6 +71,7 @@ def load_ohlcv_with_provider(
     command: str = "recommend",
     as_of: str | None = None,
     data_lake_first: bool | None = None,
+    after_market_close: bool = False,
 ) -> ProviderResult:
     config = provider_config if provider_config is not None else load_provider_config(provider_config_path)
     requested = str(data_provider or "auto").lower()
@@ -98,10 +100,18 @@ def load_ohlcv_with_provider(
     cached = _cache.get(ticker, period, selected)
     if cached is not None:
         validation = validate_provider_frame(cached, provider_used=selected, ticker=ticker, period=period)
+        final_bar_metadata = provider_final_bar_metadata(
+            source=f"{selected}:cache",
+            bar_type="CACHE",
+            eod_confirmed=False,
+            source_evidence_lock=False,
+            after_market_close=after_market_close,
+        )
         metadata = {
             "provider_validation": validation.metadata,
             **validation.metadata,
             "cache_hit": True,
+            **final_bar_metadata,
             "source_timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
         }
         _write_audit(
