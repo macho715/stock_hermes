@@ -164,6 +164,68 @@ test("runtime dashboard config controls fallback symbols and REC API defaults", 
   await expect(defaults).toContainText("model_kind=xgboost");
 });
 
+test("MODELS tab hides optional null LSTM and RNN model rows", async ({ page }) => {
+  await page.route("**/dashboard_config.json", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        markets: {
+          US: { fallback_symbols: [{ symbol: "MSFT", name: "Microsoft" }] },
+          KRX: { fallback_symbols: [] },
+        },
+        api_defaults: {
+          symbol_period: "6mo",
+          symbol_data_provider: { US: "yfinance", KRX: "pykrx" },
+          model_scores: { period: "3y", model_kind: "auto", data_provider: "yfinance" },
+          recommend: {
+            track: "BOTH",
+            period: "3y",
+            top: "5",
+            synthetic: "0",
+            data_provider: "yfinance",
+            model_kind: "auto",
+          },
+        },
+      }),
+    });
+  });
+
+  await page.route("**/api/universe?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        market: "US",
+        source: "backend_config",
+        symbols: [{ symbol: "MSFT", name: "Microsoft" }],
+      }),
+    });
+  });
+
+  await page.route("**/api/symbol?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ symbol: "MSFT", source: "YFINANCE", data: ohlcvRows }),
+    });
+  });
+
+  await page.route("**/api/model-scores?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...modelEvidence("MSFT"),
+        model_scores: { main: 58, logistic: 58, xgboost: 81.23, lstm: null, rnn: null },
+      }),
+    });
+  });
+
+  await page.goto("http://127.0.0.1:5173/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "MODELS" }).click();
+
+  await expect(page.getByText("XGBoost").first()).toBeVisible();
+  await expect(page.getByText("LSTM")).toHaveCount(0);
+  await expect(page.getByText("RNN")).toHaveCount(0);
+});
+
 test("REC API mode shows request defaults and FILE mode keeps static snapshot boundary", async ({ page }) => {
   await page.route("**/api/universe?**", async (route) => {
     await route.fulfill({
@@ -327,6 +389,95 @@ test("KRX REC API uses KRX provider defaults and requests the full universe", as
   expect(url.searchParams.get("period")).toBe("5y");
   expect(url.searchParams.get("top")).toBe("9");
   expect(url.searchParams.get("universe")?.split(",")).toHaveLength(9);
+});
+
+test("KRX REC keeps LLM advisor enabled and sends blend weight", async ({ page }) => {
+  const recommendUrls = [];
+
+  await page.route("**/dashboard_config.json", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        markets: {
+          US: { fallback_symbols: [{ symbol: "MSFT", name: "Microsoft" }] },
+          KRX: { fallback_symbols: [{ symbol: "005930.KS", name: "Samsung Electronics" }] },
+        },
+        api_defaults: {
+          symbol_period: "6mo",
+          symbol_data_provider: { US: "yfinance", KRX: "pykrx" },
+          model_scores: { period: "3y", model_kind: "auto", data_provider: "yfinance" },
+          model_scores_krx: { period: "5y", model_kind: "auto", data_provider: "pykrx" },
+          recommend: {
+            track: "BOTH",
+            period: "3y",
+            top: "5",
+            synthetic: "0",
+            data_provider: "yfinance",
+            model_kind: "auto",
+          },
+          recommend_krx: {
+            period: "3y",
+            top: "9",
+            data_provider: "pykrx",
+          },
+        },
+      }),
+    });
+  });
+
+  await page.route("**/api/universe?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        market: "KRX",
+        source: "backend_config",
+        symbols: [{ symbol: "005930.KS", name: "Samsung Electronics" }],
+      }),
+    });
+  });
+
+  await page.route("**/api/symbol?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ symbol: "005930.KS", source: "PYKRX", data: ohlcvRows }),
+    });
+  });
+
+  await page.route("**/api/model-scores?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ ...modelEvidence("005930.KS"), provider: "pykrx" }),
+    });
+  });
+
+  await page.route("**/api/recommend?**", async (route) => {
+    recommendUrls.push(route.request().url());
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...snapshotPayload(),
+        config: {
+          ...snapshotPayload().config,
+          universe: ["005930.KS"],
+          data_provider: "pykrx",
+        },
+      }),
+    });
+  });
+
+  await page.goto("http://127.0.0.1:5173/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "KRX" }).click();
+  await page.getByRole("button", { name: "REC" }).click();
+  const advisorToggle = page.locator("span", { hasText: "LLM ADVISOR" }).locator("xpath=..");
+  await expect(advisorToggle).toContainText("OFF");
+
+  await advisorToggle.click();
+
+  await expect(advisorToggle).toContainText("blend_weight=0.30");
+  await expect.poll(() => recommendUrls.some((url) => new URL(url).searchParams.get("advisor_blend_weight") === "0.3")).toBe(true);
+  const advisorUrl = recommendUrls.find((url) => new URL(url).searchParams.get("advisor_blend_weight") === "0.3");
+  expect(new URL(advisorUrl).searchParams.get("data_provider")).toBe("pykrx");
+  expect(new URL(advisorUrl).searchParams.get("advisor_run")).toBe("1");
 });
 
 test("REC provider card prefers current snapshot provider summary over stale public audit log", async ({ page }) => {

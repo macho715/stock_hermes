@@ -1899,11 +1899,12 @@ function ModelsTab({
     return <EvidenceUnavailable loading={modelEvidenceLoading} error={modelEvidenceError} />;
   }
   const data = [
-    { name: "Main", value: scores.main, color: sigColor },
-    { name: "LogReg", value: scores.lr, color: C.lr },
+    { name: "Main", value: scores.main, color: sigColor, required: true },
+    { name: "LogReg", value: scores.lr, color: C.lr, required: true },
     { name: "XGBoost", value: scores.xgb, color: C.xgb },
     { name: "LSTM", value: scores.lstm, color: C.lstm },
-  ];
+    { name: "RNN", value: scores.rnn, color: C.rnn },
+  ].filter((item) => item.required || (item.value != null && !Number.isNaN(Number(item.value))));
   const chartData = data.map((item) => ({ ...item, value: item.value == null ? 0 : item.value }));
 
   return (
