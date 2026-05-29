@@ -376,16 +376,24 @@ def _fit_walk_forward_model(feature_df: pd.DataFrame, horizon: int, cfg: Recomme
     coverage = float(oof.notna().mean())
     neutral_probs = oof.fillna(0.5).to_numpy(dtype=float)
 
+    embargo_samples = int(np.floor(len(X) * embargo_pct))
     return {
         "model": final_model,
         "feature_cols": cols,
         "oof_probs": oof,
         "backtest_probs": neutral_probs,
         "latest_prob": latest_prob,
+        "latest_prob_used_for_backtest": False,            # OOF-only guarantee
+        "backtest_probability_source": "OOF_ONLY_FILLED_0_5",
         "accuracy": float(np.mean(accs)) if accs else 0.0,
         "auc": float(np.mean(aucs)) if aucs else 0.5,
         "oof_coverage": coverage,
-        "gap": int(np.floor(len(X) * embargo_pct)),
+        "gap": embargo_samples,                            # legacy key preserved
+        "embargo_samples": embargo_samples,                # v5.1: explicit embargo count
+        "embargo_pct": embargo_pct,                        # v5.1: fractional embargo
+        "label_horizon_bars": horizon,                     # v5.1: label horizon
+        "purge_rule": "train_label_window_disjoint_from_test_span",
+        "cv_method": "purged_kfold_oof",
         "models_used": sorted(set(models_used + [final_model.kind_used])),
     }
 
@@ -797,6 +805,46 @@ def _verdict(track: Track, score: float, checks: list[ValidationCheck], cfg: Rec
     return "RED_NOT_RECOMMENDED", "Track-L 기준 미달"
 
 
+def _apply_readiness_gate(
+    verdict: str,
+    label: str,
+    honesty: dict | None,
+    model_stats: dict,
+    backtest: dict,
+) -> tuple[str, str, list[str]]:
+    """Downgrade to AMBER_WATCHLIST when readiness gates are not met.
+
+    This is a hard gate that prevents a candidate from appearing as an
+    ELIGIBLE/ACCUMULATE recommendation when core quality checks fail,
+    regardless of the raw score.  Implements v5.1 spec §4 and §6.2.
+
+    Returns
+    -------
+    (new_verdict, new_label, blocking_reasons)
+    """
+    blocking: list[str] = []
+
+    if honesty is None or honesty.get("status") not in ("PASS",):
+        blocking.append("BACKTEST_HONESTY_NOT_PASS")
+
+    if float(model_stats.get("accuracy", 0)) < 0.50:
+        blocking.append("ACCURACY_BELOW_50")
+
+    if float(model_stats.get("auc", 0)) < 0.50:
+        blocking.append("AUC_BELOW_0_50")
+
+    if int(backtest.get("n_trades", 0)) < 50:
+        blocking.append("COMPLETED_TRADES_BELOW_50")
+
+    if blocking:
+        return (
+            "AMBER_WATCHLIST",
+            "검증 미충족: 신규 자금 투입 금지 (new_capital_allowed=false)",
+            blocking,
+        )
+    return verdict, label, []
+
+
 # ────────────────────────────────────────────────────────────────
 # Engine
 # ────────────────────────────────────────────────────────────────
@@ -909,6 +957,20 @@ class RecommendationEngine:
         # The LLM advisor is forbidden from upgrading this; it can only
         # downgrade via the blended-score recheck below.
         verdict, label = _verdict(track, score, checks, cfg)
+
+        # ── Readiness gate (v5.1 §6.2): hard-downgrade to AMBER_WATCHLIST ──
+        # when backtest_honesty, accuracy, AUC, or trade count gates are not met.
+        # This runs BEFORE the advisor blend so the LLM cannot upgrade a
+        # candidate that fails these quality checks.
+        verdict, label, readiness_blocking = _apply_readiness_gate(
+            verdict=verdict,
+            label=label,
+            honesty=honesty,
+            model_stats=model_stats,
+            backtest=backtest,
+        )
+        if readiness_blocking:
+            reasons = readiness_blocking + reasons
 
         # ── Phase-6 LLM advisor blend (optional, never overrides gate up) ──
         advisor_score: float | None = None
