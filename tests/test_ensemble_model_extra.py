@@ -690,7 +690,6 @@ def test_lstm_has_torch_function_importable():
 
 def test_lstm_fit_raises_without_torch(monkeypatch):
     """LSTMPredictor.fit() raises RuntimeError when torch is not installed."""
-    import sys
     from unittest.mock import patch
 
     from stock_rtx4060.ensemble_model import LSTMPredictor, ModelConfig
@@ -707,7 +706,7 @@ def test_lstm_fit_raises_without_torch(monkeypatch):
 
 def test_lstm_torch_device_returns_string():
     """_torch_device() always returns a non-empty string."""
-    from stock_rtx4060.ensemble_model import LSTMPredictor, ModelConfig
+    from stock_rtx4060.ensemble_model import LSTMPredictor
 
     device = LSTMPredictor._torch_device()
     assert isinstance(device, str)
@@ -732,8 +731,10 @@ def test_lstm_build_sequences_interface_unchanged():
 
 def test_contrarian_mode_flips_probability():
     """contrarian_mode=True flips prob → 1-prob in predict()."""
+    import numpy as np
+    import pandas as pd
+
     from stock_rtx4060.ensemble_model import EnsemblePredictor, ModelConfig
-    import numpy as np, pandas as pd
 
     rng = np.random.default_rng(99)
     n = 200

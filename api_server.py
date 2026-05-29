@@ -431,7 +431,6 @@ def api_model_scores():
                     "contrarian_mode": contrarian_mode,
                     "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
                 },
-                "requested_model_kind": model_kind,
                 "effective_model_kind": _model_kind_effective,
                 "status": "PASS",
             }

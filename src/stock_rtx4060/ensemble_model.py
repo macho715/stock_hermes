@@ -252,7 +252,7 @@ def _fold_local_select(
         clean = X_tr.fillna(0.0).replace([float("inf"), float("-inf")], 0.0)
         selector.fit(clean, y_tr.astype(int))
         mask = selector.get_support()
-        selected = [col for col, m in zip(X_tr.columns, mask) if m]
+        selected = [col for col, m in zip(X_tr.columns, mask, strict=False) if m]
         return X_tr[selected], selected
     except Exception:
         return X_tr, list(X_tr.columns)

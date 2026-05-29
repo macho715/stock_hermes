@@ -365,6 +365,7 @@ def test_run_hpo_metric_hybrid():
         mock_mlflow.return_value.__enter__ = lambda s: s
         mock_mlflow.return_value.__exit__ = MagicMock(return_value=False)
         import importlib
+
         import stock_rtx4060.ml.hpo as hpo_mod
         importlib.reload(hpo_mod)
         result = hpo_mod.run_hpo(X, y, model="xgboost", n_trials=1, metric="hybrid")
@@ -386,6 +387,7 @@ def test_run_hpo_metric_auc():
         mock_mlflow.return_value.__enter__ = lambda s: s
         mock_mlflow.return_value.__exit__ = MagicMock(return_value=False)
         import importlib
+
         import stock_rtx4060.ml.hpo as hpo_mod
         importlib.reload(hpo_mod)
         result = hpo_mod.run_hpo(X, y, model="xgboost", n_trials=1, metric="auc")
@@ -407,6 +409,7 @@ def test_hpo_default_metric_is_brier():
         mock_mlflow.return_value.__enter__ = lambda s: s
         mock_mlflow.return_value.__exit__ = MagicMock(return_value=False)
         import importlib
+
         import stock_rtx4060.ml.hpo as hpo_mod
         importlib.reload(hpo_mod)
         result = hpo_mod.run_hpo(X, y, model="xgboost", n_trials=1)
