@@ -4,7 +4,7 @@
 
 The unified folder is a local Python CLI package. The active code lives under `src/stock_rtx4060`.
 
-The architecture is intentionally report-only. It produces Markdown/JSON screening reports and dry-run validation evidence. It does not expose a web server, broker order router, or live trading dashboard.
+The architecture is intentionally report-only. It produces Markdown/JSON screening reports, dashboard snapshots, dry-run validation evidence, and paper-only forward evidence. It includes an optional local Flask API and Vite/React dashboard for operator review, but it must not enable broker order execution or automatic capital deployment.
 
 ```mermaid
 flowchart TD
@@ -41,10 +41,68 @@ flowchart TD
     Recommend --> Output[Markdown/JSON/CSV reports + audit JSONL]
     Output --> DashboardBridge
     DashboardBridge --> DashboardSnapshot[dashboard_snapshot.json]
-    DashboardSnapshot -. file import .-> Dashboard[dashboard/stock_pred_v5.jsx and external stock_pred_v5.jsx]
+    DashboardSnapshot -. file import .-> Dashboard[root_folder_snapshot/stock-pred-v5 + legacy dashboard/stock_pred_v5.jsx]
     DashboardSnapshot -. browser smoke .-> Harness[dashboard/bridge_smoke.html]
     Ops --> Approval[Approval template / ZERO log]
 ```
+
+## Current Architecture Update — 2026-05-29
+
+The current system has four operator-facing surfaces:
+
+| Surface | Path | Role | Safety boundary |
+|---|---|---|---|
+| Python CLI | `src/stock_rtx4060/main.py` | Runs `recommend`, `dashboard-export`, `paper-status`, `factor-*`, `ops-v1`, `benchmark`, and `env`. | Report-only output under `reports/` and audit logs. |
+| Local API | `api_server.py` | Serves `/api/recommend`, `/api/snapshot`, `/api/universe`, `/api/symbol`, `/api/model-scores`, `/api/paper-status`, and `/api/health`. | Local dashboard integration only; no broker/order route. |
+| Dashboard UI | `root_folder_snapshot/stock-pred-v5` | Vite/React dashboard. REC tab can use API mode or file snapshot mode. | Shows readiness and warnings; does not place orders. |
+| Forward evidence | `src/stock_rtx4060/live_review/auto_forward_recorder.py` | Records daily forward-paper evidence until review pack generation. | `auto_promote=false`, `new_capital_allowed=false`, `broker_order_execution=false`, `manual_approval_required=true`. |
+
+```mermaid
+flowchart TD
+    Operator[Operator] --> CLI[src/stock_rtx4060/main.py]
+    Operator --> UI[root_folder_snapshot/stock-pred-v5]
+    UI --> API[api_server.py localhost Flask API]
+    CLI --> Provider[data_providers.py]
+    API --> Provider
+    Provider --> Validation[provider_validation.py]
+    Validation --> Features[feature_engine.py]
+    Features --> Model[ensemble_model.py + ml/cv.py PurgedKFold]
+    Model --> Backtest[backtester.py]
+    Backtest --> Honesty[backtest_honesty.py]
+    Model --> Recommend[recommendation_engine.py]
+    Honesty --> Recommend
+    Recommend --> Risk[risk_rules.py]
+    Recommend --> Advisor[advisors/orchestrator.py]
+    Advisor --> LLM[claude_client.py optional live LLM]
+    Advisor --> Memory[advisors/memory DuckDB L1/L2/L3]
+    Advisor --> Tools[advisors/openbb_tools]
+    Recommend --> DashboardBridge[dashboard_bridge.py]
+    DashboardBridge --> Snapshot[dashboard_snapshot.v1]
+    Snapshot --> UI
+    CLI --> Readiness[readiness/classifier.py + snapshots.py]
+    Readiness --> LiveReview[live_review/auto_forward_recorder.py]
+    LiveReview --> Evidence[reports/live_review/**]
+    CLI --> RDAgent[factors/rd_agent Alpha Factory]
+    RDAgent --> FactorRegistry[factors/factor_zoo.py + registry_hook.py]
+    RDAgent --> RDAudit[audit_log/rd_agent.jsonl]
+    Risk --> Reports[reports/*.md/*.json/*.csv]
+    Validation --> Audit[audit_log.py JSONL]
+    Reports --> Human[Manual review only]
+    Evidence --> Human
+```
+
+## Safety And Promotion Boundary — 2026-05-29
+
+Live-review and paper-trading code is intentionally additive. It does not replace the legacy paper status API and it does not enable capital deployment.
+
+| State / layer | Allowed | Forbidden |
+|---|---|---|
+| `AMBER_WATCHLIST` | Research monitoring and dashboard display. | New capital and broker execution. |
+| `PAPER_PASS` | Paper-only evidence and readiness snapshot generation. | Automatic live promotion. |
+| `FORWARD_PAPER_RUNNING` | Daily forward paper logs and review pack preparation. | Auto-promote, new capital, broker execution. |
+| `LIVE_REVIEW_CANDIDATE` | Manual review candidate only. | Automatic order placement. |
+
+The invariant is enforced across `src/stock_rtx4060/readiness/classifier.py`, `src/stock_rtx4060/readiness/snapshots.py`, `src/stock_rtx4060/paper_trading.py`, and `src/stock_rtx4060/live_review/auto_forward_recorder.py`.
 
 ## Data Flow
 
@@ -79,26 +137,37 @@ flowchart LR
 |---|---|---|
 | Root wrapper | `main.py` | Adds `src/` to `sys.path` and dispatches to the package CLI. |
 | Windows runner | `run.ps1` | Selects a working Python runtime and runs CLI commands. |
-| CLI | `src/stock_rtx4060/main.py` | Handles `self-test`, `recommend`, `ops-v1`, and compatibility command forms. |
+| CLI | `src/stock_rtx4060/main.py` | Handles `recommend`, `paper-status`, `dashboard-export`, `factor-mine`, `factor-list`, `factor-approve`, `factor-status`, `ops-v1`, `benchmark`, `env`, and compatibility command forms. |
+| Local API | `api_server.py` | Serves dashboard-facing local endpoints including `/api/recommend`, `/api/snapshot`, `/api/universe`, `/api/symbol`, `/api/model-scores`, `/api/paper-status`, and `/api/health`. |
 | Features | `src/stock_rtx4060/feature_engine.py` | Builds feature inputs for model/backtest paths. |
-| Model | `src/stock_rtx4060/ensemble_model.py` | Provides the model path used by recommendation and validation. |
+| Model | `src/stock_rtx4060/ensemble_model.py`, `src/stock_rtx4060/ml/cv.py` | Provides model scoring and leakage-aware OOF validation with PurgedKFold support. |
 | Backtest | `src/stock_rtx4060/backtester.py` | Runs dry-run portfolio/backtest calculations. |
 | Backtest honesty | `src/stock_rtx4060/backtest_honesty.py` | Adds evidence-only OOF, Sharpe, MDD, transaction-cost buffer, and walk-forward gap checks. |
 | Recommendation | `src/stock_rtx4060/recommendation_engine.py` | Produces screening verdicts and recommendation evidence. |
 | Dashboard bridge | `src/stock_rtx4060/dashboard_bridge.py` | Converts recommendation JSON into `dashboard_snapshot.v1` for dashboard file import. |
+| Dashboard UI | `root_folder_snapshot/stock-pred-v5` | Full Vite/React dashboard workspace for REC, model evidence, readiness warnings, and backend snapshot review. |
 | Ops workflow | `src/stock_rtx4060/ops_workflow.py` | Produces the Ops v1 daily brief, manual approval template, ZERO log, and workflow summary. |
 | Risk rules | `src/stock_rtx4060/risk_rules.py` | Applies risk-plan checks. |
 | Reports | `src/stock_rtx4060/reports.py` | Writes Markdown and JSON output. |
 | Provider router | `src/stock_rtx4060/data_providers.py` | Selects `synthetic`, `yfinance`, `openbb`, or `auto` OHLCV provider. |
 | Provider validation | `src/stock_rtx4060/provider_validation.py` | Checks OHLCV row count, date range, future rows, duplicate dates, required columns, nulls, and freshness evidence. |
 | Audit log | `src/stock_rtx4060/audit_log.py` | Writes masked append-only JSONL provider/workflow events. |
+| Advisor layer | `src/stock_rtx4060/advisors/` | Optional LLM advisor orchestration, prompts, audit, and blend evidence. |
+| Advisor memory | `src/stock_rtx4060/advisors/memory/` | Optional DuckDB-backed L1/L2/L3 regime memory, CWRM routing, and STL proposition extraction. |
+| Advisor OpenBB tools | `src/stock_rtx4060/advisors/openbb_tools/` | Optional OpenBB tool-use schemas and executor for advisor evidence gathering. |
+| RD-Agent Alpha Factory | `src/stock_rtx4060/factors/rd_agent/` | Optional factor mining, Qlib export, provenance, validation, and registry staging/approval. |
+| Readiness gates | `src/stock_rtx4060/readiness/` | Builds readiness snapshots and classifies live-review eligibility while keeping capital/order flags disabled. |
+| Paper trading | `src/stock_rtx4060/paper_trading.py` | Preserves legacy paper API and adds forward paper log summary helpers. |
+| Live review recorder | `src/stock_rtx4060/live_review/auto_forward_recorder.py` | Records 30-day forward-paper evidence and generates review packs without auto-promotion. |
 | MCP adapter contract | `src/stock_rtx4060/mcp_adapter.py` | Defines read/report-only Phase 1 MCP workflow contract. It does not start a server. |
-| Tests | `tests/test_core.py`, `tests/test_audit_log.py`, `tests/test_data_providers.py`, `tests/test_mcp_adapter.py`, `tests/test_dashboard_bridge.py` | Verify core CLI/package behavior, provider routing, audit masking, MCP boundary, and dashboard snapshot conversion. |
+| Tests | `tests/test_core.py`, `tests/test_dashboard_bridge.py`, `tests/test_live_review_readiness.py`, `tests/test_auto_forward_recorder.py`, `tests/test_rd_agent_*.py`, `tests/test_advisor_*.py`, `tests/test_openbb_*.py` | Verify core CLI/package behavior, dashboard snapshots, live-review gates, RD-Agent, advisor memory, and OpenBB tool boundaries. |
 | Continue checks | `.continue/checks/*.md` | Advisory PR-quality gates for financial safety, model integrity, reports, architecture, secrets, GPU claims, and verification evidence. |
 
 ## Boundary
 
-The system is report-only. It has no broker API and no mandatory web server.
+The system is report-only. Broker adapter modules may exist for architectural staging, but runtime recommendation, readiness, paper, and live-review flows must keep broker order execution disabled.
+
+The local Flask API is optional and operator-facing. It serves dashboard data and recommendation snapshots on localhost; it is not a broker API and must not expose account-writing or order-writing routes.
 
 `ops-v1` is an orchestration command, not a trading command. It creates files for human review and journal follow-up only.
 
@@ -106,7 +175,7 @@ Continue does not change runtime behavior. It is a review-time quality gate for 
 
 Phase 1 MCP work is an adapter contract only. `src/stock_rtx4060/mcp_adapter.py` allows future read/report mapping for `recommend` and `ops-v1`; it does not bind a port, start a server, or expose broker/account/order capabilities.
 
-The dashboard bridge is file-based. `dashboard-export` reads an existing `recommendations_algo_v2_*.json` file and writes `dashboard_snapshot.json`. `dashboard/stock_pred_v5.jsx` and the external `stock_pred_v5.jsx` import that file from the browser through the `BACKEND` button. Browser-side simulated scores stay separate from backend report snapshots.
+The dashboard bridge is file-based for snapshot export and API-compatible for local review. `dashboard-export` reads an existing `recommendations_algo_v2_*.json` file and writes `dashboard_snapshot.json`. The full dashboard workspace under `root_folder_snapshot/stock-pred-v5` can consume `/api/recommend` or imported `dashboard_snapshot.v1` files. The legacy single-file copy under `dashboard/stock_pred_v5.jsx` is still tracked for compatibility.
 
 Browser verification uses `dashboard/bridge_smoke.html` plus `node dashboard\verify_bridge_smoke.mjs`. The harness renders `dashboard_snapshot.v1` in Chrome through Playwright CLI and writes evidence under `reports/dashboard_browser_verification/`.
 
@@ -139,6 +208,8 @@ Phase B backtest honesty is evidence-only. A Backtest Honesty PASS does not appr
 
 ## Validation State
 
+This table contains historical validation evidence retained from earlier architecture passes. For current release status, prefer the latest local pytest/coverage run, GitHub Actions result, and the most recent pushed `main` commit evidence. Do not treat older validation rows as proof for newly added RD-Agent, advisor memory/OpenBB, readiness, live-review, or dashboard changes unless those checks were rerun in the current session.
+
 | Check | Current Result |
 |---|---|
 | `.\run.ps1 self-test` | PASS in the current Codex session |
@@ -170,10 +241,10 @@ Report-only stock-candidate screening engine. Walk-forward ensemble ML, 9 risk g
 | Component | File | Role |
 |-----------|------|------|
 | CLI Entry | `main.py` (root) | Prepends `src/` to `sys.path`, dispatches to package CLI |
-| Package CLI | `src/stock_rtx4060/main.py` | Subcommands: `self-test`, `recommend`, `ops-v1`, `benchmark`, `dashboard-export`, `demo`, `journal` |
+| Package CLI | `src/stock_rtx4060/main.py` | Subcommands: `recommend`, `paper-status`, `ops-v1`, `benchmark`, `dashboard-export`, `env`, `factor-mine`, `factor-list`, `factor-approve`, `factor-status` |
 | Orchestrator | `src/stock_rtx4060/recommendation_engine.py` | RecommendationEngine, RecommendationConfig, run() |
 | Feature Engine | `src/stock_rtx4060/feature_engine.py` | TechnicalIndicators, 60+ indicators, feature_lag=1 shift |
-| Ensemble Model | `src/stock_rtx4060/ensemble_model.py` | XGBoost + LogisticRegression fallback, TimeSeriesSplit(gap=horizon) |
+| Ensemble Model | `src/stock_rtx4060/ensemble_model.py` | XGBoost + LogisticRegression fallback, leakage-aware OOF CV with PurgedKFold support |
 | Backtester | `src/stock_rtx4060/backtester.py` | Dry-run trade simulation |
 | Risk Rules | `src/stock_rtx4060/risk_rules.py` | GREEN/AMBER/RED/ZERO gate logic, position sizing |
 | Dashboard Bridge | `src/stock_rtx4060/dashboard_bridge.py` | Converts recommendation JSON to dashboard_snapshot.v1 |
@@ -184,6 +255,10 @@ Report-only stock-candidate screening engine. Walk-forward ensemble ML, 9 risk g
 | Ops Workflow | `src/stock_rtx4060/ops_workflow.py` | Daily brief + manual approval template + ZERO log |
 | HW Profile | `src/stock_rtx4060/hw_profile.py` | nvidia-smi probe, TensorFlow GPU check, RuntimeStatus |
 | MCP Adapter | `src/stock_rtx4060/mcp_adapter.py` | Phase 1 read/report-only adapter contract (no server, no broker) |
+| LLM Advisors | `src/stock_rtx4060/advisors/` | Optional news, macro, devil's advocate, memory, OpenBB tool, and live LLM advisory evidence |
+| RD-Agent | `src/stock_rtx4060/factors/rd_agent/` | Optional factor discovery, validation, provenance, and registry approval |
+| Readiness | `src/stock_rtx4060/readiness/` | Snapshot and classifier gates for watchlist, paper, and live-review candidate states |
+| Live Review | `src/stock_rtx4060/live_review/auto_forward_recorder.py` | Forward paper recorder with no auto-promotion and no broker execution |
 
 ## Component Topology
 
@@ -306,12 +381,15 @@ graph TD
         "stop": 177.60,
         "tp2": 203.50,
         "risk_reward": 2.91,
+        "investment_readiness_status": "AMBER_WATCHLIST",
+        "new_capital_allowed": false,
+        "paper_trading_only": true,
         "validations": { ... }
       }
     ]
   }
   ```
-- Walk-forward ensemble: TimeSeriesSplit(gap=horizon) ensures no label leakage
+- Walk-forward / OOF ensemble: leakage-aware PurgedKFold and embargo controls protect label horizon boundaries
 - Feature lag: `feature_lag=1` shifts features so model never sees the bar it predicts from
 - Kelly sizing (fraction=0.25) and suggested quantity are analysis fields only; never connected to an order router
 

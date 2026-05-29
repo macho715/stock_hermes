@@ -261,9 +261,12 @@ stock_1901/                          # Updated 2026-05-29 (formerly stock_rtx406
 |---|---|
 | `reports/recommendations*/` | `recommend` smoke / live runs |
 | `reports/ops_v1*/` | `ops-v1` manual approval workflow runs |
+| `reports/live_review/**` | Forward paper / live-review evidence artifacts |
 | `reports/runtime_status.json` | `env` command |
 | `reports/**/audit_log.jsonl` | Provider attempt audit events from `recommend` and `ops-v1` |
+| `audit_log/rd_agent.jsonl` | RD-Agent factor discovery provenance and registry events |
 | `reports/**/dashboard_snapshot.json` | Dashboard bridge snapshot from `dashboard-export`, including additive `provider_summary` and `backtest_honesty_summary` when present |
+| `.codex/*.json`, `.codex/*.log`, `.codex/*.txt` | Local Codex validation reports and runtime logs |
 
 ## Continue Checks
 
@@ -280,9 +283,9 @@ Flat checks under `.continue/checks/`. Do not create nested folders. Current set
 
 ## External Dashboard File
 
-`C:\Users\jichu\Downloads\주식\stock_pred_v5.jsx` is the live dashboard. It imports `dashboard_snapshot.v1` files via a `BACKEND` button and shows backend evidence in a dedicated tab.
+`C:\Users\jichu\Downloads\주식\stock_1901\root_folder_snapshot\stock-pred-v5` is the full local Vite/React dashboard workspace. `src/components/RecommendationPanel.jsx` owns the REC panel API/file fallback behavior, LLM advisor toggles, and in-flight recommendation request dedupe.
 
-The repo-owned copy is at `dashboard/stock_pred_v5.jsx` so dashboard source changes are tracked by repo `git status`.
+The legacy repo-owned single-file dashboard copy is at `dashboard/stock_pred_v5.jsx` so older dashboard source changes are still tracked by repo `git status`.
 
 ## Reports Policy
 

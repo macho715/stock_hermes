@@ -2,6 +2,61 @@
 
 All notable changes for `stock_1901` are documented here.
 
+## 2026-05-29 — Wave 4 최신 변경 정리 (RD-Agent · Advisor Memory/OpenBB · Dashboard REC · Docs)
+
+### Summary
+
+최근 `main`에 반영된 Wave 4 변경과 현재 작업트리의 문서 동기화 내용을 한 섹션으로 정리했다. 이 항목은 코드 변경 자체가 아니라, 이미 반영된 기능과 문서 업데이트의 changelog 정리다.
+
+### Timeline
+
+```mermaid
+timeline
+    title 2026-05-29 Wave 4 Change Timeline
+    section Dashboard
+      74189be : KRX REC full-data display
+      db2dea0 : In-flight REC request dedupe
+    section Factors
+      8f6b030 : RD-Agent Alpha Factory
+      58a8018 : RD-Agent docs and optional requirements
+    section Advisors
+      e061b2a : Advisor memory and OpenBB tools
+    section Docs
+      915877d : Wave 4 root docs refresh
+      working-tree : LAYOUT and SYSTEM_ARCHITECTURE current sync
+```
+
+### Added
+
+- **`src/stock_rtx4060/factors/rd_agent/`** — RD-Agent Alpha Factory 패키지 정리
+  - Docker runner, staged factor loader, provenance, Qlib exporter, registry hook, runner, validator 구조를 명시했다.
+  - CLI는 `factor-mine`, `factor-list`, `factor-approve`, `factor-status` 흐름으로 문서화했다.
+- **`src/stock_rtx4060/advisors/memory/`** — FinThink AMH-grounded hierarchical memory 구조 반영
+  - DuckDB L1/L2/L3 regime memory, CWRM routing, STL proposition extraction, public `MemoryLayer` API를 changelog 기준으로 연결했다.
+- **`src/stock_rtx4060/advisors/openbb_tools/`** — advisor OpenBB tool-use 구조 반영
+  - tool schema, executor, agentic loop를 LLM advisor evidence layer로 정리했다.
+
+### Changed
+
+- **Dashboard REC** — 동일한 `/api/recommend` 요청이 동시에 발생할 때 in-flight Promise를 공유하도록 정리했다.
+  - StrictMode나 빠른 탭 전환에서 같은 REC fetch가 중복 실행되는 위험을 줄인다.
+- **KRX dashboard data path** — KRX 전체 recommendation data 표시 흐름을 changelog에 최신 상태로 반영했다.
+- **Docs architecture sync** — `docs/LAYOUT.md`와 `docs/SYSTEM_ARCHITECTURE.md`에 현재 API, dashboard, readiness, live-review, RD-Agent, advisor memory/OpenBB 구조를 맞췄다.
+
+### Safety Notes
+
+- LIVE_REVIEW 계층은 계속 `new_capital_allowed=false`, `broker_order_execution=false`, `manual_approval_required=true` 경계를 유지한다.
+- LLM advisor와 OpenBB tool-use는 evidence/advisory layer이며, risk gate나 readiness gate를 우회하지 않는다.
+- RD-Agent factor discovery는 registry staging/approval 흐름을 거치며 자동 실전 매매로 연결되지 않는다.
+
+### Verification
+
+- 이 changelog 업데이트는 문서 정리 작업이다.
+- 런타임 전체 pytest는 이 문서 수정에서 다시 실행하지 않았다.
+- 문서 검증은 `git diff --check`와 changelog 필수 문자열/경로 확인으로 수행했다.
+
+---
+
 ## 2026-05-29 — 대시보드 버그 수정 (XGBoost N/A · PBO Badge · LLM Advisor KRX)
 
 ### Summary
