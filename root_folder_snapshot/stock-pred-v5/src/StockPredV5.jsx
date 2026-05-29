@@ -1954,13 +1954,13 @@ function SectionLabel({ children, style }) {
 
 function IndRow({ label, value, state, color, bar, barMax }) {
   return (
-    <div style={{ marginBottom: 6, padding: "4px 0" }}>
-      <div className="flex justify-between">
-        <span style={{ fontSize: 10, color: C.textDim, letterSpacing: 1 }}>{label}</span>
-        <span style={{ fontSize: 11, color: C.text, fontWeight: 500 }}>{value}</span>
+    <div style={{ marginBottom: 8, padding: "5px 0", borderBottom: `1px solid ${C.borderSoft}` }}>
+      <div className="flex justify-between" style={{ alignItems: "baseline" }}>
+        <span style={{ fontSize: 10, color: C.textDim, fontFamily: FONT_SANS, letterSpacing: "0.04em" }}>{label}</span>
+        <span style={{ fontSize: 12, color: C.text, fontWeight: 600, letterSpacing: "0.02em" }}>{value}</span>
       </div>
       <div className="flex justify-between mt-0.5">
-        <span style={{ fontSize: 9, color }}>{state}</span>
+        <span style={{ fontSize: 9, color, fontFamily: FONT_SANS, letterSpacing: "0.05em" }}>{state}</span>
       </div>
       {bar != null && (
         <div style={{ height: 2, background: C.border, marginTop: 3 }}>
