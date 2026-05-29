@@ -47,6 +47,14 @@ reports/dashboard_browser_verification/snapshot_fixture.js
 reports/generated_reports_inventory_*.csv
 test-results/
 
+# LIVE_REVIEW mutable runtime artifacts.
+# Keep generated 30-day forward evidence out of code commits.
+reports/live_review/005930/*.json
+reports/live_review/005930/*.csv
+reports/live_review/005930/recorder_logs/
+reports/live_review/005930/review_pack_005930.md
+!reports/live_review/005930/.gitkeep
+
 # Phase 0+ runtime artifacts
 mlruns/
 mlartifacts/
