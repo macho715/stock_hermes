@@ -612,6 +612,7 @@ def _evaluate_investment_readiness(result: dict[str, Any], *, provider_summary: 
         or str(result.get("readiness_status", "")).upper() == "LIVE_REVIEW_CANDIDATE"
         or str(result.get("investment_readiness_status", "")).upper() == "LIVE_REVIEW_CANDIDATE"
     )
+    spread = _model_score_spread(result)
     if live_review_candidate:
         safety_flags = _readiness_safety_flags(result, new_capital_allowed=False)
         return {
@@ -631,6 +632,7 @@ def _evaluate_investment_readiness(result: dict[str, Any], *, provider_summary: 
             "ready_for_manual_review": True,
             "dashboard_warning": False,
             "dashboard_warning_message": None,
+            "model_score_spread": round(spread, 2) if spread is not None else None,
             "blocking_reasons": result.get("remaining_blocks") or [],
             "readiness_gate_failures": result.get("remaining_blocks") or [],
         }
@@ -653,6 +655,7 @@ def _evaluate_investment_readiness(result: dict[str, Any], *, provider_summary: 
         "ready_for_manual_review": True,
         "dashboard_warning": False,
         "dashboard_warning_message": None,
+        "model_score_spread": round(spread, 2) if spread is not None else None,
         "blocking_reasons": [],
         "readiness_gate_failures": [],
     }

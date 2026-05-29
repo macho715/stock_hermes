@@ -145,12 +145,127 @@ function fmtRatio(v) {
   return `${Number(v).toFixed(2)}×`;
 }
 
+function isSourceConflict(result) {
+  const status = String(
+    result?.investment_readiness_status
+    || result?.dashboard_status
+    || result?.readiness_status
+    || ""
+  );
+  return status === "AMBER_SOURCE_CONFLICT";
+}
+
+function badgeColor(label) {
+  const text = String(label || "").toUpperCase();
+  if (text.includes("MODEL") || text.includes("SOURCE") || text.includes("STATIC")) return C.amber;
+  if (text.includes("BACKTEST") || text.includes("BLOCK") || text.includes("INSUFFICIENT")) return C.red;
+  return C.textDim;
+}
+
+function SourceConflictChip({ label, color }) {
+  return (
+    <span style={{
+      color,
+      border: `1px solid ${color}77`,
+      background: `${color}14`,
+      padding: "2px 6px",
+      borderRadius: 3,
+      fontSize: "0.62rem",
+      fontWeight: 700,
+      letterSpacing: "0.04em",
+      lineHeight: 1.45,
+      whiteSpace: "normal",
+    }}>
+      {label}
+    </span>
+  );
+}
+
+function SourceConflictBanner({ result }) {
+  const badges = Array.isArray(result?.display_badges) ? result.display_badges : [];
+  const reasons = Array.isArray(result?.blocking_reasons) ? result.blocking_reasons : [];
+  const capitalBlocked = result?.new_capital_allowed === false;
+  const brokerBlocked = result?.safety_flags?.broker_order_execution === false || result?.broker_order_execution === false;
+  const paperOnly = result?.paper_recording_allowed === true || result?.paper_trading_only === true;
+
+  return (
+    <div style={{
+      marginBottom: 10,
+      padding: "10px",
+      background: "#241104",
+      border: `1px solid ${C.amber}`,
+      borderLeft: `4px solid ${C.red}`,
+      borderRadius: 4,
+    }}>
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, marginBottom: 7 }}>
+        <span style={{
+          color: "#050A0E",
+          background: C.amber,
+          borderRadius: 3,
+          padding: "3px 7px",
+          fontSize: "0.65rem",
+          fontWeight: 800,
+          letterSpacing: "0.06em",
+          lineHeight: 1.35,
+        }}>
+          AMBER_SOURCE_CONFLICT
+        </span>
+        <SourceConflictChip label="LIVE REVIEW BLOCKED" color={C.red} />
+        {paperOnly && <SourceConflictChip label="PAPER RECORDING ONLY" color={C.amber} />}
+        {capitalBlocked && <SourceConflictChip label="NEW CAPITAL BLOCKED" color={C.red} />}
+        {brokerBlocked && <SourceConflictChip label="NO BROKER EXECUTION" color={C.amber} />}
+      </div>
+      <div style={{ color: C.text, fontSize: "0.72rem", lineHeight: 1.5, fontWeight: 700 }}>
+        Signal, recommendation, and backtest evidence are not aligned.
+      </div>
+      <div style={{ color: C.textDim, fontSize: "0.67rem", lineHeight: 1.5, marginTop: 2 }}>
+        This candidate is blocked from live review. Score remains visible for audit only.
+      </div>
+      {badges.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8 }}>
+          {badges.map((badge) => (
+            <span key={badge} style={{
+              color: badgeColor(badge),
+              border: `1px solid ${badgeColor(badge)}66`,
+              background: `${badgeColor(badge)}18`,
+              padding: "2px 6px",
+              borderRadius: 3,
+              fontSize: "0.6rem",
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              lineHeight: 1.45,
+              overflowWrap: "anywhere",
+            }}>
+              {badge}
+            </span>
+          ))}
+        </div>
+      )}
+      {reasons.length > 0 && (
+        <details style={{ marginTop: 8 }}>
+          <summary style={{ color: C.text, cursor: "pointer", fontSize: "0.65rem", minHeight: 28, lineHeight: "28px" }}>
+            Blocking reasons ({reasons.length})
+          </summary>
+          <div style={{ display: "grid", gap: 3, marginTop: 4 }}>
+            {reasons.map((reason) => (
+              <div key={reason} style={{ color: C.textDim, fontSize: "0.6rem", lineHeight: 1.45, overflowWrap: "anywhere" }}>
+                {reason}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
 export default function RecommendationCard({ result, currency = "$", accent = "#00CCFF", onClick }) {
   if (!result) return null;
   const isGreen = result.verdict?.includes("ELIGIBLE") || result.verdict?.includes("ACCUMULATE");
   const isAmber = result.verdict?.includes("AMBER");
   const isRed = result.verdict?.startsWith("RED") || result.verdict?.startsWith("ZERO");
-  const borderColor = isGreen ? C.green : isAmber ? C.amber : isRed ? C.red : C.border;
+  const sourceConflict = isSourceConflict(result);
+  const borderColor = sourceConflict ? C.red : isGreen ? C.green : isAmber ? C.amber : isRed ? C.red : C.border;
 
   return (
     <div
@@ -167,6 +282,8 @@ export default function RecommendationCard({ result, currency = "$", accent = "#
       onMouseEnter={(e) => { if (onClick) e.currentTarget.style.background = C.panel2; }}
       onMouseLeave={(e) => { e.currentTarget.style.background = C.panel; }}
     >
+      {sourceConflict && <SourceConflictBanner result={result} />}
+
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -189,6 +306,18 @@ export default function RecommendationCard({ result, currency = "$", accent = "#
         <span style={{ color: result.track === "S" ? C.us : C.krx, fontWeight: 600, letterSpacing: 1 }}>
           Track-{result.track || "—"}
         </span>
+        <span style={{ color: sourceConflict ? C.red : C.textDim, fontWeight: sourceConflict ? 700 : 400 }}>
+          {result.investment_readiness_status || result.dashboard_status || result.readiness_status || "REPORT ONLY"}
+        </span>
+        {result.new_capital_allowed === false && (
+          <span style={{ color: C.red }}>New capital blocked</span>
+        )}
+        {(result.paper_recording_allowed === true || result.paper_trading_only === true) && (
+          <span style={{ color: C.amber }}>Paper recording only</span>
+        )}
+        {(result.safety_flags?.broker_order_execution === false || result.broker_order_execution === false) && (
+          <span style={{ color: C.amber }}>No broker execution</span>
+        )}
         {result.probability != null && (
           <span>Prob: <span style={{ color: C.text }}>{Number(result.probability).toFixed(2)}</span></span>
         )}
