@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+import pandas as pd
 
 from .position_tracker import TrackedPosition
 
@@ -230,6 +231,11 @@ class BrokerAdapter(ABC):
         """
         ...
 
+    @abstractmethod
+    def fetch_ohlcv(self, ticker: str, start: str, end: str) -> pd.DataFrame | None:
+        """OHLCV 데이터 조회 (paper broker는 pykrx 사용)."""
+        ...
+
     def close(self) -> None:
         """리소스 정리."""
         pass
@@ -295,6 +301,26 @@ class PaperBroker(BrokerAdapter):
 
     def order_log(self) -> list[OrderResult]:
         return list(self._order_log)
+
+    def fetch_ohlcv(self, ticker: str, start: str, end: str) -> pd.DataFrame | None:
+        """OHLCV 조회 — pykrx 사용, Korean→English 컬럼 정규화."""
+        try:
+            from pykrx import stock as pykrx_stock
+            symbol = ticker.replace('.KS', '').replace('.KQ', '')
+            frame = pykrx_stock.get_market_ohlcv_by_date(start.replace('-', ''), end.replace('-', ''), symbol, freq='d', adjusted=True)
+            if frame.empty:
+                return None
+            # Normalize Korean column names to English: 시가→Open, 고가→High, 저가→Low, 종가→Close, 거래량→Volume
+            frame = frame.rename(columns={
+                '시가': 'Open',
+                '고가': 'High',
+                '저가': 'Low',
+                '종가': 'Close',
+                '거래량': 'Volume',
+            })
+            return frame
+        except Exception:
+            return None
 
 
 def build_order_from_recommendation(

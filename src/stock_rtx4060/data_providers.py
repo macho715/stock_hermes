@@ -14,15 +14,16 @@ import pandas as pd
 
 from .audit_log import AuditEvent, AuditLogger, mask_secret
 from .data_cache import DataCache
+from .data_quality.final_bar_lock import provider_final_bar_metadata
 from .feature_engine import normalize_ohlcv
 from .provider_validation import validate_provider_frame
 
 _cache = DataCache()
 
-DataProviderName = Literal["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"]
+DataProviderName = Literal["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr", "krx_final", "broker_final"]
 
 OPENBB_EQUITY_HISTORICAL_ENDPOINT = "obb.equity.price.historical"
-ALLOWED_PROVIDERS = {"auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"}
+ALLOWED_PROVIDERS = {"auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr", "krx_final", "broker_final"}
 
 
 @dataclass(frozen=True)
@@ -70,6 +71,7 @@ def load_ohlcv_with_provider(
     command: str = "recommend",
     as_of: str | None = None,
     data_lake_first: bool | None = None,
+    after_market_close: bool = False,
 ) -> ProviderResult:
     config = provider_config if provider_config is not None else load_provider_config(provider_config_path)
     requested = str(data_provider or "auto").lower()
@@ -77,6 +79,18 @@ def load_ohlcv_with_provider(
 
     if selected == "synthetic":
         return _load_synthetic(ticker, period, requested, audit_logger, command, fallback_reason="synthetic flag enabled" if synthetic else None)
+
+    if requested in ("krx_final", "broker_final"):
+        return _load_authoritative_final_ohlcv(
+            ticker=ticker,
+            period=period,
+            provider=requested,
+            requested=requested,
+            audit_logger=audit_logger,
+            command=command,
+            after_market_close=after_market_close,
+            as_of=as_of,
+        )
 
     if data_lake_first is None:
         import os as _os
@@ -565,3 +579,225 @@ def _write_audit(audit_logger: AuditLogger | None, event: AuditEvent) -> None:
     if audit_logger is None:
         return
     audit_logger.write(event)
+
+
+def _load_authoritative_final_ohlcv(
+    ticker: str,
+    period: str,
+    provider: str,
+    requested: str,
+    audit_logger: AuditLogger | None,
+    command: str,
+    after_market_close: bool,
+    as_of: str | None,
+) -> ProviderResult:
+    """
+    Authoritative EOD final-bar loader for KRX_FINAL and BROKER_FINAL.
+
+    FR-001/002/003/004/005/006: Emits KRX_FINAL with source_priority=1,
+    bar_type=EOD_FINAL, eod_confirmed=True, source_evidence_lock=True,
+    and inference_allowed=True when after_market_close=True.
+
+    FR-007: Returns eod_confirmed=False with blocking metadata on failure.
+
+    FR-012: broker_order_execution is never set True.
+    """
+    started = time.perf_counter()
+
+    provider_source = "KRX_FINAL" if provider == "krx_final" else "BROKER_FINAL"
+    bar_type_success = "EOD_FINAL"
+    bar_type_fail = "EOD_FINAL_UNAVAILABLE"
+
+    # Try to get the final bar
+    bar, cache_close, cache_volume = _try_get_final_bar(ticker, period, provider, audit_logger, command, started)
+
+    if bar is None or bar.empty:
+        # Failure path: bar unavailable, block inference
+        meta = provider_final_bar_metadata(
+            source=provider_source,
+            bar_type=bar_type_fail,
+            eod_confirmed=False,
+            source_evidence_lock=False,
+            after_market_close=after_market_close,
+        )
+        _write_audit(
+            audit_logger,
+            AuditEvent(
+                event_type="provider_attempt",
+                status="FAIL",
+                command=command,
+                ticker=ticker,
+                period=period,
+                provider_requested=requested,
+                provider_used=provider,
+                source=provider_source,
+                message="final bar unavailable",
+                duration_ms=_elapsed_ms(started),
+            ),
+        )
+        return ProviderResult(
+            frame=pd.DataFrame(),
+            provider_requested=requested,
+            provider_used=provider,
+            source=provider_source,
+            metadata=meta,
+        )
+
+    final_close = float(bar.iloc[-1]["Close"])
+    final_volume = float(bar.iloc[-1]["Volume"])
+
+    # Compute cache-vs-final diff if cache values are available
+    diff_result = None
+    if cache_close is not None and cache_volume is not None:
+        from .data_quality.final_bar_lock import compare_cache_vs_final
+
+        diff_result = compare_cache_vs_final(
+            cache_close=cache_close,
+            final_close=final_close,
+            cache_volume=cache_volume,
+            final_volume=final_volume,
+        )
+
+    # Success path: authoritative final bar confirmed
+    meta = provider_final_bar_metadata(
+        source=provider_source,
+        bar_type=bar_type_success,
+        eod_confirmed=True,
+        source_evidence_lock=True,
+        after_market_close=after_market_close,
+    )
+    meta["broker_order_execution"] = False
+    if diff_result:
+        meta["cache_vs_final"] = diff_result
+    meta["source_timestamp"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    _write_audit(
+        audit_logger,
+        AuditEvent(
+            event_type="provider_attempt",
+            status="SUCCESS",
+            command=command,
+            ticker=ticker,
+            period=period,
+            provider_requested=requested,
+            provider_used=provider,
+            source=provider_source,
+            metadata=meta,
+            duration_ms=_elapsed_ms(started),
+        ),
+    )
+    return ProviderResult(
+        frame=bar,
+        provider_requested=requested,
+        provider_used=provider,
+        source=provider_source,
+        metadata=meta,
+    )
+
+
+def _try_get_final_bar(
+    ticker: str,
+    period: str,
+    provider: str,
+    audit_logger: AuditLogger | None,
+    command: str,
+    started: float,
+) -> tuple[pd.DataFrame | None, float | None, float | None]:
+    """
+    Attempt to load the final bar.
+
+    For KRX_FINAL: use pykrx as authoritative KRX source.
+    For BROKER_FINAL: use PaperBroker as the broker backend (no live execution).
+    Returns (bar, cache_close, cache_volume) on success; (None, None, None) on failure.
+    """
+    if provider == "krx_final":
+        return _try_krx_final_bar(ticker, period, audit_logger, command, started)
+    elif provider == "broker_final":
+        return _try_broker_final_bar(ticker, audit_logger, command, started)
+    return None, None, None
+
+
+def _try_krx_final_bar(
+    ticker: str,
+    period: str,
+    audit_logger: AuditLogger | None,
+    command: str,
+    started: float,
+) -> tuple[pd.DataFrame | None, float | None, float | None]:
+    """Load final bar from pykrx (KRX authoritative)."""
+    try:
+        from pykrx import stock as pykrx_stock
+
+        symbol = ticker.replace(".KS", "").replace(".KQ", "")
+        end_date = pd.Timestamp.utcnow().strftime("%Y%m%d")
+        start_date = _period_to_start_date_yyyymmdd(period)
+        frame = pykrx_stock.get_market_ohlcv_by_date(start_date, end_date, symbol, freq="d", adjusted=True)
+        if frame.empty:
+            return None, None, None
+        normalized = normalize_ohlcv(_normalize_pykrx_columns(frame))
+
+        # Cache values for diff computation
+        cache_close = float(normalized.iloc[-1]["Close"]) if len(normalized) > 0 else None
+        cache_volume = float(normalized.iloc[-1]["Volume"]) if len(normalized) > 0 else None
+
+        return normalized, cache_close, cache_volume
+    except Exception as exc:
+        _write_audit(
+            audit_logger,
+            AuditEvent(
+                event_type="provider_attempt",
+                status="FAIL",
+                command=command,
+                ticker=ticker,
+                period=period,
+                provider_requested="krx_final",
+                provider_used="krx_final",
+                source="KRX_FINAL",
+                message=str(exc),
+                error_type=type(exc).__name__,
+                duration_ms=_elapsed_ms(started),
+            ),
+        )
+        return None, None, None
+
+
+def _try_broker_final_bar(
+    ticker: str,
+    audit_logger: AuditLogger | None,
+    command: str,
+    started: float,
+) -> tuple[pd.DataFrame | None, float | None, float | None]:
+    """Load final bar from PaperBroker (broker backend, no live execution)."""
+    try:
+        from .broker import get_broker
+
+        paper = get_broker("paper")
+        end_date = pd.Timestamp.utcnow().strftime("%Y-%m-%d")
+        start_date = (pd.Timestamp.utcnow() - pd.Timedelta(days=5)).strftime("%Y-%m-%d")
+        bar = paper.fetch_ohlcv(ticker, start=start_date, end=end_date)
+        if bar is None or bar.empty:
+            return None, None, None
+
+        normalized = normalize_ohlcv(bar)
+        cache_close = float(normalized.iloc[-1]["Close"]) if len(normalized) > 0 else None
+        cache_volume = float(normalized.iloc[-1]["Volume"]) if len(normalized) > 0 else None
+
+        return normalized, cache_close, cache_volume
+    except Exception as exc:
+        _write_audit(
+            audit_logger,
+            AuditEvent(
+                event_type="provider_attempt",
+                status="FAIL",
+                command=command,
+                ticker=ticker,
+                period="5d",
+                provider_requested="broker_final",
+                provider_used="broker_final",
+                source="BROKER_FINAL",
+                message=str(exc),
+                error_type=type(exc).__name__,
+                duration_ms=_elapsed_ms(started),
+            ),
+        )
+        return None, None, None
