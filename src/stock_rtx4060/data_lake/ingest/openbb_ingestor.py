@@ -66,9 +66,9 @@ def ingest_openbb_macro(
     if result is None:
         return 0
 
-    try:
-        import pandas as pd
+    import pandas as pd  # hoisted out of try/except so NameError cannot mask real failures
 
+    try:
         df = result.to_pandas()
         if df is None or (isinstance(df, pd.DataFrame) and df.empty):
             return 0
