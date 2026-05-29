@@ -428,6 +428,59 @@ test("REC provider card prefers current snapshot provider summary over stale pub
   await expect(page.getByText("synthetic · OLD.KS")).toHaveCount(0);
 });
 
+test("REC API dedupes identical in-flight recommendation requests", async ({ page }) => {
+  let recommendCalls = 0;
+  let releaseRecommend;
+  const recommendGate = new Promise((resolve) => {
+    releaseRecommend = resolve;
+  });
+
+  await page.route("**/api/universe?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        market: "US",
+        source: "backend_config",
+        symbols: [{ symbol: "MSFT", name: "Microsoft" }],
+      }),
+    });
+  });
+
+  await page.route("**/api/symbol?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ symbol: "MSFT", source: "YFINANCE", data: ohlcvRows }),
+    });
+  });
+
+  await page.route("**/api/model-scores?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(modelEvidence("MSFT")),
+    });
+  });
+
+  await page.route("**/api/recommend?**", async (route) => {
+    recommendCalls += 1;
+    await recommendGate;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify(snapshotPayload()),
+    });
+  });
+
+  await page.goto("http://127.0.0.1:5173/", { waitUntil: "domcontentloaded" });
+  await expect(page.getByText("UNIVERSE: API")).toBeVisible({ timeout: 15000 });
+  await page.getByRole("button", { name: "REC" }).click();
+
+  await expect.poll(() => recommendCalls, { timeout: 5000 }).toBe(1);
+  await page.waitForTimeout(1000);
+  expect(recommendCalls).toBe(1);
+
+  releaseRecommend();
+  await expect(page.getByText("schema: dashboard_snapshot.v1")).toBeVisible({ timeout: 15000 });
+});
+
 test("initial selected ticker waits for backend universe before requesting symbol data", async ({ page }) => {
   const requestedSymbols = [];
 

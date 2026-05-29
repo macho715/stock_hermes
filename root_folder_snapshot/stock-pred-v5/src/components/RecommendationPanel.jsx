@@ -21,6 +21,23 @@ const C = {
 
 const FONT = '"JetBrains Mono","Fira Code",ui-monospace,SFMono-Regular,Menlo,monospace';
 
+const inFlightSnapshotRequests = new Map();
+
+function runDedupedSnapshotRequest(key, fetcher) {
+  const existing = inFlightSnapshotRequests.get(key);
+  if (existing) return existing;
+
+  const promise = Promise.resolve()
+    .then(fetcher)
+    .finally(() => {
+      if (inFlightSnapshotRequests.get(key) === promise) {
+        inFlightSnapshotRequests.delete(key);
+      }
+    });
+  inFlightSnapshotRequests.set(key, promise);
+  return promise;
+}
+
 async function fetchDashboardSnapshot(jsonPath) {
   try {
     const res = await fetch(jsonPath);
@@ -126,14 +143,16 @@ export default function RecommendationPanel({ jsonPath, apiUrl, currency = "$", 
 
     // Option A: file-based JSON fetch
     if (jsonPath) {
-      data = await fetchDashboardSnapshot(jsonPath);
+      data = await runDedupedSnapshotRequest(`file:${jsonPath}`, () => fetchDashboardSnapshot(jsonPath));
     }
     // Option B: HTTP API fetch
     else if (apiUrl) {
       try {
-        const res = await fetch(apiUrl);
-        if (!res.ok) throw new Error(`API ${res.status}`);
-        data = await res.json();
+        data = await runDedupedSnapshotRequest(`api:${apiUrl}`, async () => {
+          const res = await fetch(apiUrl);
+          if (!res.ok) throw new Error(`API ${res.status}`);
+          return await res.json();
+        });
       } catch (e) {
         setError(`API error: ${e.message}`);
         setLoading(false);
