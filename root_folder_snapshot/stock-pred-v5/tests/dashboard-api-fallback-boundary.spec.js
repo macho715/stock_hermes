@@ -58,6 +58,39 @@ function snapshotPayload() {
   };
 }
 
+function snapshotWithSizing() {
+  const base = snapshotPayload();
+  return {
+    ...base,
+    results: [{
+      rank: 1,
+      ticker: "MSFT",
+      track: "S",
+      verdict: "AMBER_REVIEW_ONLY",
+      dashboard_status: "AMBER_WATCHLIST",
+      candidate_label: "Review",
+      score: 42,
+      raw_score: 84,
+      size_multiplier: 0.5,
+      sizing_strategy_used: "global",
+      sizing_coverage_status: "PASS",
+      probability: 0.57,
+      expected_value_pct: 1.2,
+      entry: 300,
+      stop: 288,
+      tp2: 330,
+      risk_reward: 2.5,
+      max_position_pct: 20,
+      suggested_quantity: 3,
+      confirmations_passed: 5,
+      confirmations_total: 8,
+      validations: [],
+      screening_output_only: true,
+      backtest_honesty_summary: { pbo: 0.1, pbo_status: "PASS" },
+    }],
+  };
+}
+
 test("runtime public folder has no synthetic recommendation json or markdown files", async () => {
   const publicDir = path.resolve("public");
   const syntheticRuntimeFiles = fs
@@ -389,6 +422,107 @@ test("KRX REC API uses KRX provider defaults and requests the full universe", as
   expect(url.searchParams.get("period")).toBe("5y");
   expect(url.searchParams.get("top")).toBe("9");
   expect(url.searchParams.get("universe")?.split(",")).toHaveLength(9);
+});
+
+test("REC cards show CMRS sizing metadata when present", async ({ page }) => {
+  await page.route("**/dashboard_config.json", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        markets: { US: { fallback_symbols: [{ symbol: "MSFT", name: "Microsoft" }] }, KRX: { fallback_symbols: [] } },
+        api_defaults: { recommend: { track: "S", period: "3y", top: "1", synthetic: "0", data_provider: "yfinance", model_kind: "auto" } },
+      }),
+    });
+  });
+  await page.route("**/api/universe?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ market: "US", source: "backend_config", symbols: [{ symbol: "MSFT", name: "Microsoft" }] }),
+    });
+  });
+  await page.route("**/api/symbol?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ symbol: "MSFT", source: "YFINANCE", data: ohlcvRows }),
+    });
+  });
+  await page.route("**/api/model-scores?**", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(modelEvidence("MSFT")) });
+  });
+  await page.route("**/api/recommend?**", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(snapshotWithSizing()) });
+  });
+
+  await page.goto("http://127.0.0.1:5173/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "REC" }).click();
+
+  await expect(page.getByText(/^SIZE\s/)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/^SIZER\s/)).toBeVisible();
+  await expect(page.getByText(/^COVERAGE\s/)).toBeVisible();
+  await expect(page.getByText("global")).toBeVisible();
+  await expect(page.getByText("PASS").first()).toBeVisible();
+});
+
+test("REC CMRS sizing toggle controls recommendation request params", async ({ page }) => {
+  const recommendUrls = [];
+  await page.route("**/dashboard_config.json", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        markets: { US: { fallback_symbols: [{ symbol: "MSFT", name: "Microsoft" }] }, KRX: { fallback_symbols: [] } },
+        api_defaults: {
+          recommend: {
+            track: "S",
+            period: "3y",
+            top: "1",
+            synthetic: "0",
+            data_provider: "yfinance",
+            model_kind: "auto",
+            sizing_kind: "auto",
+            sizing_alpha: "0.1",
+            sizing_n_min: "30",
+          },
+        },
+      }),
+    });
+  });
+  await page.route("**/api/universe?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ market: "US", source: "backend_config", symbols: [{ symbol: "MSFT", name: "Microsoft" }] }),
+    });
+  });
+  await page.route("**/api/symbol?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ symbol: "MSFT", source: "YFINANCE", data: ohlcvRows }),
+    });
+  });
+  await page.route("**/api/model-scores?**", async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(modelEvidence("MSFT")) });
+  });
+  await page.route("**/api/recommend?**", async (route) => {
+    recommendUrls.push(route.request().url());
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(snapshotPayload()) });
+  });
+
+  await page.goto("http://127.0.0.1:5173/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "REC" }).click();
+  await expect.poll(() => recommendUrls.length, { timeout: 15000 }).toBeGreaterThan(0);
+
+  const offUrl = new URL(recommendUrls.at(-1));
+  expect(offUrl.searchParams.get("sizing_kind")).toBeNull();
+  await expect(page.getByText("CMRS SIZING")).toBeVisible();
+  await expect(page.getByText("OFF").last()).toBeVisible();
+
+  await page.getByText("CMRS SIZING").click();
+  await expect.poll(() => recommendUrls.length, { timeout: 15000 }).toBeGreaterThan(1);
+
+  const onUrl = new URL(recommendUrls.at(-1));
+  expect(onUrl.searchParams.get("sizing_kind")).toBe("auto");
+  expect(onUrl.searchParams.get("sizing_alpha")).toBe("0.1");
+  expect(onUrl.searchParams.get("sizing_n_min")).toBe("30");
+  await expect(page.getByText(/^sizing_kind=auto · alpha=0.1/)).toBeVisible();
 });
 
 test("KRX REC keeps LLM advisor enabled and sends blend weight", async ({ page }) => {

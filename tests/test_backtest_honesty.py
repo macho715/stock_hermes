@@ -72,6 +72,33 @@ def test_backtest_honesty_fails_on_excessive_drawdown():
     assert {check["name"]: check["status"] for check in summary["checks"]}["MAX_DRAWDOWN"] == "FAIL"
 
 
+def test_backtest_honesty_adds_sizing_coverage_gate():
+    summary = evaluate_backtest_honesty(
+        oof_coverage=0.72,
+        min_oof_coverage=0.45,
+        sharpe=0.30,
+        min_sharpe=-0.25,
+        mdd_pct=12.0,
+        max_mdd_pct=25.0,
+        total_return_pct=3.0,
+        transaction_cost_buffer_pct=0.5,
+        cv_gap=20,
+        horizon=20,
+        sizing_coverage_result={
+            "status": "ZERO",
+            "empirical": 0.60,
+            "claimed": 0.90,
+            "n": 100,
+            "screening_output_only": True,
+        },
+    )
+
+    checks = {check["name"]: check["status"] for check in summary["checks"]}
+    assert checks["SIZING_COVERAGE"] == "FAIL"
+    assert summary["status"] == "FAIL"
+    assert summary["sizing_coverage"]["status"] == "ZERO"
+
+
 def test_summarize_honesty_keeps_worst_status_and_counts():
     summary = summarize_honesty(
         [

@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import os
 import sys
+import json
+from dataclasses import asdict
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -108,3 +111,52 @@ def test_api_universe_cap():
     )
     body = response.get_json()
     assert "universe too large" in body.get("error", "").lower()
+
+
+def test_api_recommend_accepts_sizing_params(monkeypatch, tmp_path):
+    captured = {}
+
+    class FakeEngine:
+        def __init__(self, config):
+            captured["config"] = config
+            self.config = config
+
+        def run(self):
+            return []
+
+        def write_reports(self, results):
+            out_dir = Path(self.config.output_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            path = out_dir / "recommendations_algo_v2_fake.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "generated_at_utc": "2026-05-29T00:00:00+00:00",
+                        "config": asdict(self.config),
+                        "disclaimer": "screening_output_only; manual approval required; no broker order execution; not financial advice",
+                        "results": [],
+                        "errors": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return {"json": str(path), "markdown": str(path.with_suffix(".md")), "audit": str(out_dir / "audit_log.jsonl")}
+
+    monkeypatch.setattr(api_server, "RecommendationEngine", FakeEngine)
+    client = api_server.app.test_client()
+    response = client.get(
+        "/api/recommend"
+        f"?universe=SYNTH-A&synthetic=1&output_dir={tmp_path}"
+        "&sizing_kind=auto&sizing_alpha=0.2&sizing_n_min=7"
+    )
+
+    assert response.status_code == 200
+    assert captured["config"].sizing_kind == "auto"
+    assert captured["config"].sizing_alpha == pytest.approx(0.2)
+    assert captured["config"].sizing_n_min == 7
+
+
+def test_api_recommend_rejects_bad_sizing_kind():
+    client = api_server.app.test_client()
+    response = client.get("/api/recommend?sizing_kind=quantum")
+    assert response.status_code == 400

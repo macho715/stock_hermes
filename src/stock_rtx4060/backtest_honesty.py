@@ -30,6 +30,7 @@ def evaluate_backtest_honesty(
     # v5.1 P1 additions — optional, None = not yet run
     cost_stress_result: dict[str, Any] | None = None,
     cpcv_result: dict[str, Any] | None = None,
+    sizing_coverage_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return additive PASS/AMBER/FAIL evidence without changing ranking.
 
@@ -68,6 +69,9 @@ def evaluate_backtest_honesty(
     if cpcv_result is not None:
         checks.extend(_cpcv_checks(cpcv_result))
 
+    if sizing_coverage_result is not None:
+        checks.append(_sizing_coverage_check(sizing_coverage_result))
+
     status = _worst_status(check["status"] for check in checks)
     result: dict[str, Any] = {
         "status": status,
@@ -83,6 +87,8 @@ def evaluate_backtest_honesty(
         }
     if cpcv_result is not None:
         result["cpcv"] = cpcv_result
+    if sizing_coverage_result is not None:
+        result["sizing_coverage"] = sizing_coverage_result
 
     # [E2] Expose pbo + pbo_status at top-level for dashboard_snapshot (additive)
     raw_pbo = cpcv_result.get("pbo") if isinstance(cpcv_result, dict) else None
@@ -231,6 +237,24 @@ def _cpcv_checks(cpcv_result: dict[str, Any]) -> list[dict[str, Any]]:
         checks.append(_check("CPCV_PATH_RATE", pp_status, path_pass, 0.60, f"path_pass_rate={path_pass:.2%}; need >=60%"))
 
     return checks
+
+
+def _sizing_coverage_check(coverage_result: dict[str, Any]) -> dict[str, Any]:
+    raw_status = str(coverage_result.get("status", "NO_DATA")).upper()
+    if raw_status == "PASS":
+        status: HonestyStatus = "PASS"
+    elif raw_status == "AMBER":
+        status = "AMBER"
+    else:
+        status = "FAIL"
+    empirical = coverage_result.get("empirical")
+    claimed = coverage_result.get("claimed")
+    n = coverage_result.get("n", 0)
+    reason = (
+        f"sizing_coverage={raw_status}; empirical={empirical}; "
+        f"claimed={claimed}; n={n}; sizing is report-only downgrade gate"
+    )
+    return _check("SIZING_COVERAGE", status, empirical, claimed, reason)
 
 
 def _check(name: str, status: HonestyStatus, value: Any, threshold: Any, reason: str) -> dict[str, Any]:

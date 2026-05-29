@@ -124,6 +124,24 @@ def test_build_dashboard_snapshot_preserves_report_only_contract():
     assert snapshot["results"][0]["backtest_honesty"]["status"] == "PASS"
 
 
+def test_build_dashboard_snapshot_exports_sizing_fields_additively():
+    payload = _recommendation_payload()
+    payload["results"][0]["raw_score"] = 88.0
+    payload["results"][0]["recommendation_rank_score"] = 44.0
+    payload["results"][0]["size_multiplier"] = 0.5
+    payload["results"][0]["sizing_strategy_used"] = "global"
+    payload["results"][0]["sizing_coverage_status"] = "PASS"
+
+    snapshot = build_dashboard_snapshot(payload)
+    row = snapshot["results"][0]
+
+    assert row["score"] == 44.0
+    assert row["raw_score"] == 88.0
+    assert row["size_multiplier"] == 0.5
+    assert row["sizing_strategy_used"] == "global"
+    assert row["sizing_coverage_status"] == "PASS"
+
+
 def test_write_dashboard_snapshot_creates_file(tmp_path):
     source = tmp_path / "recommendations_algo_v2_20260503_000000.json"
     output = tmp_path / "dashboard_snapshot.json"

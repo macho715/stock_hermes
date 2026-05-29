@@ -503,6 +503,7 @@ export default function StockPredV5() {
   const [recSource, setRecSource] = useState("api"); // "file" | "api"
   const [advisorEnabled, setAdvisorEnabled] = useState(false);
   const [lstmEnabled, setLstmEnabled] = useState(false);
+  const [cmrsSizingEnabled, setCmrsSizingEnabled] = useState(false);
   const [bench, setBench] = useState({ open: false, rows: [], loading: false, progress: 0 });
   const [clock, setClock] = useState("");
   const [exportFlash, setExportFlash] = useState("");
@@ -554,21 +555,38 @@ export default function StockPredV5() {
   const effectiveRecSource = recSource;
   const recApiReady = effectiveRecSource === "api" && !universeIsLoading && recUniverse.length > 0;
   const advisorRequestEnabled = advisorEnabled;
-  const recApiUrl = useMemo(() => {
-    const params = new URLSearchParams({
+  const cmrsSizingRequestEnabled = cmrsSizingEnabled;
+  const recRequestParams = useMemo(() => {
+    const params = {
       universe: recUniverse,
       ...recApiDefaults,
       output_dir: `reports/api_recommend_${market.toLowerCase()}`,
-    });
-    if (advisorRequestEnabled) {
-      params.set("advisor_run", "1");
-      params.set("advisor_blend_weight", "0.3");
+    };
+    delete params.sizing_kind;
+    delete params.sizing_alpha;
+    delete params.sizing_n_min;
+    if (cmrsSizingRequestEnabled) {
+      const configuredKind = String(recApiDefaults.sizing_kind || "").trim();
+      params.sizing_kind = configuredKind && configuredKind !== "off" ? configuredKind : "auto";
+      params.sizing_alpha = String(recApiDefaults.sizing_alpha || "0.1");
+      params.sizing_n_min = String(recApiDefaults.sizing_n_min || "30");
     }
+    if (advisorRequestEnabled) {
+      params.advisor_run = "1";
+      params.advisor_blend_weight = "0.3";
+    }
+    return params;
+  }, [advisorRequestEnabled, cmrsSizingRequestEnabled, market, recApiDefaults, recUniverse]);
+  const recApiUrl = useMemo(() => {
+    const params = new URLSearchParams(recRequestParams);
     return apiUrl(`/api/recommend?${params.toString()}`);
-  }, [market, recUniverse, recApiDefaults, advisorRequestEnabled]);
+  }, [recRequestParams]);
   const recApiDefaultText = useMemo(
-    () => Object.entries(recApiDefaults).map(([key, value]) => `${key}=${value}`).join(" · "),
-    [recApiDefaults]
+    () => Object.entries(recRequestParams)
+      .filter(([key]) => !["universe", "output_dir"].includes(key))
+      .map(([key, value]) => `${key}=${value}`)
+      .join(" · "),
+    [recRequestParams]
   );
   const pickSymbol = useCallback((symbol) => {
     setSelected(symbol);
@@ -1401,6 +1419,44 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                       <span style={{ color: C.textMuted, marginLeft: "auto" }}>
                         {advisorRequestEnabled
                           ? "blend_weight=0.30 · requires ANTHROPIC_API_KEY or MINIMAX_API_KEY"
+                          : "OFF"}
+                      </span>
+                    </div>
+                  )}
+                  {effectiveRecSource === "api" && (
+                    <div style={{
+                      margin: "4px 8px 0",
+                      padding: "5px 8px",
+                      border: `1px solid ${cmrsSizingEnabled ? `${C.green}55` : C.border}`,
+                      background: cmrsSizingEnabled ? "#07150F" : C.bgDeep,
+                      fontFamily: FONT,
+                      fontSize: 8,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      cursor: "pointer",
+                      userSelect: "none",
+                    }}
+                      onClick={() => setCmrsSizingEnabled((v) => !v)}
+                    >
+                      <div style={{
+                        width: 24, height: 12, borderRadius: 6,
+                        background: cmrsSizingRequestEnabled ? C.green : C.border,
+                        position: "relative", transition: "background .15s", flexShrink: 0,
+                      }}>
+                        <div style={{
+                          position: "absolute", top: 2,
+                          left: cmrsSizingRequestEnabled ? 14 : 2,
+                          width: 8, height: 8, borderRadius: "50%",
+                          background: "#fff", transition: "left .15s",
+                        }} />
+                      </div>
+                      <span style={{ color: cmrsSizingRequestEnabled ? C.green : C.textMuted, fontWeight: 600, letterSpacing: 1.5 }}>
+                        CMRS SIZING
+                      </span>
+                      <span style={{ color: C.textMuted, marginLeft: "auto" }}>
+                        {cmrsSizingRequestEnabled
+                          ? `sizing_kind=${recRequestParams.sizing_kind} · alpha=${recRequestParams.sizing_alpha} · n_min=${recRequestParams.sizing_n_min}`
                           : "OFF"}
                       </span>
                     </div>

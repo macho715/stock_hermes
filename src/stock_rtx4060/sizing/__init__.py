@@ -1,0 +1,51 @@
+"""Conformal Multi-horizon Regime-gated Sizing public API."""
+
+from .calibration import (
+    CALM,
+    RISK,
+    TREND,
+    SizingInputs,
+    build_calib_book,
+    build_sizing_inputs,
+    coverage_hits_for_result,
+    horizon_label,
+    regime_from_feature_row,
+    regime_probs_from_label,
+)
+from .strategy import (
+    CRISIS,
+    AutoSizingRouter,
+    CalibBook,
+    CoverageGateResult,
+    GlobalCMRS,
+    HorizonScore,
+    MondrianCMRS,
+    SizingResult,
+    SizingStrategy,
+    coverage_honesty_gate,
+    make_sizer,
+)
+
+__all__ = [
+    "CALM",
+    "CRISIS",
+    "RISK",
+    "TREND",
+    "AutoSizingRouter",
+    "CalibBook",
+    "CoverageGateResult",
+    "GlobalCMRS",
+    "HorizonScore",
+    "MondrianCMRS",
+    "SizingInputs",
+    "SizingResult",
+    "SizingStrategy",
+    "build_calib_book",
+    "build_sizing_inputs",
+    "coverage_hits_for_result",
+    "coverage_honesty_gate",
+    "horizon_label",
+    "make_sizer",
+    "regime_from_feature_row",
+    "regime_probs_from_label",
+]

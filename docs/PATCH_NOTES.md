@@ -7,7 +7,7 @@ The unified package keeps the active integrated Algorithm v2 implementation unde
 | Area | Change |
 |------|--------|
 | Coverage | 78.5% → **85.82%** (1,210 tests); target ≥85% met |
-| CORS | `api_server.py` changed from `origins=["*"]` to explicit localhost origins (5173, 4173, 5151) |
+| CORS | `api_server.py` changed from `origins=["*"]` to explicit local dashboard origins. Current allowlist covers `localhost` and `127.0.0.1` dev ports 5173, 5174, 5175, 4173, and 5151. |
 | `logging.basicConfig` | `InterceptHandler` isolation fix; tests use `monkeypatch` to avoid global handler |
 | P0 Observability | `src/stock_rtx4060/observability/` — loguru JSONL, prometheus_client, MLflow wrappers |
 | P1 Data Lake | `src/stock_rtx4060/data_lake/` — DuckDB+Parquet PITStore, bitemporal `as_of`, KIS/Alpaca ingestors |

@@ -75,6 +75,9 @@ def build_parser() -> argparse.ArgumentParser:
     recommend.add_argument("--model-kind", choices=["auto", "xgb", "logistic", "rf"], default="logistic")
     recommend.add_argument("--xgb-device", choices=["cpu", "cuda"], default="cpu")
     recommend.add_argument("--cv-gap", type=int, help="PurgedKFold embargo gap (rows); must be >= horizon")
+    recommend.add_argument("--sizing-kind", choices=["off", "global", "mondrian", "auto"], default="off")
+    recommend.add_argument("--sizing-alpha", type=float, default=0.1)
+    recommend.add_argument("--sizing-n-min", type=int, default=30)
     recommend.add_argument("--output-dir", default="reports/recommendations")
 
     paper = sub.add_parser("paper-run", help="paper-only virtual trading — no broker orders (screening only)")
@@ -92,6 +95,9 @@ def build_parser() -> argparse.ArgumentParser:
     paper.add_argument("--model-kind", choices=["auto", "xgb", "logistic", "rf"], default="logistic")
     paper.add_argument("--xgb-device", choices=["cpu", "cuda"], default="cpu")
     paper.add_argument("--cv-gap", type=int)
+    paper.add_argument("--sizing-kind", choices=["off", "global", "mondrian", "auto"], default="off")
+    paper.add_argument("--sizing-alpha", type=float, default=0.1)
+    paper.add_argument("--sizing-n-min", type=int, default=30)
     paper.add_argument("--output-dir", default="reports/recommendations")
     paper.add_argument("--output-root", default="reports/paper_trading/runs", help="root directory for paper trading run output")
     paper.add_argument("--run-date", help="YYYY-MM-DD override for run_id; defaults to today")
@@ -123,6 +129,9 @@ def build_parser() -> argparse.ArgumentParser:
     ops.add_argument("--model-kind", choices=["auto", "xgb", "logistic", "rf"], default="logistic")
     ops.add_argument("--xgb-device", choices=["cpu", "cuda"], default="cpu")
     ops.add_argument("--cv-gap", type=int, help="PurgedKFold embargo gap (rows); must be >= horizon")
+    ops.add_argument("--sizing-kind", choices=["off", "global", "mondrian", "auto"], default="off")
+    ops.add_argument("--sizing-alpha", type=float, default=0.1)
+    ops.add_argument("--sizing-n-min", type=int, default=30)
     ops.add_argument("--output-dir", default="reports/ops_v1")
 
     dashboard = sub.add_parser("dashboard-export", help="convert recommendation JSON into a dashboard snapshot")
@@ -292,6 +301,9 @@ def cmd_recommend(args: argparse.Namespace) -> int:
         data_provider=args.data_provider,
         provider_config=args.provider_config,
         kevpe_events=args.kevpe_events,
+        sizing_kind=getattr(args, "sizing_kind", "off"),
+        sizing_alpha=getattr(args, "sizing_alpha", 0.1),
+        sizing_n_min=getattr(args, "sizing_n_min", 30),
     )
     engine = RecommendationEngine(config)
     results = engine.run()
@@ -333,6 +345,9 @@ def cmd_paper_run(args: argparse.Namespace) -> int:
         data_provider=args.data_provider,
         provider_config=args.provider_config,
         kevpe_events=args.kevpe_events,
+        sizing_kind=getattr(args, "sizing_kind", "off"),
+        sizing_alpha=getattr(args, "sizing_alpha", 0.1),
+        sizing_n_min=getattr(args, "sizing_n_min", 30),
     )
     rec_engine = RecommendationEngine(rec_config)
     results = rec_engine.run()
@@ -473,6 +488,9 @@ def cmd_ops_v1(args: argparse.Namespace) -> int:
         data_provider=args.data_provider,
         provider_config=args.provider_config,
         kevpe_events=args.kevpe_events,
+        sizing_kind=getattr(args, "sizing_kind", "off"),
+        sizing_alpha=getattr(args, "sizing_alpha", 0.1),
+        sizing_n_min=getattr(args, "sizing_n_min", 30),
     )
     paths = run_ops_v1_workflow(config, output_dir=args.output_dir)
     print(json.dumps(paths, ensure_ascii=False, indent=2))

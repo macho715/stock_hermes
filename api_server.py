@@ -528,6 +528,18 @@ def api_recommend():
     output_dir = request.args.get("output_dir", "reports/api_recommend")
     advisor_run = request.args.get("advisor_run", "0") == "1"
     advisor_blend_weight = float(request.args.get("advisor_blend_weight", "0.3"))
+    sizing_kind = request.args.get("sizing_kind", "off")
+    if sizing_kind not in {"off", "global", "mondrian", "auto"}:
+        return jsonify({"error": "sizing_kind must be one of: off, global, mondrian, auto"}), 400
+    try:
+        sizing_alpha = float(request.args.get("sizing_alpha", "0.1"))
+        sizing_n_min = int(request.args.get("sizing_n_min", "30"))
+    except ValueError:
+        return jsonify({"error": "sizing_alpha must be float and sizing_n_min must be int"}), 400
+    if not 0.0 < sizing_alpha < 1.0:
+        return jsonify({"error": "sizing_alpha must be between 0 and 1"}), 400
+    if sizing_n_min < 1:
+        return jsonify({"error": "sizing_n_min must be >= 1"}), 400
     # cv_gap=5 default activates CPCV so pbo_status is populated in the snapshot
     cv_gap_raw = request.args.get("cv_gap")
     cv_gap = int(cv_gap_raw) if cv_gap_raw is not None else 5
@@ -558,6 +570,9 @@ def api_recommend():
             cv_gap=cv_gap,
             advisor_run=advisor_run,
             advisor_blend_weight=advisor_blend_weight if advisor_run else 0.0,
+            sizing_kind=sizing_kind,
+            sizing_alpha=sizing_alpha,
+            sizing_n_min=sizing_n_min,
         )
         engine = RecommendationEngine(config)
         results = engine.run()
