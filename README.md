@@ -11,7 +11,7 @@
 1. [시스템 개요](#1-시스템-개요)
 2. [아키텍처](#2-아키텍처)
 3. [데이터 계약 타입 맵](#3-데이터-계약-타입-맵)
-4. [Wave 3 신규 기능](#4-wave-3-신규-기능)
+4. [최신 반영 요약](#4-최신-반영-요약)
 5. [빠른 시작](#5-빠른-시작)
 6. [CLI 명령어](#6-cli-명령어)
 7. [대시보드](#7-대시보드)
@@ -195,7 +195,30 @@ classDiagram
 
 ---
 
-## 4. Wave 3 신규 기능
+## 4. 최신 반영 요약
+
+### 2026-05-29 GitHub main 상태
+
+현재 `main`은 Wave 4 문서와 구현 반영분을 포함합니다. 이 섹션은 GitHub 첫 화면에서 최신 기능을 빠르게 확인하기 위한 요약입니다.
+
+| 영역 | 최신 상태 |
+|---|---|
+| Dashboard REC | KRX 전체 데이터 표시, PBO Badge, LLM Advisor KRX 사용, 동일 in-flight REC 요청 dedupe |
+| RD-Agent | `src/stock_rtx4060/factors/rd_agent/` Alpha Factory 패키지와 `factor-*` CLI 흐름 반영 |
+| LLM Advisor | AMH memory, DuckDB L1/L2/L3 regime memory, STL proposition, OpenBB tool-use 구조 반영 |
+| Readiness / Live Review | `new_capital_allowed=false`, `broker_order_execution=false`, `manual_approval_required=true` 불변 유지 |
+| Docs | `CHANGELOG.md`, `docs/LAYOUT.md`, `docs/SYSTEM_ARCHITECTURE.md` 최신 구조 동기화 |
+
+```mermaid
+flowchart LR
+    Main[GitHub main] --> Dashboard[Dashboard REC\nKRX + PBO + dedupe]
+    Main --> RDAgent[RD-Agent Alpha Factory\nfactor-mine/list/approve/status]
+    Main --> Advisor[LLM Advisor\nMemory + OpenBB tools]
+    Main --> Readiness[Readiness / Live Review\nno capital, no broker]
+    Main --> Docs[README + CHANGELOG\nLAYOUT + SYSTEM_ARCHITECTURE]
+```
+
+### Wave 3 / Wave 4 기능
 
 ### E1 — MLflow LLM Span Tracing
 
