@@ -491,7 +491,15 @@ export default function StockPredV5() {
   const symbolPeriod = dashboardConfig?.api_defaults?.symbol_period || "";
   const symbolProviderByMarket = dashboardConfig?.api_defaults?.symbol_data_provider || {};
   const symbolDataProvider = symbolProviderByMarket[market] || (market === "KRX" ? "pykrx" : "yfinance");
-  const modelScoreDefaults = dashboardConfig?.api_defaults?.model_scores || {};
+  // KRX uses pykrx provider; US uses yfinance. model_scores_krx overrides model_scores for KRX.
+  const modelScoreDefaults = useMemo(() => {
+    const base = dashboardConfig?.api_defaults?.model_scores || {};
+    if (market === "KRX") {
+      const krxOverride = dashboardConfig?.api_defaults?.model_scores_krx || {};
+      return { ...base, ...krxOverride };
+    }
+    return base;
+  }, [dashboardConfig, market]);
   const recApiDefaults = dashboardConfig?.api_defaults?.recommend || {};
   const signalThresholds = dashboardConfig?.signal_thresholds || {};
   const signalThresholdLabel = signalThresholds.label || "";

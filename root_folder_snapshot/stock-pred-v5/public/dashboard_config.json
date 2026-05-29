@@ -36,8 +36,12 @@
     "model_scores": {
       "period": "3y",
       "model_kind": "auto",
-      "data_provider": "yfinance",
-      "use_lstm": "1"
+      "data_provider": "yfinance"
+    },
+    "model_scores_krx": {
+      "period": "3y",
+      "model_kind": "auto",
+      "data_provider": "pykrx"
     },
     "recommend": {
       "track": "BOTH",
