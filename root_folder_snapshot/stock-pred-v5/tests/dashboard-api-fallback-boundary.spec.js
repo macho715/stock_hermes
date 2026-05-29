@@ -329,6 +329,105 @@ test("KRX REC API uses KRX provider defaults and requests the full universe", as
   expect(url.searchParams.get("universe")?.split(",")).toHaveLength(9);
 });
 
+test("REC provider card prefers current snapshot provider summary over stale public audit log", async ({ page }) => {
+  await page.route("**/dashboard_config.json", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        markets: {
+          US: { fallback_symbols: [{ symbol: "MSFT", name: "Microsoft" }] },
+          KRX: { fallback_symbols: [{ symbol: "005930.KS", name: "Samsung Electronics" }] },
+        },
+        api_defaults: {
+          symbol_period: "6mo",
+          symbol_data_provider: { US: "yfinance", KRX: "pykrx" },
+          model_scores: { period: "3y", model_kind: "auto", data_provider: "yfinance" },
+          model_scores_krx: { period: "5y", model_kind: "auto", data_provider: "pykrx" },
+          recommend: {
+            track: "BOTH",
+            period: "3y",
+            top: "5",
+            synthetic: "0",
+            data_provider: "yfinance",
+            model_kind: "auto",
+          },
+          recommend_krx: {
+            period: "3y",
+            top: "9",
+            data_provider: "pykrx",
+          },
+        },
+      }),
+    });
+  });
+
+  await page.route("**/api/universe?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        market: "KRX",
+        source: "backend_config",
+        symbols: [{ symbol: "005930.KS", name: "Samsung Electronics" }],
+      }),
+    });
+  });
+
+  await page.route("**/api/symbol?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ source: "PYKRX", data: ohlcvRows }),
+    });
+  });
+
+  await page.route("**/api/model-scores?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ ...modelEvidence("005930.KS"), provider: "pykrx" }),
+    });
+  });
+
+  await page.route("**/api/recommend?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...snapshotPayload(),
+        provider_summary: {
+          status: "PASS",
+          providers_used: ["pykrx"],
+          event_count: 9,
+          row_count_min: 730,
+          last_date_max: "2026-05-29",
+        },
+        config: {
+          ...snapshotPayload().config,
+          universe: ["005930.KS"],
+          data_provider: "pykrx",
+          model_kind: "auto",
+        },
+      }),
+    });
+  });
+
+  await page.route("**/audit_log.jsonl", async (route) => {
+    await route.fulfill({
+      contentType: "text/plain",
+      body: JSON.stringify({
+        event_type: "provider_attempt",
+        provider_used: "synthetic",
+        ticker: "OLD.KS",
+        status: "SUCCESS",
+      }),
+    });
+  });
+
+  await page.goto("http://127.0.0.1:5173/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "KRX" }).click();
+  await page.getByRole("button", { name: "REC" }).click();
+
+  await expect(page.getByText("pykrx · 9 events · rows≥730 · 2026-05-29 · auto")).toBeVisible();
+  await expect(page.getByText("synthetic · OLD.KS")).toHaveCount(0);
+});
+
 test("initial selected ticker waits for backend universe before requesting symbol data", async ({ page }) => {
   const requestedSymbols = [];
 

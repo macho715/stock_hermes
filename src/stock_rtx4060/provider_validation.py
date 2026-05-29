@@ -101,6 +101,14 @@ def validate_provider_frame(
 
 
 def _date_index(frame: pd.DataFrame) -> pd.DatetimeIndex | None:
+    for column in frame.columns:
+        if str(column).lower() in {"date", "datetime", "timestamp"}:
+            values = pd.to_datetime(frame[column], errors="coerce")
+            values = values[~values.isna()]
+            if len(values):
+                return pd.DatetimeIndex(values).tz_localize(None).normalize()
+    if isinstance(frame.index, pd.RangeIndex):
+        return None
     try:
         index = pd.to_datetime(frame.index, errors="coerce")
     except Exception:

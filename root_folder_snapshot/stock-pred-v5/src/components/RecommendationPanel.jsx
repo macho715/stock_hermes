@@ -216,15 +216,19 @@ export default function RecommendationPanel({ jsonPath, apiUrl, currency = "$", 
       }
     : { GREEN: 0, AMBER: 0, RED: 0 };
 
+  const snapshotProviderSummary = snapshot?.provider_summary && typeof snapshot.provider_summary === "object"
+    ? snapshot.provider_summary
+    : null;
   const providerSummary = snapshot
     ? {
-        provider: auditSummary?.latestProvider && auditSummary.latestProvider !== "—"
-          ? auditSummary.latestProvider
+        provider: Array.isArray(snapshotProviderSummary?.providers_used)
+          ? snapshotProviderSummary.providers_used.join("+")
           : (snapshot.config?.data_provider || snapshot.source || "—"),
-        status: auditSummary?.latestStatus || (snapshot.result_count > 0 ? "SNAPSHOT_READY" : "NO_RESULTS"),
-        ticker: auditSummary?.latestTicker || snapshot.config?.universe?.[0] || "—",
+        status: snapshotProviderSummary?.status || (snapshot.result_count > 0 ? "SNAPSHOT_READY" : "NO_RESULTS"),
+        eventCount: snapshotProviderSummary?.event_count ?? auditSummary?.providerEvents ?? "—",
+        rowCountMin: snapshotProviderSummary?.row_count_min ?? "—",
+        lastDate: snapshotProviderSummary?.last_date_max || "—",
         model: snapshot.config?.model_kind || "—",
-        device: snapshot.config?.xgb_device || "—",
       }
     : null;
 
@@ -364,7 +368,7 @@ export default function RecommendationPanel({ jsonPath, apiUrl, currency = "$", 
             {
               title: "PROVIDER",
               status: providerSummary?.status || "—",
-              detail: `${providerSummary?.provider || "—"} · ${providerSummary?.ticker || "—"} · ${providerSummary?.model || "—"} · ${providerSummary?.device || "—"}`,
+              detail: `${providerSummary?.provider || "—"} · ${providerSummary?.eventCount || "—"} events · rows≥${providerSummary?.rowCountMin || "—"} · ${providerSummary?.lastDate || "—"} · ${providerSummary?.model || "—"}`,
               color: providerSummary?.status === "SUCCESS" || providerSummary?.status === "SNAPSHOT_READY" ? C.green : C.amber,
             },
           ].map((item) => (

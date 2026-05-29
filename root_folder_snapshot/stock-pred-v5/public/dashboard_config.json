@@ -116,7 +116,7 @@
     },
     "recommend_krx": {
       "period": "3y",
-      "top": "5"
+      "top": "9"
     }
   },
   "signal_thresholds": {

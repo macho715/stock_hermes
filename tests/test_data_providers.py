@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
+import stock_rtx4060.data_providers as data_providers
 from stock_rtx4060.audit_log import AuditLogger
 from stock_rtx4060.data_providers import load_ohlcv_with_provider, resolve_provider
 
@@ -29,6 +30,42 @@ def test_synthetic_provider_writes_audit_event(tmp_path, monkeypatch):
     assert rows[0]["metadata"]["provider_validation_status"] == "PASS"
     assert rows[0]["metadata"]["row_count"] == len(result.frame)
     assert result.metadata["provider_validation"]["status"] == "PASS"
+
+
+def test_cached_provider_result_keeps_validation_metadata_and_audit(tmp_path, monkeypatch):
+    frame = pd.DataFrame(
+        {
+            "Date": ["2026-05-27", "2026-05-28", "2026-05-29"],
+            "Open": [10.0, 11.0, 12.0],
+            "High": [11.0, 12.0, 13.0],
+            "Low": [9.0, 10.0, 11.0],
+            "Close": [10.5, 11.5, 12.5],
+            "Volume": [1_000_000.0, 1_100_000.0, 1_200_000.0],
+        }
+    )
+
+    class FakeCache:
+        def get(self, ticker, period, provider):
+            assert (ticker, period, provider) == ("005930.KS", "3y", "pykrx")
+            return frame
+
+        def set(self, *args, **kwargs):
+            raise AssertionError("cache hit should not write through")
+
+    monkeypatch.setattr(data_providers, "_cache", FakeCache())
+    logger = AuditLogger(tmp_path / "audit_log.jsonl")
+
+    result = load_ohlcv_with_provider("005930.KS", "3y", data_provider="pykrx", audit_logger=logger)
+
+    assert result.source == "pykrx:cache"
+    assert result.metadata["row_count"] == 3
+    assert result.metadata["last_date"] == "2026-05-29"
+    assert result.metadata["cache_hit"] is True
+    rows = [json.loads(line) for line in (tmp_path / "audit_log.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert rows[0]["event_type"] == "provider_attempt"
+    assert rows[0]["source"] == "pykrx:cache"
+    assert rows[0]["metadata"]["row_count"] == 3
+    assert rows[0]["metadata"]["last_date"] == "2026-05-29"
 
 
 def test_openbb_provider_normalizes_mocked_historical_response(tmp_path, monkeypatch):

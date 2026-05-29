@@ -94,9 +94,32 @@ def load_ohlcv_with_provider(
                 "Ingest historical data before issuing point-in-time queries."
             )
 
+    cache_started = time.perf_counter()
     cached = _cache.get(ticker, period, selected)
     if cached is not None:
-        return ProviderResult(frame=cached, provider_requested=requested, provider_used=selected, source=f"{selected}:cache")
+        validation = validate_provider_frame(cached, provider_used=selected, ticker=ticker, period=period)
+        metadata = {
+            "provider_validation": validation.metadata,
+            **validation.metadata,
+            "cache_hit": True,
+            "source_timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
+        }
+        _write_audit(
+            audit_logger,
+            AuditEvent(
+                event_type="provider_attempt",
+                status="SUCCESS",
+                command=command,
+                ticker=ticker,
+                period=period,
+                provider_requested=requested,
+                provider_used=selected,
+                source=f"{selected}:cache",
+                metadata=metadata,
+                duration_ms=_elapsed_ms(cache_started),
+            ),
+        )
+        return ProviderResult(frame=cached, provider_requested=requested, provider_used=selected, source=f"{selected}:cache", metadata=metadata)
 
     if selected == "pykrx":
         result = _load_pykrx(ticker, period, requested, audit_logger, command)

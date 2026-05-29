@@ -27,8 +27,8 @@ All notable changes for `stock_1901` are documented here.
   - `evaluate_backtest_honesty(cpcv_result=_cpcv_result)` 전달
 - **`backtest_honesty.py`** — `evaluate_backtest_honesty()` 반환값에 `pbo`/`pbo_status` 추가
   - E2 패치 누락: `result["pbo"]`, `result["pbo_status"]` additive 추가
-- **`dashboard_config.json`** — KRX REC 기본값 `period=5y` → `3y`, `top=9` → `5`
-  - Vite 프록시 타임아웃 방지
+- **`dashboard_config.json`** — KRX REC 기본값 `period=5y` → `3y`, `top=9` 유지
+  - Vite 프록시 타임아웃을 줄이면서 KRX 전체 9개 universe 표시를 보존
 
 ### Infrastructure Fix
 - 이중 서버 프로세스(PID 28416, Python 3.12 구버전 서버)가 포트 5151을 점거해
