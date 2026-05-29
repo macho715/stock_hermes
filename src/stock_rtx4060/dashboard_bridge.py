@@ -58,7 +58,11 @@ def build_dashboard_snapshot(payload: dict[str, Any], *, source_json_path: str |
     if not isinstance(source_config, dict):
         source_config = {}
 
-    snapshot_results = [_normalize_result(item, rank=index + 1) for index, item in enumerate(results)]
+    provider_summary = payload.get("provider_summary")
+    snapshot_results = [
+        _normalize_result(item, rank=index + 1, provider_summary=provider_summary)
+        for index, item in enumerate(results)
+    ]
 
     # Phase-5: optional `meta` block with risk attribution.  Absent unless the
     # caller supplied a `meta` field on the payload.  The schema stays
@@ -82,7 +86,7 @@ def build_dashboard_snapshot(payload: dict[str, Any], *, source_json_path: str |
         ),
         "audit_log_path": payload.get("audit_log_path"),
         "algorithm_patch": payload.get("algorithm_patch"),
-        "provider_summary": payload.get("provider_summary"),
+        "provider_summary": provider_summary,
         "backtest_honesty_summary": payload.get("backtest_honesty_summary"),
         "config": {
             "universe": source_config.get("universe"),
@@ -206,7 +210,165 @@ def _truncate_advisor_rationale(value: Any) -> str | None:
     return text[:237] + "..."
 
 
-def _normalize_result(result: Any, *, rank: int) -> dict[str, Any]:
+READINESS_SCORE_CAP = 44.0
+READINESS_WARNING_MESSAGE = (
+    "AMBER WATCHLIST\n"
+    "Model failed one or more readiness gates.\n"
+    "New capital is not allowed.\n"
+    "Paper trading and monitoring only."
+)
+
+
+def _to_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _to_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _first_number(result: dict[str, Any], *keys: str) -> float | None:
+    for key in keys:
+        value = _to_float(result.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _first_int(result: dict[str, Any], *keys: str) -> int | None:
+    for key in keys:
+        value = _to_int(result.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _has_failed_validation(result: dict[str, Any], names: set[str]) -> bool:
+    validations = result.get("validations")
+    if not isinstance(validations, list):
+        return False
+    for item in validations:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name", "")).upper()
+        status = str(item.get("status", "")).upper()
+        if status == "FAIL" and any(token in name for token in names):
+            return True
+    return False
+
+
+def _evaluate_investment_readiness(result: dict[str, Any], *, provider_summary: Any) -> dict[str, Any]:
+    """Return dashboard-only readiness metadata without changing raw rank score."""
+    score = _first_number(result, "investment_readiness_score", "recommendation_rank_score") or 0.0
+    accuracy = _first_number(result, "model_accuracy", "accuracy")
+    auc = _first_number(result, "model_auc", "auc")
+    alpha = _first_number(result, "alpha_pct", "backtest_alpha_pct", "benchmark_alpha_pct", "alpha")
+    completed_trades = _first_int(result, "completed_trades", "completedTrades", "n_trades", "trade_count")
+    backtest_honesty = result.get("backtest_honesty")
+
+    hard_reasons: list[str] = []
+    if result.get("screening_output_only") is not True:
+        hard_reasons.append("screening_output_only missing")
+    if result.get("broker_order_execution") is True or result.get("broker_execution_enabled") is True:
+        hard_reasons.append("broker order execution possible")
+    if provider_summary is None:
+        hard_reasons.append("provider audit missing")
+    if isinstance(provider_summary, dict) and str(provider_summary.get("status", "")).upper() == "FAIL":
+        hard_reasons.append("provider audit failed")
+    backtest_honesty_status = ""
+    if not isinstance(backtest_honesty, dict):
+        hard_reasons.append("backtest honesty missing")
+    else:
+        backtest_honesty_status = str(backtest_honesty.get("status", "")).upper()
+        if backtest_honesty_status == "FAIL":
+            hard_reasons.append("backtest honesty failed")
+    if result.get("point_in_time_clear") is False or result.get("pit_status") == "FAIL":
+        hard_reasons.append("point-in-time unclear")
+    if result.get("data_leakage_suspected") is True or _has_failed_validation(result, {"LEAK", "LOOKAHEAD"}):
+        hard_reasons.append("data leakage suspected")
+    text_blob = " ".join(str(result.get(key, "")) for key in ("candidate_label", "reasons", "warning", "disclaimer")).lower()
+    if any(token in text_blob for token in ("guaranteed return", "수익 보장", "자동매매")):
+        hard_reasons.append("prohibited performance or automation wording")
+
+    readiness_reasons: list[str] = []
+    if backtest_honesty_status and backtest_honesty_status != "PASS":
+        readiness_reasons.append(f"Backtest honesty {backtest_honesty_status} != PASS")
+    if accuracy is None:
+        readiness_reasons.append("Accuracy missing")
+    elif accuracy < 0.50:
+        readiness_reasons.append(f"Accuracy {accuracy:.2%} < 50.00%")
+    if auc is None:
+        readiness_reasons.append("AUC missing")
+    elif auc < 0.50:
+        readiness_reasons.append(f"AUC {auc:.4f} < 0.50")
+    if alpha is None:
+        readiness_reasons.append("Alpha missing")
+    elif alpha < 0:
+        readiness_reasons.append(f"Alpha {alpha:.2f}% < 0.00%")
+    if completed_trades is None:
+        readiness_reasons.append("Completed trades missing")
+    elif completed_trades < 50:
+        readiness_reasons.append(f"Completed trades {completed_trades} < 50")
+
+    if hard_reasons:
+        return {
+            "investment_readiness_status": "HARD_FAIL",
+            "investment_readiness_score": 0.0,
+            "live_queue_action": "HARD_BLOCK",
+            "research_queue_action": "EXCLUDE_UNTIL_FIXED",
+            "live_investable": False,
+            "new_capital_allowed": False,
+            "paper_trading_only": True,
+            "ready_for_manual_review": False,
+            "dashboard_warning": True,
+            "dashboard_warning_message": "HARD FAIL\n" + "\n".join(hard_reasons),
+            "blocking_reasons": hard_reasons,
+            "readiness_gate_failures": readiness_reasons,
+        }
+
+    if readiness_reasons:
+        return {
+            "investment_readiness_status": "AMBER_WATCHLIST",
+            "investment_readiness_score": round(min(score, READINESS_SCORE_CAP), 2),
+            "live_queue_action": "HARD_BLOCK",
+            "research_queue_action": "AMBER_WATCHLIST",
+            "live_investable": False,
+            "new_capital_allowed": False,
+            "paper_trading_only": True,
+            "ready_for_manual_review": False,
+            "dashboard_warning": True,
+            "dashboard_warning_message": READINESS_WARNING_MESSAGE,
+            "blocking_reasons": readiness_reasons,
+            "readiness_gate_failures": readiness_reasons,
+        }
+
+    return {
+        "investment_readiness_status": "READY_FOR_MANUAL_REVIEW",
+        "investment_readiness_score": round(score, 2),
+        "live_queue_action": "MANUAL_REVIEW_REQUIRED",
+        "research_queue_action": "MONITOR",
+        "live_investable": True,
+        "new_capital_allowed": True,
+        "paper_trading_only": False,
+        "ready_for_manual_review": True,
+        "dashboard_warning": False,
+        "dashboard_warning_message": None,
+        "blocking_reasons": [],
+        "readiness_gate_failures": [],
+    }
+
+
+def _normalize_result(result: Any, *, rank: int, provider_summary: Any = None) -> dict[str, Any]:
     if not isinstance(result, dict):
         raise DashboardBridgeError(f"result #{rank} must be an object")
     missing = sorted(field for field in RESULT_REQUIRED_FIELDS if field not in result)
@@ -215,13 +377,18 @@ def _normalize_result(result: Any, *, rank: int) -> dict[str, Any]:
     if result.get("screening_output_only") is not True:
         raise DashboardBridgeError(f"result #{rank} must preserve screening_output_only=true")
 
+    readiness = _evaluate_investment_readiness(result, provider_summary=provider_summary)
+
     return {
         "rank": rank,
         "ticker": result["ticker"],
         "track": result["track"],
         "verdict": result["verdict"],
+        "dashboard_status": readiness["investment_readiness_status"],
         "candidate_label": result.get("candidate_label"),
         "score": result["recommendation_rank_score"],
+        "raw_score": result["recommendation_rank_score"],
+        **readiness,
         "probability": result["direction_prob"],
         "expected_value_pct": result["expected_value_pct"],
         "entry": result["entry"],
@@ -240,6 +407,8 @@ def _normalize_result(result: Any, *, rank: int) -> dict[str, Any]:
         "model_auc": result.get("model_auc"),
         "oof_coverage": result.get("oof_coverage"),
         "backtest_return_pct": result.get("backtest_return_pct"),
+        "alpha_pct": _first_number(result, "alpha_pct", "backtest_alpha_pct", "benchmark_alpha_pct", "alpha"),
+        "completed_trades": _first_int(result, "completed_trades", "completedTrades", "n_trades", "trade_count"),
         "backtest_sharpe": result.get("backtest_sharpe"),
         "backtest_sortino": result.get("backtest_sortino"),
         "backtest_mdd_pct": result.get("backtest_mdd_pct"),
