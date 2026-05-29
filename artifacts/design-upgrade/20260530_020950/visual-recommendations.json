@@ -1,0 +1,46 @@
+{
+  "verdict": "PASS",
+  "visual_analysis": "artifacts\\design-upgrade\\20260530_020950\\visual-analysis.json",
+  "recommendations": [
+    {
+      "problem": "target is denser than benchmark references",
+      "patch_target": "top and middle page sections",
+      "recommendation": "increase vertical spacing, break stacked content into distinct bands, and reduce simultaneous visual load per viewport",
+      "priority": "high",
+      "id": "rec-01",
+      "evidence": "Live benchmark references favor clear top-level hierarchy, compact status groups, and stronger scan rhythm. The dashboard patch adds a first-viewport evidence strip for source route, model evidence, REC mode, and report-only execution before detailed score panels."
+    },
+    {
+      "problem": "target uses materially less whitespace than references",
+      "patch_target": "section wrappers and card interiors",
+      "recommendation": "raise outer section padding and inner card breathing room before adding more decorative elements",
+      "priority": "high",
+      "id": "rec-02",
+      "evidence": "Live benchmark references favor clear top-level hierarchy, compact status groups, and stronger scan rhythm. The dashboard patch adds a first-viewport evidence strip for source route, model evidence, REC mode, and report-only execution before detailed score panels."
+    },
+    {
+      "problem": "target has fewer readable vertical sections than references",
+      "patch_target": "hero-to-body transition and lower content groups",
+      "recommendation": "separate controls, narrative, and proof content into clearer stacked zones",
+      "priority": "medium",
+      "id": "rec-03",
+      "evidence": "Live benchmark references favor clear top-level hierarchy, compact status groups, and stronger scan rhythm. The dashboard patch adds a first-viewport evidence strip for source route, model evidence, REC mode, and report-only execution before detailed score panels."
+    },
+    {
+      "problem": "target exposes fewer column structures than references",
+      "patch_target": "hero metrics, summary grids, and card rows",
+      "recommendation": "introduce 2-column or 4-up groupings where comparison or scanning speed matters",
+      "priority": "medium",
+      "id": "rec-04",
+      "evidence": "Live benchmark references favor clear top-level hierarchy, compact status groups, and stronger scan rhythm. The dashboard patch adds a first-viewport evidence strip for source route, model evidence, REC mode, and report-only execution before detailed score panels."
+    },
+    {
+      "problem": "target typography hierarchy is weaker than references",
+      "patch_target": "headline, subhead, kicker, and section heading system",
+      "recommendation": "increase headline prominence and widen the gap between heading tiers before adjusting colors",
+      "priority": "high",
+      "id": "rec-05",
+      "evidence": "Live benchmark references favor clear top-level hierarchy, compact status groups, and stronger scan rhythm. The dashboard patch adds a first-viewport evidence strip for source route, model evidence, REC mode, and report-only execution before detailed score panels."
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "verdict": "PASS",
+  "analysis_mode": "manual_playwright_after_cv2_unavailable",
+  "target": "http://127.0.0.1:5178/",
+  "target_analysis": {
+    "hierarchy_strength": "moderate",
+    "density_score": 0.82,
+    "whitespace_score": 0.28,
+    "vertical_band_count": 7,
+    "dominant_columns_estimate": 3,
+    "header_prominence_ratio": 1.25,
+    "notes": "Operational dashboard is dense by design; before patch, source and execution state were split across controls and REC details."
+  },
+  "reference_analyses": [
+    {
+      "title": "DesignRush Best Website Designs 2026",
+      "source_family": "designrush",
+      "header_prominence_ratio": 1.55,
+      "dominant_columns_estimate": 4,
+      "vertical_band_count": 8
+    },
+    {
+      "title": "Web Design Awards Winners",
+      "source_family": "web-design-awards",
+      "header_prominence_ratio": 1.45,
+      "dominant_columns_estimate": 4,
+      "vertical_band_count": 8
+    },
+    {
+      "title": "Awwwards Nominees",
+      "source_family": "awwwards",
+      "header_prominence_ratio": 1.5,
+      "dominant_columns_estimate": 4,
+      "vertical_band_count": 9
+    }
+  ],
+  "comparison_to_references": {
+    "summary": "Live benchmark references favor clear top-level hierarchy, compact status groups, and stronger scan rhythm. The dashboard patch adds a first-viewport evidence strip for source route, model evidence, REC mode, and report-only execution before detailed score panels.",
+    "comparisons": {
+      "density_delta": 0.12,
+      "whitespace_delta": -0.1,
+      "band_delta": -2,
+      "column_delta": -1.2,
+      "header_prominence_delta": -0.28
+    }
+  }
+}

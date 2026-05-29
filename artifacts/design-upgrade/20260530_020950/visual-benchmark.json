@@ -1,0 +1,49 @@
+{
+  "verdict": "PASS",
+  "target": "http://127.0.0.1:5178/",
+  "benchmark_json": "artifacts\\design-upgrade\\20260530_020950\\design-benchmark.json",
+  "screenshots": [
+    {
+      "kind": "target",
+      "url": "http://127.0.0.1:5178/",
+      "path": "artifacts\\design-upgrade\\20260530_020950\\reference-shots\\target.png",
+      "ok": true,
+      "stdout": "Navigating to http://127.0.0.1:5178/\nCapturing screenshot into artifacts\\design-upgrade\\20260530_020950\\reference-shots\\target.png",
+      "stderr": ""
+    },
+    {
+      "url": "https://www.designrush.com/best-designs/websites",
+      "path": "artifacts\\design-upgrade\\20260530_020950\\reference-shots\\01-www-designrush-com-best-designs-websites.png",
+      "ok": true,
+      "stdout": "Navigating to https://www.designrush.com/best-designs/websites\nCapturing screenshot into artifacts\\design-upgrade\\20260530_020950\\reference-shots\\01-www-designrush-com-best-designs-websites.png",
+      "stderr": "",
+      "kind": "reference",
+      "source_family": "designrush",
+      "provenance": "archive_crawl",
+      "title": "DesignRush Best Website Designs 2026"
+    },
+    {
+      "url": "https://www.webdesignawards.io/winners",
+      "path": "artifacts\\design-upgrade\\20260530_020950\\reference-shots\\02-www-webdesignawards-io-winners.png",
+      "ok": true,
+      "stdout": "Navigating to https://www.webdesignawards.io/winners\nCapturing screenshot into artifacts\\design-upgrade\\20260530_020950\\reference-shots\\02-www-webdesignawards-io-winners.png",
+      "stderr": "",
+      "kind": "reference",
+      "source_family": "web-design-awards",
+      "provenance": "sitemap_crawl",
+      "title": "Web Design Awards Winners"
+    },
+    {
+      "url": "https://www.awwwards.com/websites/nominees",
+      "path": "artifacts\\design-upgrade\\20260530_020950\\reference-shots\\03-www-awwwards-com-websites-nominees.png",
+      "ok": true,
+      "stdout": "Navigating to https://www.awwwards.com/websites/nominees\nCapturing screenshot into artifacts\\design-upgrade\\20260530_020950\\reference-shots\\03-www-awwwards-com-websites-nominees.png",
+      "stderr": "",
+      "kind": "reference",
+      "source_family": "awwwards",
+      "provenance": "archive_crawl",
+      "title": "Awwwards Nominees"
+    }
+  ],
+  "successful_reference_screenshots": 3
+}

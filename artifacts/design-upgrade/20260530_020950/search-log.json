@@ -1,0 +1,840 @@
+{
+  "skill": "design-upgrade-loop",
+  "profile": "dashboard",
+  "target": "root_folder_snapshot\\stock-pred-v5\\src\\StockPredV5.jsx",
+  "collected_at": "2026-05-29T22:12:15Z",
+  "provider": "non-api-hybrid-crawl",
+  "queries": [
+    {
+      "query": "current enterprise dashboard design examples",
+      "expected_source_family": "designrush",
+      "provider": "non-api-hybrid-crawl",
+      "search_engine": "archive-crawl",
+      "search_url": "",
+      "searched_at": "2026-05-29T22:11:41Z",
+      "raw_result_count": 1,
+      "family_result_count": 6,
+      "results": [
+        {
+          "title": "Website Design",
+          "url": "https://www.designrush.com/best-designs/websites",
+          "description": "",
+          "pub_date": "",
+          "source_family": "designrush",
+          "provenance": "archive_crawl",
+          "backing_query": "current enterprise dashboard design examples"
+        },
+        {
+          "title": "Logo Design",
+          "url": "https://www.designrush.com/best-designs/logo",
+          "description": "",
+          "pub_date": "",
+          "source_family": "designrush",
+          "provenance": "archive_crawl",
+          "backing_query": "current enterprise dashboard design examples"
+        },
+        {
+          "title": "Print Design",
+          "url": "https://www.designrush.com/best-designs/print",
+          "description": "",
+          "pub_date": "",
+          "source_family": "designrush",
+          "provenance": "archive_crawl",
+          "backing_query": "current enterprise dashboard design examples"
+        },
+        {
+          "title": "App Design",
+          "url": "https://www.designrush.com/best-designs/apps",
+          "description": "",
+          "pub_date": "",
+          "source_family": "designrush",
+          "provenance": "archive_crawl",
+          "backing_query": "current enterprise dashboard design examples"
+        },
+        {
+          "title": "Packaging Design",
+          "url": "https://www.designrush.com/best-designs/packaging",
+          "description": "",
+          "pub_date": "",
+          "source_family": "designrush",
+          "provenance": "archive_crawl",
+          "backing_query": "current enterprise dashboard design examples"
+        },
+        {
+          "title": "Video Design",
+          "url": "https://www.designrush.com/best-designs/video",
+          "description": "",
+          "pub_date": "",
+          "source_family": "designrush",
+          "provenance": "archive_crawl",
+          "backing_query": "current enterprise dashboard design examples"
+        }
+      ],
+      "attempt_history": [
+        {
+          "attempt": "canonical_fetch",
+          "provider": "non-api-hybrid-crawl",
+          "query": "current enterprise dashboard design examples",
+          "search_engine": "canonical-fetch",
+          "search_url": "",
+          "searched_at": "2026-05-29T22:11:39Z",
+          "raw_result_count": 2,
+          "family_result_count": 2,
+          "sample_raw_titles": [
+            "Best Website Designs of 2026 | DesignRush",
+            "Best Designs | Award-Winning Designs [Trusted by Top Brands]"
+          ],
+          "sample_raw_links": [
+            "https://www.designrush.com/best-designs/websites",
+            "https://www.designrush.com/best-designs"
+          ],
+          "sample_raw_descriptions": [],
+          "results": [
+            {
+              "title": "Best Website Designs of 2026 | DesignRush",
+              "url": "https://www.designrush.com/best-designs/websites",
+              "description": "",
+              "pub_date": "",
+              "source_family": "designrush",
+              "provenance": "canonical_fetch",
+              "backing_query": "current enterprise dashboard design examples"
+            },
+            {
+              "title": "Best Designs | Award-Winning Designs [Trusted by Top Brands]",
+              "url": "https://www.designrush.com/best-designs",
+              "description": "",
+              "pub_date": "",
+              "source_family": "designrush",
+              "provenance": "canonical_fetch",
+              "backing_query": "current enterprise dashboard design examples"
+            }
+          ],
+          "canonical_urls": [
+            {
+              "url": "https://www.designrush.com/best-designs/websites",
+              "ok": true
+            },
+            {
+              "url": "https://www.designrush.com/best-designs",
+              "ok": true
+            }
+          ]
+        },
+        {
+          "attempt": "sitemap_crawl",
+          "provider": "non-api-hybrid-crawl",
+          "query": "current enterprise dashboard design examples",
+          "search_engine": "sitemap-crawl",
+          "search_url": "",
+          "searched_at": "2026-05-29T22:11:40Z",
+          "raw_result_count": 1,
+          "family_result_count": 0,
+          "sample_raw_titles": [],
+          "sample_raw_links": [],
+          "sample_raw_descriptions": [],
+          "results": [],
+          "sitemaps": [
+            {
+              "url": "https://www.designrush.com/sitemap.xml",
+              "ok": true,
+              "raw_url_count": 0,
+              "nested_sitemap_count": 17
+            }
+          ]
+        },
+        {
+          "attempt": "archive_crawl",
+          "provider": "non-api-hybrid-crawl",
+          "query": "current enterprise dashboard design examples",
+          "search_engine": "archive-crawl",
+          "search_url": "",
+          "searched_at": "2026-05-29T22:11:41Z",
+          "raw_result_count": 1,
+          "family_result_count": 6,
+          "sample_raw_titles": [
+            "Website Design",
+            "Logo Design",
+            "Print Design"
+          ],
+          "sample_raw_links": [
+            "https://www.designrush.com/best-designs/websites",
+            "https://www.designrush.com/best-designs/logo",
+            "https://www.designrush.com/best-designs/print"
+          ],
+          "sample_raw_descriptions": [],
+          "results": [
+            {
+              "title": "Website Design",
+              "url": "https://www.designrush.com/best-designs/websites",
+              "description": "",
+              "pub_date": "",
+              "source_family": "designrush",
+              "provenance": "archive_crawl",
+              "backing_query": "current enterprise dashboard design examples"
+            },
+            {
+              "title": "Logo Design",
+              "url": "https://www.designrush.com/best-designs/logo",
+              "description": "",
+              "pub_date": "",
+              "source_family": "designrush",
+              "provenance": "archive_crawl",
+              "backing_query": "current enterprise dashboard design examples"
+            },
+            {
+              "title": "Print Design",
+              "url": "https://www.designrush.com/best-designs/print",
+              "description": "",
+              "pub_date": "",
+              "source_family": "designrush",
+              "provenance": "archive_crawl",
+              "backing_query": "current enterprise dashboard design examples"
+            },
+            {
+              "title": "App Design",
+              "url": "https://www.designrush.com/best-designs/apps",
+              "description": "",
+              "pub_date": "",
+              "source_family": "designrush",
+              "provenance": "archive_crawl",
+              "backing_query": "current enterprise dashboard design examples"
+            },
+            {
+              "title": "Packaging Design",
+              "url": "https://www.designrush.com/best-designs/packaging",
+              "description": "",
+              "pub_date": "",
+              "source_family": "designrush",
+              "provenance": "archive_crawl",
+              "backing_query": "current enterprise dashboard design examples"
+            },
+            {
+              "title": "Video Design",
+              "url": "https://www.designrush.com/best-designs/video",
+              "description": "",
+              "pub_date": "",
+              "source_family": "designrush",
+              "provenance": "archive_crawl",
+              "backing_query": "current enterprise dashboard design examples"
+            }
+          ],
+          "archive_urls": [
+            {
+              "url": "https://www.designrush.com/best-designs/websites",
+              "ok": true,
+              "family_result_count": 6
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "query": "current dashboard awards SaaS examples",
+      "expected_source_family": "web-design-awards",
+      "provider": "non-api-hybrid-crawl",
+      "search_engine": "sitemap-crawl",
+      "search_url": "",
+      "searched_at": "2026-05-29T22:11:50Z",
+      "raw_result_count": 1,
+      "family_result_count": 6,
+      "results": [
+        {
+          "title": "https://www.webdesignawards.io/winners",
+          "url": "https://www.webdesignawards.io/winners",
+          "description": "",
+          "pub_date": "",
+          "source_family": "web-design-awards",
+          "provenance": "sitemap_crawl",
+          "backing_query": "current dashboard awards SaaS examples"
+        },
+        {
+          "title": "https://www.webdesignawards.io/nominees",
+          "url": "https://www.webdesignawards.io/nominees",
+          "description": "",
+          "pub_date": "",
+          "source_family": "web-design-awards",
+          "provenance": "sitemap_crawl",
+          "backing_query": "current dashboard awards SaaS examples"
+        },
+        {
+          "title": "https://www.webdesignawards.io/pricing",
+          "url": "https://www.webdesignawards.io/pricing",
+          "description": "",
+          "pub_date": "",
+          "source_family": "web-design-awards",
+          "provenance": "sitemap_crawl",
+          "backing_query": "current dashboard awards SaaS examples"
+        },
+        {
+          "title": "https://www.webdesignawards.io/pricing/agency",
+          "url": "https://www.webdesignawards.io/pricing/agency",
+          "description": "",
+          "pub_date": "",
+          "source_family": "web-design-awards",
+          "provenance": "sitemap_crawl",
+          "backing_query": "current dashboard awards SaaS examples"
+        },
+        {
+          "title": "https://www.webdesignawards.io/pricing/judge",
+          "url": "https://www.webdesignawards.io/pricing/judge",
+          "description": "",
+          "pub_date": "",
+          "source_family": "web-design-awards",
+          "provenance": "sitemap_crawl",
+          "backing_query": "current dashboard awards SaaS examples"
+        },
+        {
+          "title": "https://www.webdesignawards.io/pricing/nomination",
+          "url": "https://www.webdesignawards.io/pricing/nomination",
+          "description": "",
+          "pub_date": "",
+          "source_family": "web-design-awards",
+          "provenance": "sitemap_crawl",
+          "backing_query": "current dashboard awards SaaS examples"
+        }
+      ],
+      "attempt_history": [
+        {
+          "attempt": "canonical_fetch",
+          "provider": "non-api-hybrid-crawl",
+          "query": "current dashboard awards SaaS examples",
+          "search_engine": "canonical-fetch",
+          "search_url": "",
+          "searched_at": "2026-05-29T22:11:48Z",
+          "raw_result_count": 2,
+          "family_result_count": 2,
+          "sample_raw_titles": [
+            "Top 28 SAAS Websites (2026) | Web Design Awards | Web Design Awards",
+            "Web Design Awards 2026 — The Curated Index of Award-Winning Websites"
+          ],
+          "sample_raw_links": [
+            "https://www.webdesignawards.io/categories/saas",
+            "https://www.webdesignawards.io"
+          ],
+          "sample_raw_descriptions": [],
+          "results": [
+            {
+              "title": "Top 28 SAAS Websites (2026) | Web Design Awards | Web Design Awards",
+              "url": "https://www.webdesignawards.io/categories/saas",
+              "description": "",
+              "pub_date": "",
+              "source_family": "web-design-awards",
+              "provenance": "canonical_fetch",
+              "backing_query": "current dashboard awards SaaS examples"
+            },
+            {
+              "title": "Web Design Awards 2026 — The Curated Index of Award-Winning Websites",
+              "url": "https://www.webdesignawards.io",
+              "description": "",
+              "pub_date": "",
+              "source_family": "web-design-awards",
+              "provenance": "canonical_fetch",
+              "backing_query": "current dashboard awards SaaS examples"
+            }
+          ],
+          "canonical_urls": [
+            {
+              "url": "https://www.webdesignawards.io/categories/saas",
+              "ok": true
+            },
+            {
+              "url": "https://www.webdesignawards.io/",
+              "ok": true
+            }
+          ]
+        },
+        {
+          "attempt": "sitemap_crawl",
+          "provider": "non-api-hybrid-crawl",
+          "query": "current dashboard awards SaaS examples",
+          "search_engine": "sitemap-crawl",
+          "search_url": "",
+          "searched_at": "2026-05-29T22:11:50Z",
+          "raw_result_count": 1,
+          "family_result_count": 6,
+          "sample_raw_titles": [
+            "https://www.webdesignawards.io/winners",
+            "https://www.webdesignawards.io/nominees",
+            "https://www.webdesignawards.io/pricing"
+          ],
+          "sample_raw_links": [
+            "https://www.webdesignawards.io/winners",
+            "https://www.webdesignawards.io/nominees",
+            "https://www.webdesignawards.io/pricing"
+          ],
+          "sample_raw_descriptions": [],
+          "results": [
+            {
+              "title": "https://www.webdesignawards.io/winners",
+              "url": "https://www.webdesignawards.io/winners",
+              "description": "",
+              "pub_date": "",
+              "source_family": "web-design-awards",
+              "provenance": "sitemap_crawl",
+              "backing_query": "current dashboard awards SaaS examples"
+            },
+            {
+              "title": "https://www.webdesignawards.io/nominees",
+              "url": "https://www.webdesignawards.io/nominees",
+              "description": "",
+              "pub_date": "",
+              "source_family": "web-design-awards",
+              "provenance": "sitemap_crawl",
+              "backing_query": "current dashboard awards SaaS examples"
+            },
+            {
+              "title": "https://www.webdesignawards.io/pricing",
+              "url": "https://www.webdesignawards.io/pricing",
+              "description": "",
+              "pub_date": "",
+              "source_family": "web-design-awards",
+              "provenance": "sitemap_crawl",
+              "backing_query": "current dashboard awards SaaS examples"
+            },
+            {
+              "title": "https://www.webdesignawards.io/pricing/agency",
+              "url": "https://www.webdesignawards.io/pricing/agency",
+              "description": "",
+              "pub_date": "",
+              "source_family": "web-design-awards",
+              "provenance": "sitemap_crawl",
+              "backing_query": "current dashboard awards SaaS examples"
+            },
+            {
+              "title": "https://www.webdesignawards.io/pricing/judge",
+              "url": "https://www.webdesignawards.io/pricing/judge",
+              "description": "",
+              "pub_date": "",
+              "source_family": "web-design-awards",
+              "provenance": "sitemap_crawl",
+              "backing_query": "current dashboard awards SaaS examples"
+            },
+            {
+              "title": "https://www.webdesignawards.io/pricing/nomination",
+              "url": "https://www.webdesignawards.io/pricing/nomination",
+              "description": "",
+              "pub_date": "",
+              "source_family": "web-design-awards",
+              "provenance": "sitemap_crawl",
+              "backing_query": "current dashboard awards SaaS examples"
+            }
+          ],
+          "sitemaps": [
+            {
+              "url": "https://www.webdesignawards.io/sitemap.xml",
+              "ok": true,
+              "raw_url_count": 1384,
+              "nested_sitemap_count": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "query": "current admin dashboard inspiration examples",
+      "expected_source_family": "awwwards",
+      "provider": "non-api-hybrid-crawl",
+      "search_engine": "archive-crawl",
+      "search_url": "",
+      "searched_at": "2026-05-29T22:12:04Z",
+      "raw_result_count": 1,
+      "family_result_count": 6,
+      "results": [
+        {
+          "title": "Nominees",
+          "url": "https://www.awwwards.com/websites/nominees",
+          "description": "",
+          "pub_date": "",
+          "source_family": "awwwards",
+          "provenance": "archive_crawl",
+          "backing_query": "current admin dashboard inspiration examples"
+        },
+        {
+          "title": "Sites of the Day",
+          "url": "https://www.awwwards.com/websites/sites_of_the_day",
+          "description": "",
+          "pub_date": "",
+          "source_family": "awwwards",
+          "provenance": "archive_crawl",
+          "backing_query": "current admin dashboard inspiration examples"
+        },
+        {
+          "title": "Sites of the Month",
+          "url": "https://www.awwwards.com/websites/sites_of_the_month",
+          "description": "",
+          "pub_date": "",
+          "source_family": "awwwards",
+          "provenance": "archive_crawl",
+          "backing_query": "current admin dashboard inspiration examples"
+        },
+        {
+          "title": "Sites of the Year",
+          "url": "https://www.awwwards.com/websites/sites_of_the_year",
+          "description": "",
+          "pub_date": "",
+          "source_family": "awwwards",
+          "provenance": "archive_crawl",
+          "backing_query": "current admin dashboard inspiration examples"
+        },
+        {
+          "title": "Portfolio Websites",
+          "url": "https://www.awwwards.com/websites/portfolio",
+          "description": "",
+          "pub_date": "",
+          "source_family": "awwwards",
+          "provenance": "archive_crawl",
+          "backing_query": "current admin dashboard inspiration examples"
+        },
+        {
+          "title": "Free fonts",
+          "url": "https://www.awwwards.com/awwwards/collections/free-fonts",
+          "description": "",
+          "pub_date": "",
+          "source_family": "awwwards",
+          "provenance": "archive_crawl",
+          "backing_query": "current admin dashboard inspiration examples"
+        }
+      ],
+      "attempt_history": [
+        {
+          "attempt": "canonical_fetch",
+          "provider": "non-api-hybrid-crawl",
+          "query": "current admin dashboard inspiration examples",
+          "search_engine": "canonical-fetch",
+          "search_url": "",
+          "searched_at": "2026-05-29T22:11:58Z",
+          "raw_result_count": 2,
+          "family_result_count": 2,
+          "sample_raw_titles": [
+            "Winning websites. Web Design Inspiration - Awwwards",
+            "Awwwards - Website Awards - Best Web Design Trends"
+          ],
+          "sample_raw_links": [
+            "https://www.awwwards.com/websites",
+            "https://www.awwwards.com"
+          ],
+          "sample_raw_descriptions": [],
+          "results": [
+            {
+              "title": "Winning websites. Web Design Inspiration - Awwwards",
+              "url": "https://www.awwwards.com/websites",
+              "description": "",
+              "pub_date": "",
+              "source_family": "awwwards",
+              "provenance": "canonical_fetch",
+              "backing_query": "current admin dashboard inspiration examples"
+            },
+            {
+              "title": "Awwwards - Website Awards - Best Web Design Trends",
+              "url": "https://www.awwwards.com",
+              "description": "",
+              "pub_date": "",
+              "source_family": "awwwards",
+              "provenance": "canonical_fetch",
+              "backing_query": "current admin dashboard inspiration examples"
+            }
+          ],
+          "canonical_urls": [
+            {
+              "url": "https://www.awwwards.com/websites/",
+              "ok": true
+            },
+            {
+              "url": "https://www.awwwards.com/",
+              "ok": true
+            }
+          ]
+        },
+        {
+          "attempt": "sitemap_crawl",
+          "provider": "non-api-hybrid-crawl",
+          "query": "current admin dashboard inspiration examples",
+          "search_engine": "sitemap-crawl",
+          "search_url": "",
+          "searched_at": "2026-05-29T22:12:01Z",
+          "raw_result_count": 1,
+          "family_result_count": 0,
+          "sample_raw_titles": [],
+          "sample_raw_links": [],
+          "sample_raw_descriptions": [],
+          "results": [],
+          "sitemaps": [
+            {
+              "url": "https://www.awwwards.com/sitemap.xml",
+              "ok": false,
+              "raw_url_count": 0,
+              "nested_sitemap_count": 0,
+              "error": "HTTP Error 404: Not Found"
+            }
+          ]
+        },
+        {
+          "attempt": "archive_crawl",
+          "provider": "non-api-hybrid-crawl",
+          "query": "current admin dashboard inspiration examples",
+          "search_engine": "archive-crawl",
+          "search_url": "",
+          "searched_at": "2026-05-29T22:12:04Z",
+          "raw_result_count": 1,
+          "family_result_count": 6,
+          "sample_raw_titles": [
+            "Nominees",
+            "Sites of the Day",
+            "Sites of the Month"
+          ],
+          "sample_raw_links": [
+            "https://www.awwwards.com/websites/nominees",
+            "https://www.awwwards.com/websites/sites_of_the_day",
+            "https://www.awwwards.com/websites/sites_of_the_month"
+          ],
+          "sample_raw_descriptions": [],
+          "results": [
+            {
+              "title": "Nominees",
+              "url": "https://www.awwwards.com/websites/nominees",
+              "description": "",
+              "pub_date": "",
+              "source_family": "awwwards",
+              "provenance": "archive_crawl",
+              "backing_query": "current admin dashboard inspiration examples"
+            },
+            {
+              "title": "Sites of the Day",
+              "url": "https://www.awwwards.com/websites/sites_of_the_day",
+              "description": "",
+              "pub_date": "",
+              "source_family": "awwwards",
+              "provenance": "archive_crawl",
+              "backing_query": "current admin dashboard inspiration examples"
+            },
+            {
+              "title": "Sites of the Month",
+              "url": "https://www.awwwards.com/websites/sites_of_the_month",
+              "description": "",
+              "pub_date": "",
+              "source_family": "awwwards",
+              "provenance": "archive_crawl",
+              "backing_query": "current admin dashboard inspiration examples"
+            },
+            {
+              "title": "Sites of the Year",
+              "url": "https://www.awwwards.com/websites/sites_of_the_year",
+              "description": "",
+              "pub_date": "",
+              "source_family": "awwwards",
+              "provenance": "archive_crawl",
+              "backing_query": "current admin dashboard inspiration examples"
+            },
+            {
+              "title": "Portfolio Websites",
+              "url": "https://www.awwwards.com/websites/portfolio",
+              "description": "",
+              "pub_date": "",
+              "source_family": "awwwards",
+              "provenance": "archive_crawl",
+              "backing_query": "current admin dashboard inspiration examples"
+            },
+            {
+              "title": "Free fonts",
+              "url": "https://www.awwwards.com/awwwards/collections/free-fonts",
+              "description": "",
+              "pub_date": "",
+              "source_family": "awwwards",
+              "provenance": "archive_crawl",
+              "backing_query": "current admin dashboard inspiration examples"
+            }
+          ],
+          "archive_urls": [
+            {
+              "url": "https://www.awwwards.com/websites/",
+              "ok": true,
+              "family_result_count": 6
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "visited_urls": [
+    {
+      "url": "https://www.designrush.com/best-designs/websites",
+      "visited_at": "2026-05-29T22:11:42Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "designrush",
+      "title": "Website Design",
+      "provenance": "archive_crawl",
+      "backing_query": "current enterprise dashboard design examples"
+    },
+    {
+      "url": "https://www.designrush.com/best-designs/logo",
+      "visited_at": "2026-05-29T22:11:43Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "designrush",
+      "title": "Logo Design",
+      "provenance": "archive_crawl",
+      "backing_query": "current enterprise dashboard design examples"
+    },
+    {
+      "url": "https://www.designrush.com/best-designs/print",
+      "visited_at": "2026-05-29T22:11:44Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "designrush",
+      "title": "Print Design",
+      "provenance": "archive_crawl",
+      "backing_query": "current enterprise dashboard design examples"
+    },
+    {
+      "url": "https://www.designrush.com/best-designs/apps",
+      "visited_at": "2026-05-29T22:11:44Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "designrush",
+      "title": "App Design",
+      "provenance": "archive_crawl",
+      "backing_query": "current enterprise dashboard design examples"
+    },
+    {
+      "url": "https://www.designrush.com/best-designs/packaging",
+      "visited_at": "2026-05-29T22:11:45Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "designrush",
+      "title": "Packaging Design",
+      "provenance": "archive_crawl",
+      "backing_query": "current enterprise dashboard design examples"
+    },
+    {
+      "url": "https://www.designrush.com/best-designs/video",
+      "visited_at": "2026-05-29T22:11:46Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "designrush",
+      "title": "Video Design",
+      "provenance": "archive_crawl",
+      "backing_query": "current enterprise dashboard design examples"
+    },
+    {
+      "url": "https://www.webdesignawards.io/winners",
+      "visited_at": "2026-05-29T22:11:50Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "web-design-awards",
+      "title": "https://www.webdesignawards.io/winners",
+      "provenance": "sitemap_crawl",
+      "backing_query": "current dashboard awards SaaS examples"
+    },
+    {
+      "url": "https://www.webdesignawards.io/nominees",
+      "visited_at": "2026-05-29T22:11:51Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "web-design-awards",
+      "title": "https://www.webdesignawards.io/nominees",
+      "provenance": "sitemap_crawl",
+      "backing_query": "current dashboard awards SaaS examples"
+    },
+    {
+      "url": "https://www.webdesignawards.io/pricing",
+      "visited_at": "2026-05-29T22:11:52Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "web-design-awards",
+      "title": "https://www.webdesignawards.io/pricing",
+      "provenance": "sitemap_crawl",
+      "backing_query": "current dashboard awards SaaS examples"
+    },
+    {
+      "url": "https://www.webdesignawards.io/pricing/agency",
+      "visited_at": "2026-05-29T22:11:52Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "web-design-awards",
+      "title": "https://www.webdesignawards.io/pricing/agency",
+      "provenance": "sitemap_crawl",
+      "backing_query": "current dashboard awards SaaS examples"
+    },
+    {
+      "url": "https://www.webdesignawards.io/pricing/judge",
+      "visited_at": "2026-05-29T22:11:53Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "web-design-awards",
+      "title": "https://www.webdesignawards.io/pricing/judge",
+      "provenance": "sitemap_crawl",
+      "backing_query": "current dashboard awards SaaS examples"
+    },
+    {
+      "url": "https://www.webdesignawards.io/pricing/nomination",
+      "visited_at": "2026-05-29T22:11:54Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "web-design-awards",
+      "title": "https://www.webdesignawards.io/pricing/nomination",
+      "provenance": "sitemap_crawl",
+      "backing_query": "current dashboard awards SaaS examples"
+    },
+    {
+      "url": "https://www.awwwards.com/websites/nominees",
+      "visited_at": "2026-05-29T22:12:06Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "awwwards",
+      "title": "Nominees",
+      "provenance": "archive_crawl",
+      "backing_query": "current admin dashboard inspiration examples"
+    },
+    {
+      "url": "https://www.awwwards.com/websites/sites_of_the_day",
+      "visited_at": "2026-05-29T22:12:07Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "awwwards",
+      "title": "Sites of the Day",
+      "provenance": "archive_crawl",
+      "backing_query": "current admin dashboard inspiration examples"
+    },
+    {
+      "url": "https://www.awwwards.com/websites/sites_of_the_month",
+      "visited_at": "2026-05-29T22:12:09Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "awwwards",
+      "title": "Sites of the Month",
+      "provenance": "archive_crawl",
+      "backing_query": "current admin dashboard inspiration examples"
+    },
+    {
+      "url": "https://www.awwwards.com/websites/sites_of_the_year",
+      "visited_at": "2026-05-29T22:12:11Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "awwwards",
+      "title": "Sites of the Year",
+      "provenance": "archive_crawl",
+      "backing_query": "current admin dashboard inspiration examples"
+    },
+    {
+      "url": "https://www.awwwards.com/websites/portfolio",
+      "visited_at": "2026-05-29T22:12:13Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "awwwards",
+      "title": "Portfolio Websites",
+      "provenance": "archive_crawl",
+      "backing_query": "current admin dashboard inspiration examples"
+    },
+    {
+      "url": "https://www.awwwards.com/awwwards/collections/free-fonts",
+      "visited_at": "2026-05-29T22:12:15Z",
+      "http_status": 200,
+      "ok": true,
+      "source_family": "awwwards",
+      "title": "Free fonts",
+      "provenance": "archive_crawl",
+      "backing_query": "current admin dashboard inspiration examples"
+    }
+  ]
+}

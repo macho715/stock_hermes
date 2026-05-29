@@ -1,0 +1,57 @@
+{
+  "verification_mode": "applied",
+  "target": "dashboard page",
+  "page_kind": "dashboard",
+  "changed_files": [
+    "root_folder_snapshot/stock-pred-v5/src/StockPredV5.jsx"
+  ],
+  "material_change_confirmed": true,
+  "visual_delta_summary": "The first viewport now includes a compact operational evidence strip with active symbol, data route, model evidence state, REC mode, and report-only execution status before detailed panels.",
+  "benchmark_elements_applied": [
+    {
+      "element": "compact evidence/status strips above dense sections",
+      "patch_target": "top-of-page structure",
+      "evidence": "OperationalEvidenceStrip renders DATA ROUTE, MODEL EVIDENCE, REC MODE, and EXECUTION directly below the header."
+    },
+    {
+      "element": "sharper active-state contrast and understated card elevation",
+      "patch_target": "first-viewport status cards",
+      "evidence": "Each evidence card uses a colored top border, stronger value text, and subtle shadow while preserving the dark dashboard palette."
+    },
+    {
+      "element": "operational warnings prominent, secondary scores visible for audit",
+      "patch_target": "execution safety status",
+      "evidence": "REPORT ONLY and no broker order language is visible before the score panels and recommendation card details."
+    }
+  ],
+  "editable_source_available": true,
+  "benchmark_path": "design-benchmark.json",
+  "benchmark_gate_path": "benchmark-gate.json",
+  "before_artifact": "before.png",
+  "after_artifact": "after.png",
+  "image_diff": {
+    "verdict": "PASS",
+    "reason": "image dimensions differ",
+    "before_size": [
+      1440,
+      1100
+    ],
+    "after_size": [
+      1440,
+      1135
+    ],
+    "diff_ratio": 1.0,
+    "changed_pixels": 1634400,
+    "summary": "The top evidence strip adds visible first-viewport structure and increases page height by 35px."
+  },
+  "metrics": {
+    "visual_hierarchy": 4.3,
+    "readability": 4.1,
+    "spacing_alignment": 4.0,
+    "component_consistency": 4.2,
+    "information_clarity": 4.4,
+    "usability": 4.1,
+    "brand_fit": 4.2
+  },
+  "blocking_issues": []
+}

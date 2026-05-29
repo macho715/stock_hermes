@@ -1,0 +1,14 @@
+{
+  "created_at": "2026-05-29T22:12:15Z",
+  "request": "STOCK.PRED v5.0 data-heavy investment dashboard design upgrade with current benchmark references",
+  "profile": "dashboard",
+  "target": "root_folder_snapshot\\stock-pred-v5\\src\\StockPredV5.jsx",
+  "support": [
+    "root_folder_snapshot\\stock-pred-v5\\src\\components\\RecommendationCard.jsx"
+  ],
+  "screenshot": "C:\\Users\\jichu\\Downloads\\주식\\stock_1901\\artifacts\\design-upgrade\\20260530_020950\\before.png",
+  "constraints": "Operational investment dashboard; keep dense scan-first workflow; no marketing hero; preserve safety badges and report-only investment constraints; desktop first with readable compact panels.",
+  "target_root": "C:\\Users\\jichu\\Downloads\\주식\\stock_1901",
+  "artifacts_dir": "C:\\Users\\jichu\\Downloads\\주식\\stock_1901\\artifacts\\design-upgrade\\20260530_020950",
+  "loop_skill_path": "C:\\Users\\jichu\\.codex\\skills\\design-upgrade-loop\\SKILL.md"
+}

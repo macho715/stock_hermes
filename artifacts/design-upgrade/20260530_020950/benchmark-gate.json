@@ -1,0 +1,12 @@
+{
+  "verdict": "PASS",
+  "validated_at": "2026-05-29T22:19:41Z",
+  "search_log": "artifacts\\design-upgrade\\20260530_020950\\search-log.json",
+  "benchmark_json": "artifacts\\design-upgrade\\20260530_020950\\design-benchmark.json",
+  "query_count": 3,
+  "non_empty_query_count": 3,
+  "result_count": 18,
+  "visited_url_count": 18,
+  "successful_visited_url_count": 18,
+  "reference_count": 3
+}

@@ -1017,6 +1017,49 @@ ${backtest ? `## Backtest (\\$10,000 initial)
   const chartSlice = useMemo(() => enriched.slice(-90), [enriched]);
 
   const sigColor = sig === "BUY" ? C.buy : sig === "SELL" ? C.sell : C.hold;
+  const opsEvidence = useMemo(() => {
+    const providerLabel = String(symbolDataProvider || "auto").toUpperCase();
+    const evidenceLabel = modelEvidenceLoading
+      ? "LOADING"
+      : modelEvidence
+        ? "LOCKED"
+        : "WAITING";
+    const evidenceColor = modelEvidence ? C.green : modelEvidenceLoading ? C.amber : C.red;
+    return [
+      {
+        label: "DATA ROUTE",
+        value: providerLabel,
+        color: market === "KRX" ? C.krx : C.us,
+        note: universeLabel,
+      },
+      {
+        label: "MODEL EVIDENCE",
+        value: evidenceLabel,
+        color: evidenceColor,
+        note: modelEvidenceError ? "backend check required" : "primary signal source",
+      },
+      {
+        label: "REC MODE",
+        value: recSource === "api" ? "API LIVE" : "FILE STATIC",
+        color: recSource === "api" ? C.green : C.amber,
+        note: recSource === "api" ? "recommendation endpoint" : "snapshot only",
+      },
+      {
+        label: "EXECUTION",
+        value: "REPORT ONLY",
+        color: C.amber,
+        note: "no new capital or broker orders",
+      },
+    ];
+  }, [
+    market,
+    symbolDataProvider,
+    universeLabel,
+    modelEvidenceLoading,
+    modelEvidence,
+    modelEvidenceError,
+    recSource,
+  ]);
 
   /* ======================== RENDER ======================== */
   return (
@@ -1143,6 +1186,8 @@ ${backtest ? `## Backtest (\\$10,000 initial)
           </div>
         </div>
       </header>
+
+      <OperationalEvidenceStrip items={opsEvidence} accent={accent} selected={selected} />
 
       {/* MAIN */}
       <div
@@ -1754,6 +1799,83 @@ function CenterPanel({
         </ResponsiveContainer>
       </Panel>
     </>
+  );
+}
+
+function OperationalEvidenceStrip({ items, accent, selected }) {
+  return (
+    <div
+      style={{
+        position: "relative",
+        zIndex: 1,
+        display: "grid",
+        gridTemplateColumns: "minmax(150px, 0.72fr) repeat(4, minmax(150px, 1fr))",
+        gap: 8,
+        padding: "8px 12px",
+        background: C.bgDeep,
+        borderBottom: `1px solid ${C.borderSoft}`,
+      }}
+    >
+      <div
+        style={{
+          minWidth: 0,
+          padding: "7px 9px",
+          background: C.panel,
+          border: `1px solid ${accent}55`,
+          borderLeft: `3px solid ${accent}`,
+        }}
+      >
+        <div style={{ color: C.textMuted, fontSize: 8, letterSpacing: 1.4, fontFamily: FONT_SANS }}>
+          ACTIVE SYMBOL
+        </div>
+        <div style={{ color: accent, fontSize: 13, fontWeight: 800, letterSpacing: "0.08em", marginTop: 2 }}>
+          {selected || "N/A"}
+        </div>
+      </div>
+      {items.map((item) => (
+        <div
+          key={item.label}
+          style={{
+            minWidth: 0,
+            padding: "7px 9px",
+            background: C.panel,
+            border: `1px solid ${C.border}`,
+            borderTop: `2px solid ${item.color}`,
+            boxShadow: C.shadowSm,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              justifyContent: "space-between",
+              gap: 8,
+            }}
+          >
+            <span style={{ color: C.textMuted, fontSize: 8, letterSpacing: 1.2, fontFamily: FONT_SANS }}>
+              {item.label}
+            </span>
+            <span style={{ color: item.color, fontSize: 11, fontWeight: 800, letterSpacing: "0.05em" }}>
+              {item.value}
+            </span>
+          </div>
+          <div
+            style={{
+              color: C.textDim,
+              fontSize: 8,
+              lineHeight: 1.35,
+              marginTop: 3,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+            title={item.note}
+          >
+            {item.note}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

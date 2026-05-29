@@ -1,0 +1,63 @@
+{
+  "verdict": "PASS",
+  "benchmark_json": "artifacts\\design-upgrade\\20260530_020950\\design-benchmark.json",
+  "visual_recommendations": "artifacts\\design-upgrade\\20260530_020950\\visual-recommendations.json",
+  "surface_type": "dashboard",
+  "items": [
+    {
+      "id": "rec-01",
+      "file_or_section": "top-of-page structure",
+      "current_problem": "target is denser than benchmark references",
+      "proposed_change": "increase vertical spacing, break stacked content into distinct bands, and reduce simultaneous visual load per viewport",
+      "reference_anchor": "https://www.designrush.com/best-designs/websites",
+      "impact": "high",
+      "risk": "medium",
+      "priority": "high",
+      "evidence": "Live benchmark references favor clear top-level hierarchy, compact status groups, and stronger scan rhythm. The dashboard patch adds a first-viewport evidence strip for source route, model evidence, REC mode, and report-only execution before detailed score panels."
+    },
+    {
+      "id": "rec-02",
+      "file_or_section": "content grouping",
+      "current_problem": "target uses materially less whitespace than references",
+      "proposed_change": "raise outer section padding and inner card breathing room before adding more decorative elements",
+      "reference_anchor": "https://www.designrush.com/best-designs/websites",
+      "impact": "medium",
+      "risk": "medium",
+      "priority": "high",
+      "evidence": "Live benchmark references favor clear top-level hierarchy, compact status groups, and stronger scan rhythm. The dashboard patch adds a first-viewport evidence strip for source route, model evidence, REC mode, and report-only execution before detailed score panels."
+    },
+    {
+      "id": "rec-03",
+      "file_or_section": "top-of-page structure",
+      "current_problem": "target has fewer readable vertical sections than references",
+      "proposed_change": "separate controls, narrative, and proof content into clearer stacked zones",
+      "reference_anchor": "https://www.designrush.com/best-designs/websites",
+      "impact": "high",
+      "risk": "low",
+      "priority": "medium",
+      "evidence": "Live benchmark references favor clear top-level hierarchy, compact status groups, and stronger scan rhythm. The dashboard patch adds a first-viewport evidence strip for source route, model evidence, REC mode, and report-only execution before detailed score panels."
+    },
+    {
+      "id": "rec-04",
+      "file_or_section": "top-of-page structure",
+      "current_problem": "target exposes fewer column structures than references",
+      "proposed_change": "introduce 2-column or 4-up groupings where comparison or scanning speed matters",
+      "reference_anchor": "https://www.designrush.com/best-designs/websites",
+      "impact": "high",
+      "risk": "low",
+      "priority": "medium",
+      "evidence": "Live benchmark references favor clear top-level hierarchy, compact status groups, and stronger scan rhythm. The dashboard patch adds a first-viewport evidence strip for source route, model evidence, REC mode, and report-only execution before detailed score panels."
+    },
+    {
+      "id": "rec-05",
+      "file_or_section": "top-of-page structure",
+      "current_problem": "target typography hierarchy is weaker than references",
+      "proposed_change": "increase headline prominence and widen the gap between heading tiers before adjusting colors",
+      "reference_anchor": "https://www.designrush.com/best-designs/websites",
+      "impact": "high",
+      "risk": "medium",
+      "priority": "high",
+      "evidence": "Live benchmark references favor clear top-level hierarchy, compact status groups, and stronger scan rhythm. The dashboard patch adds a first-viewport evidence strip for source route, model evidence, REC mode, and report-only execution before detailed score panels."
+    }
+  ]
+}
