@@ -99,6 +99,17 @@ def _make_lgbm(trial: Any) -> Any:
     return model, params
 
 
+def _safe_auc(y_true: np.ndarray, prob: np.ndarray) -> float:
+    """Safe ROC-AUC — returns 0.5 for degenerate cases."""
+    if len(y_true) == 0 or len(np.unique(y_true)) < 2:
+        return 0.5
+    try:
+        from sklearn.metrics import roc_auc_score
+        return float(roc_auc_score(y_true, prob))
+    except Exception:
+        return 0.5
+
+
 def _safe_brier(y_true: np.ndarray, prob: np.ndarray) -> float:
     if len(y_true) == 0:
         return 0.5
@@ -119,8 +130,20 @@ def run_hpo(
     experiment: str = "direction_v1",
     study_name: str | None = None,
     storage: str | None = None,
+    metric: str = "brier",
 ) -> dict[str, Any]:
-    """Run Optuna HPO and return ``{best_params, best_value, study}``."""
+    """Run Optuna HPO and return ``{best_params, best_value, study, metric}``.
+
+    Parameters
+    ----------
+    metric : ``"brier"`` | ``"auc"`` | ``"hybrid"``
+        Objective to minimise.
+
+        * ``"brier"`` — mean OOF Brier score (default, calibration-preserving).
+        * ``"auc"`` — ``1 - mean OOF AUC`` (maximises discrimination).
+        * ``"hybrid"`` — ``0.5 * brier + 0.5 * (1 - auc)`` **(recommended for
+          PAPER_CANDIDATE path)**: balances calibration and discrimination.
+    """
     optuna = _require_optuna()
     cv = cv or PurgedKFold(n_splits=5, embargo_pct=0.01)
     X_arr = X.values if isinstance(X, pd.DataFrame) else np.asarray(X)
@@ -145,7 +168,8 @@ def run_hpo(
         else:
             raise ValueError(f"unsupported model {model!r}")
 
-        scores: list[float] = []
+        brier_scores: list[float] = []
+        auc_scores: list[float] = []
         _groups = np.arange(len(X)) + horizon
         for fold_idx, (tr, te) in enumerate(cv.split(X, groups=_groups)):
             est = _clone(estimator)
@@ -154,16 +178,33 @@ def run_hpo(
                 prob = est.predict_proba(X_arr[te])[:, 1]
             except Exception:
                 prob = est.predict(X_arr[te]).astype(float)
-            scores.append(_safe_brier(y_arr[te], prob))
-            trial.report(float(np.mean(scores)), step=fold_idx)
+            brier_scores.append(_safe_brier(y_arr[te], prob))
+            auc_scores.append(_safe_auc(y_arr[te], prob))
+            # Report composite score for pruning
+            _brier_now = float(np.mean(brier_scores))
+            _auc_now = float(np.mean(auc_scores))
+            if metric == "auc":
+                _report = 1.0 - _auc_now
+            elif metric == "hybrid":
+                _report = 0.5 * _brier_now + 0.5 * (1.0 - _auc_now)
+            else:
+                _report = _brier_now
+            trial.report(_report, step=fold_idx)
             if trial.should_prune():
                 raise optuna.TrialPruned()
 
-        mean_score = float(np.mean(scores))
+        mean_brier = float(np.mean(brier_scores))
+        mean_auc = float(np.mean(auc_scores))
+        if metric == "auc":
+            mean_score = 1.0 - mean_auc
+        elif metric == "hybrid":
+            mean_score = 0.5 * mean_brier + 0.5 * (1.0 - mean_auc)
+        else:
+            mean_score = mean_brier
         try:
             with MLflowSession(experiment, run_name=f"trial_{trial.number}"):
-                log_params({**params, "model": model})
-                log_metrics({"oos_brier": mean_score})
+                log_params({**params, "model": model, "metric": metric})
+                log_metrics({"oos_brier": mean_brier, "oos_auc": mean_auc, "objective": mean_score})
                 # mlflow 3.x log_input — training fold reference
                 try:
                     import mlflow  # type: ignore[import-not-found]
@@ -184,6 +225,7 @@ def run_hpo(
         "best_params": dict(study.best_params),
         "best_value": float(study.best_value),
         "study": study,
+        "metric": metric,
     }
 
 

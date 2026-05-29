@@ -344,3 +344,71 @@ def test_make_journal_storage_exported_in_all():
     from stock_rtx4060.ml import hpo
 
     assert "make_journal_storage" in hpo.__all__
+
+
+# ---------------------------------------------------------------------------
+# HPO metric parameter (hybrid / auc / brier)
+# ---------------------------------------------------------------------------
+
+
+def test_run_hpo_metric_hybrid():
+    """run_hpo with metric='hybrid' returns metric field in result."""
+    import sys
+    from unittest.mock import MagicMock, patch
+
+    X, y = _synth()
+    mock_optuna, mock_study, mock_trial = _make_optuna_mock(0.22)
+    mock_trial.number = 0
+
+    with patch.dict(sys.modules, {"optuna": mock_optuna}), \
+         patch("stock_rtx4060.ml.hpo.MLflowSession") as mock_mlflow:
+        mock_mlflow.return_value.__enter__ = lambda s: s
+        mock_mlflow.return_value.__exit__ = MagicMock(return_value=False)
+        import importlib
+        import stock_rtx4060.ml.hpo as hpo_mod
+        importlib.reload(hpo_mod)
+        result = hpo_mod.run_hpo(X, y, model="xgboost", n_trials=1, metric="hybrid")
+
+    assert result.get("metric") == "hybrid"
+
+
+def test_run_hpo_metric_auc():
+    """run_hpo with metric='auc' returns metric='auc' in result."""
+    import sys
+    from unittest.mock import MagicMock, patch
+
+    X, y = _synth()
+    mock_optuna, mock_study, mock_trial = _make_optuna_mock(0.20)
+    mock_trial.number = 0
+
+    with patch.dict(sys.modules, {"optuna": mock_optuna}), \
+         patch("stock_rtx4060.ml.hpo.MLflowSession") as mock_mlflow:
+        mock_mlflow.return_value.__enter__ = lambda s: s
+        mock_mlflow.return_value.__exit__ = MagicMock(return_value=False)
+        import importlib
+        import stock_rtx4060.ml.hpo as hpo_mod
+        importlib.reload(hpo_mod)
+        result = hpo_mod.run_hpo(X, y, model="xgboost", n_trials=1, metric="auc")
+
+    assert result.get("metric") == "auc"
+
+
+def test_hpo_default_metric_is_brier():
+    """Default metric must remain 'brier' (backwards-compat)."""
+    import sys
+    from unittest.mock import MagicMock, patch
+
+    X, y = _synth()
+    mock_optuna, mock_study, mock_trial = _make_optuna_mock(0.22)
+    mock_trial.number = 0
+
+    with patch.dict(sys.modules, {"optuna": mock_optuna}), \
+         patch("stock_rtx4060.ml.hpo.MLflowSession") as mock_mlflow:
+        mock_mlflow.return_value.__enter__ = lambda s: s
+        mock_mlflow.return_value.__exit__ = MagicMock(return_value=False)
+        import importlib
+        import stock_rtx4060.ml.hpo as hpo_mod
+        importlib.reload(hpo_mod)
+        result = hpo_mod.run_hpo(X, y, model="xgboost", n_trials=1)
+
+    assert result.get("metric") == "brier"

@@ -86,6 +86,7 @@ class ModelConfig:
     random_state: int = 42
     cv_kind: CVKind = "timeseries"
     embargo_pct: float = 0.01
+    max_features: int | None = None   # fold-local feature cap; None = use all
     xgb_params: dict[str, Any] = field(
         default_factory=lambda: {
             "n_estimators": 240,
@@ -231,6 +232,29 @@ class DirectionModel:
             return pd.Series(np.abs(coef), index=self.feature_cols).sort_values(ascending=False)
         except Exception:
             return pd.Series(dtype=float)
+
+
+def _fold_local_select(
+    X_tr: pd.DataFrame,
+    y_tr: pd.Series,
+    k: int,
+) -> tuple[pd.DataFrame, list[str]]:
+    """Select top-k features by mutual information — fold-local only.
+
+    Fitting is strictly on ``(X_tr, y_tr)``.  Never call with test data.
+    Falls back to returning all columns when selection fails.
+    """
+    try:
+        from sklearn.feature_selection import SelectKBest, mutual_info_classif
+
+        selector = SelectKBest(score_func=mutual_info_classif, k=min(k, X_tr.shape[1]))
+        clean = X_tr.fillna(0.0).replace([float("inf"), float("-inf")], 0.0)
+        selector.fit(clean, y_tr.astype(int))
+        mask = selector.get_support()
+        selected = [col for col, m in zip(X_tr.columns, mask) if m]
+        return X_tr[selected], selected
+    except Exception:
+        return X_tr, list(X_tr.columns)
 
 
 def _has_torch() -> bool:
@@ -588,6 +612,13 @@ class EnsemblePredictor:
         for fold, (train_idx, test_idx) in enumerate(splitter.split(X, groups=_groups), start=1):
             X_tr, X_te = X.iloc[train_idx], X.iloc[test_idx]
             y_tr, y_te = y.iloc[train_idx], y.iloc[test_idx]
+
+            # Fold-local feature selection — safe against look-ahead bias because
+            # selection uses only X_tr/y_tr (never X_te/y_te).
+            if self.config.max_features and X_tr.shape[1] > self.config.max_features:
+                X_tr, selected_cols = _fold_local_select(X_tr, y_tr, self.config.max_features)
+                X_te = X_te[selected_cols]
+
             model = DirectionModel(self.config).fit(X_tr, y_tr)
             prob = model.predict_proba(X_te)
 
