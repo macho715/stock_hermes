@@ -3,7 +3,7 @@
 ## Source Tree
 
 ```
-stock_1901/                          # Updated 2026-05-10 (formerly stock_rtx4060_unified)
+stock_1901/                          # Updated 2026-05-29 (formerly stock_rtx4060_unified)
 ├── README.md
 ├── CHANGELOG.md
 ├── CLAUDE.md                        # AI assistant guidance (P0-P8 invariants)
@@ -12,6 +12,7 @@ stock_1901/                          # Updated 2026-05-10 (formerly stock_rtx406
 ├── run.ps1
 ├── pyproject.toml                   # Project metadata + ruff config
 ├── requirements.txt                 # Core runtime dependencies
+├── requirements.in                  # Dependency input / optional dependency declarations
 ├── requirements-openbb.txt          # OpenBB optional dependencies
 ├── requirements-gpu-wsl.txt         # WSL2/CUDA GPU dependencies
 ├── requirements-dev.txt             # Development dependencies
@@ -21,7 +22,7 @@ stock_1901/                          # Updated 2026-05-10 (formerly stock_rtx406
 ├── flows/                           # P7 Prefect orchestration
 │   ├── daily_krx.py                 # KRX daily flow (16:30 KST Mon-Fri)
 │   ├── daily_us.py                  # US daily flow (16:30 ET Mon-Fri)
-│   └── research_weekly.py           # Weekly HPO + MLflow promotion gate
+│   └── research_weekly.py           # Weekly HPO, RD-Agent helpers, MLflow promotion gate
 ├── src/stock_rtx4060/
 │   ├── __init__.py
 │   ├── main.py                      # CLI parser + command dispatcher
@@ -30,6 +31,7 @@ stock_1901/                          # Updated 2026-05-10 (formerly stock_rtx406
 │   ├── ensemble_model.py            # LightGBM/XGBoost/LR ensemble, PurgedKFold
 │   ├── backtester.py                # Dry-run trade simulation + Deflated Sharpe/PSR
 │   ├── backtest_honesty.py          # Phase B evidence-only backtest honesty checks
+│   ├── paper_trading.py             # Paper-only promotion and forward evidence helpers
 │   ├── benchmark.py                 # Benchmark runner
 │   ├── risk_rules.py                # Track-S / Track-L risk gate logic
 │   ├── dashboard_bridge.py          # dashboard_snapshot.v1 builder
@@ -57,7 +59,14 @@ stock_1901/                          # Updated 2026-05-10 (formerly stock_rtx406
 │   │   ├── alpha101.py              # Alpha101/158 port
 │   │   ├── barra.py                 # Cross-sectional Barra factors
 │   │   ├── factor_zoo.py            # Factor registry + IC/IR/decay analytics
-│   │   └── rd_agent.py              # RD-Agent auto-mining runner
+│   │   └── rd_agent/                # RD-Agent Alpha Factory package
+│   │       ├── docker_runner.py     # Optional Docker execution guard
+│   │       ├── loader.py            # Staged factor loader
+│   │       ├── provenance.py        # Discovery provenance writer
+│   │       ├── qlib_exporter.py     # OHLCV to Qlib-compatible export
+│   │       ├── registry_hook.py     # Approved factor registration
+│   │       ├── runner.py            # Factor mining runner
+│   │       └── validator.py         # Candidate factor validation
 │   ├── ml/                          # P3 — ML upgrade
 │   │   ├── __init__.py
 │   │   ├── cv.py                    # PurgedKFold(n_splits, embargo_pct)
@@ -73,10 +82,29 @@ stock_1901/                          # Updated 2026-05-10 (formerly stock_rtx406
 │   │   └── stat_tests.py            # Deflated Sharpe, PSR, MinTRL
 │   ├── advisors/                    # P6 — LLM advisory layer
 │   │   ├── __init__.py
+│   │   ├── audit.py                 # Advisor audit events
+│   │   ├── base.py                  # AdvisoryOutput contract
+│   │   ├── claude_client.py         # Optional external LLM client
 │   │   ├── news_sentiment.py        # NewsSentiment advisor
 │   │   ├── devils_advocate.py       # DevilsAdvocate advisor
 │   │   ├── macro_regime.py          # MacroRegime advisor
-│   │   └── langgraph_dag.py         # LangGraph orchestrator
+│   │   ├── orchestrator.py          # Advisor orchestration + memory hook
+│   │   ├── memory/                  # R-Mem hierarchical memory layer
+│   │   │   ├── cwrm_router.py       # Conflict-weighted shallow/deep routing
+│   │   │   ├── hierarchical_store.py
+│   │   │   ├── memory_layer.py      # Public memory API
+│   │   │   ├── regime_memory.py     # DuckDB L1/L2/L3 store
+│   │   │   └── stl_protocol.py      # IF-THEN-WITH proposition extraction
+│   │   ├── openbb_tools/            # Agentic OpenBB tool loop
+│   │   │   ├── agentic_loop.py
+│   │   │   ├── tool_executor.py
+│   │   │   └── tool_schemas.py
+│   │   └── prompts/                 # Advisor system/user prompt templates
+│   ├── readiness/                   # Readiness snapshots and live-review gates
+│   │   ├── classifier.py
+│   │   └── snapshots.py
+│   ├── live_review/                 # Forward-paper automation
+│   │   └── auto_forward_recorder.py
 │   └── broker/                      # P8 — Live broker adapters
 │       ├── __init__.py
 │       ├── alpaca_adapter.py        # Alpaca adapter
@@ -85,10 +113,17 @@ stock_1901/                          # Updated 2026-05-10 (formerly stock_rtx406
 │       ├── order_router.py          # SOR/TWAP/VWAP + kill-switch
 │       └── reconciliation.py        # Position reconciliation
 ├── dashboard/
-│   ├── stock_pred_v5.jsx            # Repo-owned dashboard source copy
+│   ├── stock_pred_v5.jsx            # Legacy repo-owned single-file dashboard copy
 │   ├── bridge_smoke.html
 │   └── verify_bridge_smoke.mjs
-├── tests/                           # 1,210 tests — 85.82% coverage (2026-05-10)
+├── root_folder_snapshot/
+│   └── stock-pred-v5/               # Full Vite/React dashboard workspace
+│       └── src/components/
+│           ├── RecommendationPanel.jsx
+│           ├── RecommendationCard.jsx
+│           ├── KevpeBadge.jsx
+│           └── RiskGateBadge.jsx
+├── tests/                           # pytest suite; see CI/current test reports for counts
 │   ├── test_core.py                 # Ops v1 workflow regression tests
 │   ├── test_backtest_honesty.py     # Phase B backtest honesty tests
 │   ├── test_data_providers.py       # Provider routing tests
@@ -97,6 +132,8 @@ stock_1901/                          # Updated 2026-05-10 (formerly stock_rtx406
 │   ├── test_audit_log.py            # Audit masking tests
 │   ├── test_mcp_adapter.py          # MCP boundary tests
 │   ├── test_dashboard_bridge.py     # Dashboard bridge tests
+│   ├── test_live_review_readiness.py
+│   ├── test_auto_forward_recorder.py
 │   ├── test_reports.py              # reports.py coverage (100%)
 │   ├── test_risk_rules.py           # risk_rules.py coverage (100%)
 │   ├── test_ensemble_model_extra.py # ensemble_model.py extended coverage (~85%)
@@ -105,12 +142,19 @@ stock_1901/                          # Updated 2026-05-10 (formerly stock_rtx406
 │   ├── test_observability.py        # P0 observability coverage
 │   ├── test_data_lake.py            # P1 PITStore/DuckDB coverage
 │   ├── test_factors.py              # P2 factor zoo coverage
+│   ├── test_rd_agent_loader.py      # RD-Agent loader coverage
+│   ├── test_rd_agent_runner.py      # RD-Agent runner coverage
+│   ├── test_rd_agent_qlib_exporter.py
+│   ├── test_rd_agent_validator.py
 │   ├── test_ml_cv.py                # P3 PurgedKFold coverage
 │   ├── test_ml_hpo.py               # P3 Optuna HPO coverage
 │   ├── test_ml_explain.py           # P3 SHAP coverage
 │   ├── test_portfolio.py            # P4 optimizer coverage
 │   ├── test_backtest_vbt.py         # P5 vectorbt sweep coverage
 │   ├── test_advisors.py             # P6 LLM advisor coverage
+│   ├── test_advisor_memory_layer.py
+│   ├── test_openbb_agentic_loop.py
+│   ├── test_openbb_tool_executor.py
 │   ├── test_alert_engine.py         # alert_engine.py coverage (97%)
 │   └── test_broker.py               # P8 broker adapter coverage
 ├── docs/
@@ -148,12 +192,13 @@ stock_1901/                          # Updated 2026-05-10 (formerly stock_rtx406
 
 | File | Purpose |
 |---|---|
-| `main.py` | CLI argument parser and command dispatcher (`recommend`, `benchmark`, `ops-v1`, `env`, `dashboard-export`). |
+| `main.py` | CLI argument parser and command dispatcher (`recommend`, `paper-status`, `benchmark`, `ops-v1`, `env`, `dashboard-export`, `factor-mine`, `factor-list`, `factor-approve`, `factor-status`). |
 | `recommendation_engine.py` | `RecommendationEngine` — candidate scoring, OHLCV caching, report generation. |
 | `feature_engine.py` | 60+ technical indicators: SMA, EMA, RSI, MACD, ATR, Bollinger, volume delta, etc. |
-| `ensemble_model.py` | XGBoost + LogisticRegression ensemble with OOF CV, `TimeSeriesSplit(gap=horizon)`. |
+| `ensemble_model.py` | XGBoost + LogisticRegression ensemble with leakage-aware OOF CV and PurgedKFold support. |
 | `backtester.py` | Dry-run trade simulation: entry/exit logic, P&L, Sharpe, MDD. |
 | `backtest_honesty.py` | Phase B evidence-only checks for OOF coverage, Sharpe floor, max drawdown, cost buffer, and walk-forward gap. |
+| `paper_trading.py` | Paper-only status, promotion drawdown, forward paper log append, summary load/write helpers. |
 | `benchmark.py` | Benchmark smoke runner. |
 | `risk_rules.py` | Track-S / Track-L risk gate rules: stop, take-profit, risk budget, position cap. |
 | `dashboard_bridge.py` | Converts recommendation JSON into `dashboard_snapshot.v1` for frontend file import. |
@@ -164,6 +209,11 @@ stock_1901/                          # Updated 2026-05-10 (formerly stock_rtx406
 | `ops_workflow.py` | Ops v1 daily brief, manual approval template, ZERO log, summary generation. |
 | `mcp_adapter.py` | Phase 1 read/report-only MCP adapter contract. Does not start an MCP server. |
 | `reports.py` | Shared Markdown, JSON, CSV report helpers. |
+| `factors/rd_agent/` | Optional RD-Agent Alpha Factory integration: staged factor mining, Qlib export, provenance, validation, and registry hooks. |
+| `advisors/memory/` | FinThink AMH-grounded hierarchical memory layer with DuckDB regime memory, CWRM routing, and STL propositions. |
+| `advisors/openbb_tools/` | Agentic OpenBB tool schema/executor loop for advisor evidence gathering. |
+| `readiness/` | Investment readiness snapshots and live-review classifier gates. |
+| `live_review/auto_forward_recorder.py` | Daily forward paper recorder that keeps `new_capital_allowed=false` and requires manual approval. |
 
 ## File Naming Conventions
 
@@ -178,6 +228,7 @@ stock_1901/                          # Updated 2026-05-10 (formerly stock_rtx406
 | File | Controls | Format |
 |---|---|---|
 | `requirements.txt` | Core runtime dependencies | pip |
+| `requirements.in` | Dependency input and optional dependency declarations | pip-tools input |
 | `requirements-openbb.txt` | OpenBB optional provider | pip |
 | `requirements-gpu-wsl.txt` | WSL2/CUDA GPU deps | pip |
 | `requirements-dev.txt` | Development deps | pip |
@@ -189,16 +240,20 @@ stock_1901/                          # Updated 2026-05-10 (formerly stock_rtx406
 
 | Entry | Command | Purpose |
 |---|---|---|
-| `main.py` | `python main.py --recommend --universe AAPL --track S` | Run recommendation scan |
-| `main.py` | `python main.py --benchmark --synthetic --benchmark-rows 1200` | Benchmark smoke test |
-| `main.py` | `python main.py --recommend --synthetic --universe SYNTH-A --track BOTH --top 5 --output-dir reports` | Offline smoke |
-| `main.py` | `python main.py --recommend --universe AAPL,MSFT,NVDA --track BOTH --period 3y --top 5` | Live yfinance scan |
-| `main.py` | `python main.py --ticker AAPL --period 5y --horizon 5` | Single-ticker pipeline |
-| `main.py` | `python main.py --ops-v1` | Ops v1 manual approval workflow |
-| `main.py` | `python main.py --dashboard-export --output-dir reports` | Dashboard snapshot export |
-| `main.py` | `python main.py --env` | Runtime environment status |
+| `src/stock_rtx4060/main.py` | `PYTHONPATH=src python -m stock_rtx4060.main recommend --synthetic --universe SYNTH-A --track BOTH --top 5 --output-dir reports/recommendations` | Offline recommendation smoke |
+| `src/stock_rtx4060/main.py` | `PYTHONPATH=src python -m stock_rtx4060.main recommend --universe AAPL,MSFT,NVDA --track BOTH --period 3y --top 5` | Live provider recommendation scan |
+| `src/stock_rtx4060/main.py` | `PYTHONPATH=src python -m stock_rtx4060.main paper-status --symbol 005930.KS --output-dir reports/recommendations` | Paper-only promotion status |
+| `src/stock_rtx4060/main.py` | `PYTHONPATH=src python -m stock_rtx4060.main dashboard-export --recommendation-json reports/recommendations/recommendations_algo_v2_*.json` | Dashboard snapshot export |
+| `src/stock_rtx4060/main.py` | `PYTHONPATH=src python -m stock_rtx4060.main factor-mine --cycles 2 --budget-usd 10.0` | RD-Agent factor mining |
+| `src/stock_rtx4060/main.py` | `PYTHONPATH=src python -m stock_rtx4060.main factor-list --status all` | List discovered factors |
+| `src/stock_rtx4060/main.py` | `PYTHONPATH=src python -m stock_rtx4060.main factor-approve --factor-id rd_momentum --run-date 2026-05-29` | Approve staged factors |
+| `src/stock_rtx4060/main.py` | `PYTHONPATH=src python -m stock_rtx4060.main factor-status` | Show discovered factor registry status |
+| `src/stock_rtx4060/main.py` | `PYTHONPATH=src python -m stock_rtx4060.main benchmark --synthetic --benchmark-rows 1200` | Benchmark smoke test |
+| `src/stock_rtx4060/main.py` | `PYTHONPATH=src python -m stock_rtx4060.main ops-v1` | Ops v1 manual approval workflow |
+| `src/stock_rtx4060/main.py` | `PYTHONPATH=src python -m stock_rtx4060.main env` | Runtime environment status |
 | `preview_server.py` | `python preview_server.py` | Flask + Vite unified launcher |
 | `api_server.py` | `python api_server.py --port 5151` | Flask API server |
+| `root_folder_snapshot/stock-pred-v5` | `npm run dev` | Full local dashboard UI |
 
 ## Generated Output
 
@@ -861,4 +916,74 @@ flowchart TD
 
 - Append-only update generated by `root-docs-batch-update`.
 - Code/config/doc/agent inventory counts: code=2393, docs=1302, config=903, agent_profiles=1.
+- Follow-up verification should confirm that newly added text matches actual implementation paths listed above.
+
+
+## Codex Documentation Update — 2026-05-29T12:28:54.428371+00:00
+
+**Update policy:** existing content above this section is preserved. This section was appended after scanning code, documentation, config, and agent profile files.
+
+**Purpose:** This section maps the detected repository layout and documentation surface.
+
+### Evidence inventory
+
+**Source/code files sampled:**
+- `api_server.py`
+- `dashboard\stock_pred_v5.jsx`
+- `docs\purged_kfold_embargo.py`
+- `docs\test_purged_kfold_embargo.py`
+- `flows\__init__.py`
+- `flows\daily_krx.py`
+- `flows\daily_us.py`
+- `flows\research_weekly.py`
+- `flows\utils.py`
+- `main.py`
+- `preview_server.py`
+- `reports\dashboard_browser_verification\snapshot_fixture.js`
+
+**Documentation files sampled:**
+- `.codex\dashboard_live_verify\krx\recommendations_algo_v2_20260529_145024.md`
+- `.codex\dashboard_live_verify\krx_after_cache_fix\recommendations_algo_v2_20260529_150920.md`
+- `.codex\dashboard_live_verify\krx_after_provider_validation_fix\recommendations_algo_v2_20260529_151147.md`
+- `.codex\dashboard_live_verify\us\recommendations_algo_v2_20260529_144953.md`
+- `.codex\dashboard_live_verify\us_after_provider_validation_fix\recommendations_algo_v2_20260529_151825.md`
+- `.codex\goals\dashboard-report-bridge.goal.md`
+- `.codex\goals\mcp-openbb-audit-phase1.goal.md`
+- `.codex\llm_advisor_dashboard_before_lines.txt`
+- `.codex\llm_advisor_dashboard_live_ui\recommendations_algo_v2_20260529_154221.md`
+- `.codex\llm_advisor_dashboard_live_ui\recommendations_algo_v2_20260529_154236.md`
+- `.codex\llm_advisor_dashboard_live_ui\recommendations_algo_v2_20260529_154237.md`
+- `.codex\llm_advisor_dashboard_live_ui\recommendations_algo_v2_20260529_154543.md`
+
+**Config/build files sampled:**
+- `.claude\launch.json`
+- `.codex\dashboard_live_verify\final_endpoint_summary.json`
+- `.codex\dashboard_live_verify\krx\recommendations_algo_v2_20260529_145024.json`
+- `.codex\dashboard_live_verify\krx_after_cache_fix\recommendations_algo_v2_20260529_150920.json`
+- `.codex\dashboard_live_verify\krx_after_cache_fix_response.json`
+- `.codex\dashboard_live_verify\krx_after_provider_validation_fix\recommendations_algo_v2_20260529_151147.json`
+- `.codex\dashboard_live_verify\krx_after_provider_validation_fix_response.json`
+- `.codex\dashboard_live_verify\us\recommendations_algo_v2_20260529_144953.json`
+- `.codex\dashboard_live_verify\us_after_provider_validation_fix\recommendations_algo_v2_20260529_151825.json`
+- `.codex\dashboard_live_verify\us_after_provider_validation_fix_response.json`
+- `.codex\llm_advisor_dashboard_live_ui\recommendations_algo_v2_20260529_154221.json`
+- `.codex\llm_advisor_dashboard_live_ui\recommendations_algo_v2_20260529_154236.json`
+
+**Agent profile files sampled:**
+- `docs\agents\codex-default-doc-agent.md` (`codex-default-doc-agent`)
+
+### Mermaid graph
+
+```mermaid
+flowchart TD
+  ROOT[Repository root] --> SRC[src / app code]
+  ROOT --> DOCS[docs / markdown]
+  ROOT --> AGENTS[agent profiles]
+  ROOT --> CONFIG[config/build files]
+```
+
+### Verification notes
+
+- Append-only update generated by `root-docs-batch-update`.
+- Code/config/doc/agent inventory counts: code=2393, docs=1310, config=908, agent_profiles=1.
 - Follow-up verification should confirm that newly added text matches actual implementation paths listed above.
