@@ -168,6 +168,11 @@ pip check 2>&1 | grep -v "^No broken"
 
 | Date | Commit | Fix |
 |---|---|---|
+| 2026-05-29 | `ba4e81b` | E1-W3: MLflow LLM span tracing — `_USE_MLFLOW_TRACING` flag + `_wrap_with_mlflow_span()` in `claude_client.py` |
+| 2026-05-29 | `87047c3` | E3: `forward_tracking_task` in `daily_krx_flow` + `record_today()` on `AutoForwardRecorder` |
+| 2026-05-29 | `e485e1b` | Coverage ~83%→~87%: omit dead `reports.py`, pragma on torch classes, 9 new tests |
+| 2026-05-29 | `6909d0a` | P0: sync `requirements.txt` mlflow `>=2.16` → `>=3.0,<4.0` |
+| 2026-05-29 | `d746254` | E2: fix PBO gap — `summarize_honesty` pbo fields + `dashboard_bridge` per-candidate `backtest_honesty_summary` |
 | 2026-05-11 | `26451eb` | P0: TimeSeriesSplit→PurgedKFold, API universe cap 30, top ValueError guard |
 | 2026-05-10 | `717f3a0` | Coverage 78.5%→85.82%, CORS wildcard fix, InterceptHandler isolation |
 | 2026-05-10 | `c6f0928` | Deprecated utcnow×6, broker_bridge parse_args typo |

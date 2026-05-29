@@ -2,6 +2,46 @@
 
 All notable changes for `stock_1901` are documented here.
 
+## 2026-05-29 — Wave 3 업그레이드 완료 (E1/E2/E3)
+
+### Summary
+
+MLflow 3.x LLM Tracing, PBO 대시보드 통합, AutoForwardRecorder Prefect 자동화 완료.
+테스트 커버리지 83% → ~87% 회복. 전체 테스트 통과.
+
+### Added
+- **`src/stock_rtx4060/advisors/claude_client.py`** — MLflow LLM span tracing (E1-W3)
+  - `_USE_MLFLOW_TRACING` feature flag (기본값 `false`, `USE_MLFLOW_TRACING=true`로 활성화)
+  - `_wrap_with_mlflow_span()` 메서드 — LiteLLM/MiniMax/Anthropic 세 경로 모두 span 기록
+- **`src/stock_rtx4060/backtest_honesty.py`** — PBO 집계 필드 추가 (E2)
+  - `_compute_pbo_status()` 헬퍼: ≤20%→PASS, ≤50%→AMBER, >50%→RED
+  - `summarize_honesty()` 반환값에 `pbo`, `pbo_status` 추가 (worst-case aggregation)
+- **`src/stock_rtx4060/dashboard_bridge.py`** — per-candidate PBO 노출 (E2)
+  - `_pbo_summary_for_card()` 헬퍼 추가
+  - 각 후보 결과에 `backtest_honesty_summary` 키 추가 → React PBO badge 활성화
+- **`stock-pred-v5/src/components/RecommendationCard.jsx`** — PBO badge 컴포넌트 (E2)
+  - `PboBadge` 컴포넌트: 색상+아이콘+수치 동시 표시 (WCAG AA 준수)
+  - `pbo_status`가 없으면 badge 미표시 (하위 호환)
+- **`src/stock_rtx4060/live_review/auto_forward_recorder.py`** — `record_today()` 메서드 (E3)
+  - Prefect 호환 JSON 직렬화 dict 반환
+- **`flows/daily_krx.py`** — `forward_tracking_task` 추가 (E3)
+  - 9번째 자동 단계: `snapshot_dashboard` → `forward_tracking` → `alert`
+  - `FORWARD_TRACKING_ENABLED` flag (기본값 `true`)
+  - `alert_task`에 `forward_tracking_status` kwarg 추가
+
+### Fixed
+- **`requirements.txt`** — `mlflow>=2.16` → `mlflow>=3.0,<4.0` 동기화 (requirements.in과 일치)
+- **`pyproject.toml`** — `reports.py` coverage omit 추가 (reports/ 패키지에 가려진 죽은 코드)
+- **`src/stock_rtx4060/ensemble_model.py`** — `_TorchLSTMNet`, `LSTMPredictor`, `GRUPredictor` 클래스에 `# pragma: no cover` 추가 (torch 미설치 CI 환경)
+- **`src/stock_rtx4060/observability/mlflow_client.py`** — try/except 그레이스풀 디그레데이션 추가
+
+### QA
+- 전체 테스트: **통과** (coverage ~87%, fail_under=75 gate 충족)
+- E2 갭 수정: `summarize_honesty` + `dashboard_bridge` per-candidate
+- 커밋: `ba4e81b`, `87047c3`, `e485e1b`, `6909d0a`, `d746254`
+
+---
+
 ## 2026-05-29 — GAP Surgical Fixes + MLflow 3.x Upgrade (rtqx4060)
 
 ### Summary
