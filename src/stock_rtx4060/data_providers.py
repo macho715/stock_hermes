@@ -20,10 +20,10 @@ from .provider_validation import validate_provider_frame
 
 _cache = DataCache()
 
-DataProviderName = Literal["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"]
+DataProviderName = Literal["auto", "synthetic", "yfinance", "openbb", "pykrx", "krx_final", "broker_final", "fdr"]
 
 OPENBB_EQUITY_HISTORICAL_ENDPOINT = "obb.equity.price.historical"
-ALLOWED_PROVIDERS = {"auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"}
+ALLOWED_PROVIDERS = {"auto", "synthetic", "yfinance", "openbb", "pykrx", "krx_final", "broker_final", "fdr"}
 
 
 @dataclass(frozen=True)
@@ -133,6 +133,10 @@ def load_ohlcv_with_provider(
 
     if selected == "pykrx":
         result = _load_pykrx(ticker, period, requested, audit_logger, command)
+    elif selected == "krx_final":
+        result = _load_krx_final(ticker, period, requested, audit_logger, command, after_market_close=after_market_close)
+    elif selected == "broker_final":
+        result = _load_broker_final(ticker, period, requested, config, audit_logger, command, after_market_close=after_market_close)
     elif selected == "fdr":
         result = _load_fdr(ticker, period, requested, audit_logger, command)
     elif selected == "openbb":
@@ -351,6 +355,162 @@ def _load_pykrx(
         )
         # PyKRX failed — trigger fallback chain: try FDR
         return _load_fdr(ticker, period, requested, audit_logger, command, fallback_reason=f"pykrx failed: {exc}")
+
+
+def _load_krx_final(
+    ticker: str,
+    period: str,
+    requested: str,
+    audit_logger: AuditLogger | None,
+    command: str,
+    *,
+    after_market_close: bool,
+) -> ProviderResult:
+    started = time.perf_counter()
+    try:
+        from pykrx import stock as pykrx_stock
+
+        symbol = ticker.replace(".KS", "").replace(".KQ", "")
+        start_date = _period_to_start_date_yyyymmdd(period)
+        end_date = pd.Timestamp.now("UTC").strftime("%Y%m%d")
+        frame = pykrx_stock.get_market_ohlcv_by_date(start_date, end_date, symbol, freq="d", adjusted=True)
+        if frame.empty:
+            raise RuntimeError("empty OHLCV frame from KRX final provider")
+        normalized = normalize_ohlcv(_normalize_pykrx_columns(frame))
+        validation = validate_provider_frame(normalized, provider_used="krx_final", ticker=ticker, period=period)
+        final_bar_metadata = provider_final_bar_metadata(
+            source="KRX_FINAL",
+            bar_type="EOD_FINAL",
+            eod_confirmed=True,
+            source_evidence_lock=True,
+            after_market_close=after_market_close,
+        )
+        metadata = {
+            "provider_validation": validation.metadata,
+            **validation.metadata,
+            "ticker_type": "KRX",
+            "data_freshness_minutes": 0,
+            "market_close_adj": True,
+            **final_bar_metadata,
+            "source_timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
+        }
+        _write_audit(
+            audit_logger,
+            AuditEvent(
+                event_type="provider_attempt",
+                status="SUCCESS",
+                command=command,
+                ticker=ticker,
+                period=period,
+                provider_requested=requested,
+                provider_used="krx_final",
+                source="KRX_FINAL",
+                metadata=metadata,
+                duration_ms=_elapsed_ms(started),
+            ),
+        )
+        return ProviderResult(
+            frame=normalized,
+            provider_requested=requested,
+            provider_used="krx_final",
+            source="KRX_FINAL",
+            metadata=metadata,
+        )
+    except Exception as exc:
+        _write_audit(
+            audit_logger,
+            AuditEvent(
+                event_type="provider_attempt",
+                status="FAIL",
+                command=command,
+                ticker=ticker,
+                period=period,
+                provider_requested=requested,
+                provider_used="krx_final",
+                source="KRX_FINAL",
+                message=str(exc),
+                error_type=type(exc).__name__,
+                duration_ms=_elapsed_ms(started),
+            ),
+        )
+        raise RuntimeError(f"{ticker}: KRX final provider failed: {exc}") from exc
+
+
+def _load_broker_final(
+    ticker: str,
+    period: str,
+    requested: str,
+    config: dict[str, Any],
+    audit_logger: AuditLogger | None,
+    command: str,
+    *,
+    after_market_close: bool,
+) -> ProviderResult:
+    started = time.perf_counter()
+    try:
+        export_path = config.get("broker_final_ohlcv_path")
+        if not export_path:
+            raise RuntimeError("broker_final_ohlcv_path is required for broker_final provider")
+        frame = pd.read_csv(Path(str(export_path)))
+        if frame.empty:
+            raise RuntimeError("empty OHLCV frame from broker final export")
+        normalized = normalize_ohlcv(frame)
+        validation = validate_provider_frame(normalized, provider_used="broker_final", ticker=ticker, period=period)
+        final_bar_metadata = provider_final_bar_metadata(
+            source="BROKER_FINAL",
+            bar_type="EOD_FINAL",
+            eod_confirmed=True,
+            source_evidence_lock=True,
+            after_market_close=after_market_close,
+        )
+        metadata = {
+            "provider_validation": validation.metadata,
+            **validation.metadata,
+            "ticker_type": "KRX" if ticker.endswith((".KS", ".KQ")) else "UNKNOWN",
+            "broker_export_path": str(export_path),
+            **final_bar_metadata,
+            "source_timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
+        }
+        _write_audit(
+            audit_logger,
+            AuditEvent(
+                event_type="provider_attempt",
+                status="SUCCESS",
+                command=command,
+                ticker=ticker,
+                period=period,
+                provider_requested=requested,
+                provider_used="broker_final",
+                source="BROKER_FINAL",
+                metadata={**metadata, "broker_export_path": mask_secret(str(export_path))},
+                duration_ms=_elapsed_ms(started),
+            ),
+        )
+        return ProviderResult(
+            frame=normalized,
+            provider_requested=requested,
+            provider_used="broker_final",
+            source="BROKER_FINAL",
+            metadata=metadata,
+        )
+    except Exception as exc:
+        _write_audit(
+            audit_logger,
+            AuditEvent(
+                event_type="provider_attempt",
+                status="FAIL",
+                command=command,
+                ticker=ticker,
+                period=period,
+                provider_requested=requested,
+                provider_used="broker_final",
+                source="BROKER_FINAL",
+                message=str(exc),
+                error_type=type(exc).__name__,
+                duration_ms=_elapsed_ms(started),
+            ),
+        )
+        raise RuntimeError(f"{ticker}: broker final provider failed: {exc}") from exc
 
 
 def _load_fdr(
