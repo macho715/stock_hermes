@@ -62,6 +62,11 @@ _USE_LITELLM: bool = os.environ.get("USE_LITELLM", "false").lower() in ("1", "tr
 # spans because mlflow.anthropic.autolog() does not intercept the Router path.
 _USE_MLFLOW_TRACING: bool = os.environ.get("USE_MLFLOW_TRACING", "false").lower() in ("1", "true", "yes")
 
+# OpenBB tool-use feature flag — set OPENBB_TOOLS_ENABLED=true to allow
+# advisors to call OpenBB data endpoints via Anthropic tool_use during inference.
+# Disabled by default so the existing acall() path is 100% unaffected.
+_OPENBB_TOOLS_ENABLED: bool = os.environ.get("OPENBB_TOOLS_ENABLED", "false").lower() in ("1", "true", "yes")
+
 DEFAULT_MODEL = "claude-opus-4-7"
 DEFAULT_MINIMAX_MODEL = "MiniMax-M2.7"
 DEFAULT_MINIMAX_BASE_URL = "https://api.minimax.io/v1"
@@ -642,7 +647,6 @@ class ClaudeClient:
         Activated only when ``USE_LITELLM=true`` and ``litellm`` is installed.
         Falls back silently to the native path on any Router construction error.
         """
-        import litellm  # local import — only reached when _HAS_LITELLM is True
 
         fallback_models_raw = os.environ.get("LITELLM_FALLBACK_MODELS", "openai/MiniMax-M2.7")
         fallback_models = [m.strip() for m in fallback_models_raw.split(",") if m.strip()]
@@ -724,8 +728,8 @@ class ClaudeClient:
         self,
         *,
         messages: list[dict[str, Any]],
-        inner_result: "CallResult",
-    ) -> "CallResult":
+        inner_result: CallResult,
+    ) -> CallResult:
         """[E1-W3] Record ``inner_result`` as an MLflow LLM span.
 
         No-ops gracefully when mlflow is not installed or
@@ -756,6 +760,79 @@ class ClaudeClient:
         return inner_result
 
 
+    async def acall_with_tools(
+        self,
+        *,
+        system: str | list[dict[str, Any]] | None,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        as_of: str | None = None,
+        max_tool_rounds: int = 5,
+        max_tokens: int | None = None,
+    ) -> CallResult:
+        """Async call with Anthropic tool_use agentic loop.
+
+        Wraps :func:`~advisors.openbb_tools.agentic_loop.run_tool_loop` so
+        advisors can call OpenBB data endpoints during inference.
+
+        When ``OPENBB_TOOLS_ENABLED=false`` (the default), falls back to the
+        standard :meth:`acall` path without any tool handling so the existing
+        behaviour is 100% preserved.
+
+        Parameters
+        ----------
+        tools
+            Anthropic tool schemas (from :mod:`advisors.openbb_tools.tool_schemas`).
+        as_of
+            Point-in-time constraint forwarded to the tool executor.
+        max_tool_rounds
+            Maximum tool_use iterations before forcing end_turn.
+        """
+        if not _OPENBB_TOOLS_ENABLED:
+            return await self.acall(system=system, messages=messages, tools=tools, max_tokens=max_tokens)
+
+        from .openbb_tools.agentic_loop import run_tool_loop
+        from .openbb_tools.tool_executor import ToolExecutor
+
+        client = self._ensure_async()
+        sys_blocks = self._build_system_blocks(system)
+        prompt_hash = self._hash_payload(system=sys_blocks, messages=messages, tools=tools)
+        executor = ToolExecutor(as_of=as_of)
+
+        text, total_in, total_out, tool_cost = await run_tool_loop(
+            client,
+            messages=list(messages),   # copy so caller's list is not mutated
+            model=self.model,
+            system=sys_blocks,
+            tools=tools,
+            executor=executor,
+            as_of=as_of,
+            max_tool_rounds=max_tool_rounds,
+            max_tokens=int(max_tokens or self.max_output_tokens),
+        )
+
+        cost = compute_cost_usd(
+            input_tokens=total_in,
+            cache_read_tokens=0,
+            cache_creation_tokens=0,
+            output_tokens=total_out,
+            model=self.model,
+        ) + tool_cost
+
+        result = CallResult(
+            text=text,
+            raw_message=None,
+            tokens_in=total_in,
+            tokens_out=total_out,
+            cache_read_tokens=0,
+            cache_creation_tokens=0,
+            cost_usd=float(cost),
+            prompt_hash=prompt_hash,
+            model=self.model,
+        )
+        return self._wrap_with_mlflow_span(messages=messages, inner_result=result)
+
+
 __all__ = [
     "ClaudeClient",
     "CallResult",
@@ -767,4 +844,5 @@ __all__ = [
     "DEFAULT_MAX_INPUT_TOKENS",
     "DEFAULT_MAX_OUTPUT_TOKENS",
     "_USE_MLFLOW_TRACING",
+    "_OPENBB_TOOLS_ENABLED",
 ]

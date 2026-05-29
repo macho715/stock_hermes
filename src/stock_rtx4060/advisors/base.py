@@ -55,6 +55,10 @@ class AdvisoryOutput:
     tokens_in: int
     tokens_out: int
     cost_usd: float
+    # [AMH Memory Layer — W4 FR-1] additive optional fields; default="" preserves
+    # backward compatibility — all existing call-sites need not change.
+    regime_label: str = ""           # "risk_on" | "neutral" | "risk_off" | ""
+    logical_proposition: str = ""    # STL Protocol output (NewsSentiment agent only)
 
     def __post_init__(self) -> None:
         if not -1.0 <= float(self.score) <= 1.0:

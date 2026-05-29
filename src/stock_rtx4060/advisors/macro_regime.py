@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .base import AdvisoryOutput
-from .claude_client import ClaudeClient
+from .claude_client import _OPENBB_TOOLS_ENABLED, ClaudeClient
 from .news_sentiment import _clip, _parse_advisor_json
 from .prompts import load_prompt, render
 
@@ -46,16 +46,26 @@ class MacroRegimeAgent:
                 tokens_in=0,
                 tokens_out=0,
                 cost_usd=0.0,
+                regime_label="neutral",
             )
 
         system_tpl = load_prompt("macro_system")
         user_tpl = load_prompt("macro_user")
         rendered_user = render(user_tpl, {"as_of": as_of, "panel": panel})
 
-        result = await self.client.acall(
-            system=system_tpl,
-            messages=[{"role": "user", "content": rendered_user}],
-        )
+        if _OPENBB_TOOLS_ENABLED:
+            from .openbb_tools.tool_schemas import MACRO_TOOLS
+            result = await self.client.acall_with_tools(
+                system=system_tpl,
+                messages=[{"role": "user", "content": rendered_user}],
+                tools=MACRO_TOOLS,
+                as_of=context.get("as_of"),
+            )
+        else:
+            result = await self.client.acall(
+                system=system_tpl,
+                messages=[{"role": "user", "content": rendered_user}],
+            )
         parsed = _parse_advisor_json(result.text)
         regime = str(parsed.get("regime", "")).strip().lower()
         if regime not in REGIME_TO_SCORE:
@@ -89,6 +99,7 @@ class MacroRegimeAgent:
             tokens_in=int(result.tokens_in),
             tokens_out=int(result.tokens_out),
             cost_usd=float(result.cost_usd),
+            regime_label=regime,  # [AMH Memory Layer — W4 FR-2]
         )
 
     # ------------------------------------------------------------------

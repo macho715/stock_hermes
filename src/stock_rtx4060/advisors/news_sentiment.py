@@ -20,7 +20,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from .base import AdvisoryOutput
-from .claude_client import ClaudeClient
+from .claude_client import _OPENBB_TOOLS_ENABLED, ClaudeClient
 from .prompts import load_prompt, render
 
 logger = logging.getLogger(__name__)
@@ -81,15 +81,26 @@ class NewsSentimentAgent:
             user_tpl, {"ticker": ticker, "as_of": as_of, "headlines": [h.__dict__ for h in headlines]}
         )
 
-        result = await self.client.acall(
-            system=system_tpl,
-            messages=[{"role": "user", "content": rendered_user}],
-        )
+        if _OPENBB_TOOLS_ENABLED:
+            from .openbb_tools.tool_schemas import NEWS_TOOLS
+            result = await self.client.acall_with_tools(
+                system=system_tpl,
+                messages=[{"role": "user", "content": rendered_user}],
+                tools=NEWS_TOOLS,
+                as_of=context.get("as_of"),
+            )
+        else:
+            result = await self.client.acall(
+                system=system_tpl,
+                messages=[{"role": "user", "content": rendered_user}],
+            )
         parsed = _parse_advisor_json(result.text)
         score = _clip(parsed.get("score", 0.0), -1.0, 1.0)
         confidence = _clip(parsed.get("confidence", 0.0), 0.0, 1.0)
         rationale = str(parsed.get("rationale", ""))[:1024]
         citations = list(parsed.get("citations", [])) or [h.url for h in headlines[:3]]
+        # [AMH Memory — W4 FR-5] extract STL proposition from model output
+        proposition = str(parsed.get("proposition", "") or parsed.get("logical_proposition", ""))[:512]
         return AdvisoryOutput(
             agent=self.name,
             ticker=ticker,
@@ -101,6 +112,7 @@ class NewsSentimentAgent:
             tokens_in=int(result.tokens_in),
             tokens_out=int(result.tokens_out),
             cost_usd=float(result.cost_usd),
+            logical_proposition=proposition,
         )
 
     # ------------------------------------------------------------------
