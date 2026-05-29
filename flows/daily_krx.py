@@ -41,6 +41,18 @@ def _resolve_universe() -> list[str]:
     return [t.strip() for t in raw.split(",") if t.strip()]
 
 
+def _resolve_recommend_provider() -> str:
+    return os.environ.get("STOCK1901_DATA_PROVIDER", "auto").strip().lower() or "auto"
+
+
+def _resolve_provider_config() -> str | None:
+    value = os.environ.get("STOCK1901_PROVIDER_CONFIG")
+    if not value:
+        return None
+    value = value.strip()
+    return value or None
+
+
 # ---------------------------------------------------------------------------
 # Task wrappers — each is decorated for retry; their bodies thinly delegate to
 # existing modules in stock_rtx4060.*.
@@ -149,7 +161,12 @@ def recommend_task(universe: list[str], *, dry_run: bool = False) -> dict[str, A
     """Run the report-only RecommendationEngine over ``universe``."""
     from stock_rtx4060.recommendation_engine import RecommendationConfig, RecommendationEngine
 
-    cfg = RecommendationConfig(universe=list(universe))
+    cfg = RecommendationConfig(
+        universe=list(universe),
+        data_provider=_resolve_recommend_provider(),
+        provider_config=_resolve_provider_config(),
+        after_market_close=True,
+    )
     engine = RecommendationEngine(cfg)
     results = engine.run()
     return {

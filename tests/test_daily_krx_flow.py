@@ -95,6 +95,109 @@ def test_daily_krx_cron_constants():
     assert daily_krx.KRX_FLOW_TIMEZONE == "Asia/Seoul"
 
 
+def test_daily_krx_recommend_task_enables_after_market_close(monkeypatch):
+    captured: dict[str, object] = {}
+
+    import stock_rtx4060.recommendation_engine as rec_mod
+
+    class _FakeEngine:
+        def __init__(self, config):
+            captured["config"] = config
+
+        def run(self):
+            return []
+
+    monkeypatch.setattr(rec_mod, "RecommendationEngine", _FakeEngine)
+
+    result = daily_krx.recommend_task(["005930.KS"], dry_run=True)
+    cfg = captured["config"]
+
+    assert result["dry_run"] is True
+    assert cfg.after_market_close is True
+    assert cfg.data_provider == "auto"
+
+
+def test_daily_krx_recommend_task_scheduled_krx_resolves_krx_final(monkeypatch):
+    captured: dict[str, object] = {}
+
+    import stock_rtx4060.recommendation_engine as rec_mod
+
+    class _FakeEngine:
+        def __init__(self, config):
+            captured["config"] = config
+
+        def run(self):
+            return []
+
+    monkeypatch.setattr(rec_mod, "RecommendationEngine", _FakeEngine)
+
+    daily_krx.recommend_task(["005930.KS"], dry_run=True)
+    cfg = captured["config"]
+
+    assert rec_mod.select_post_close_provider(
+        ticker="005930.KS",
+        requested_provider=cfg.data_provider,
+        after_market_close=cfg.after_market_close,
+        provider_config={},
+    ) == "krx_final"
+
+
+def test_daily_krx_recommend_task_prefers_broker_final_export_config(tmp_path, monkeypatch):
+    provider_config = tmp_path / "provider_config.json"
+    broker_export = tmp_path / "broker_final.csv"
+    provider_config.write_text(f'{{"broker_final_ohlcv_path": "{broker_export.as_posix()}"}}', encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    import stock_rtx4060.recommendation_engine as rec_mod
+
+    class _FakeEngine:
+        def __init__(self, config):
+            captured["config"] = config
+
+        def run(self):
+            return []
+
+    monkeypatch.setenv("STOCK1901_PROVIDER_CONFIG", str(provider_config))
+    monkeypatch.setattr(rec_mod, "RecommendationEngine", _FakeEngine)
+
+    daily_krx.recommend_task(["005930.KS"], dry_run=True)
+    cfg = captured["config"]
+
+    assert cfg.provider_config == str(provider_config)
+    assert rec_mod.select_post_close_provider(
+        ticker="005930.KS",
+        requested_provider=cfg.data_provider,
+        after_market_close=cfg.after_market_close,
+        provider_config={"broker_final_ohlcv_path": str(broker_export)},
+    ) == "broker_final"
+
+
+def test_daily_krx_recommend_task_us_ticker_keeps_requested_provider(monkeypatch):
+    captured: dict[str, object] = {}
+
+    import stock_rtx4060.recommendation_engine as rec_mod
+
+    class _FakeEngine:
+        def __init__(self, config):
+            captured["config"] = config
+
+        def run(self):
+            return []
+
+    monkeypatch.setenv("STOCK1901_DATA_PROVIDER", "yfinance")
+    monkeypatch.setattr(rec_mod, "RecommendationEngine", _FakeEngine)
+
+    daily_krx.recommend_task(["AAPL"], dry_run=True)
+    cfg = captured["config"]
+
+    assert rec_mod.select_post_close_provider(
+        ticker="AAPL",
+        requested_provider=cfg.data_provider,
+        after_market_close=cfg.after_market_close,
+        provider_config={},
+    ) == "yfinance"
+
+
 # ---------------------------------------------------------------------------
 # E3 (Wave 3): forward_tracking_task + FORWARD_TRACKING_ENABLED flag
 # ---------------------------------------------------------------------------
