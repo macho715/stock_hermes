@@ -2,6 +2,68 @@
 
 All notable changes for `stock_1901` are documented here.
 
+## 2026-05-29 — CMRS Sizing · Wave 4 Dashboard UI · SPRT Gate · TFT Stub
+
+### Summary
+
+오늘 세션에서 추가된 주요 기능들: CMRS downgrade-only sizing 패키지, Wave 4 대시보드 UI (RegimeBadge·ModelScoresStrip·데이터 파이프라인), SPRT 통계적 모델 승격 게이트, TFT 4번째 앙상블 모델 stub. 테스트 1648 passed, coverage 83%.
+
+### Added
+
+- **`src/stock_rtx4060/sizing/`** — CMRS (Confidence-Modulated Risk Sizing) 패키지 신규 (2026-05-29)
+  - `strategy.py` — Mondrian conformal prediction 기반 size_multiplier 계산
+  - `calibration.py` — empirical sizing_coverage_status PASS/AMBER/ZERO 판정
+  - `integration.py` — `RecommendationConfig.sizing_kind` 파이프라인 연결
+  - `/api/recommend?sizing_kind=auto&sizing_alpha=0.1&sizing_n_min=30` 파라미터 지원
+  - `SIZE / SIZER / COVERAGE` 배지를 REC 카드에 표시
+  - `raw_score → score` 감쇠: `size_multiplier=0`이면 score=0으로 감쇠 (downgrade-only)
+- **`src/stock_rtx4060/ml/tft_model.py`** — TFT (Temporal Fusion Transformer) 4번째 앙상블 모델 stub (2026-05-29)
+  - `TFTPredictor` — pytorch_forecasting 없으면 0.5 반환 (graceful degradation)
+  - `TFT_MODEL_ENABLED=false` 기본값 — 기존 동작 보존
+  - `EnsemblePredictor.predict()` 반환값에 `tft_prob` 키 추가
+- **`flows/research_weekly.py`** — SPRT 통계적 모델 승격 게이트 (2026-05-29)
+  - `_sprt_promotion_decision()` — plain SPRT (scipy.stats 기반)
+  - `SPRT_GATE_ENABLED=false`로 legacy 5% delta 경로 fallback 가능
+  - CONTINUE → legacy delta check fallback (backward compat 유지)
+  - MLflow `sprt_z_stat` 메트릭 기록
+- **`src/stock_rtx4060/advisors/openbb_tools/`** — OpenBB tool-use LLM advisor (2026-05-29)
+  - `tool_schemas.py` — Anthropic tool 4개: price/news/fundamentals/macro
+  - `tool_executor.py` — PIT 가드 + 2000자 truncation + graceful fallback
+  - `agentic_loop.py` — canonical Anthropic tool_use loop (max_rounds=5)
+  - `OPENBB_TOOLS_ENABLED=false` 기본값
+- **`src/stock_rtx4060/advisors/memory/`** — FinThink AMH 계층 메모리 (2026-05-29)
+  - `regime_memory.py` / `hierarchical_store.py` / `cwrm_router.py` / `stl_protocol.py`
+  - DuckDB L1/L2/L3 regime-tagged episodic/semantic/procedural memory
+  - `ADVISOR_MEMORY_ENABLED=false` 기본값
+- **Dashboard Wave 4 UI** — RecommendationCard 신규 컴포넌트 (2026-05-29)
+  - `RegimeBadge` — risk_on(초록)/neutral(회색)/risk_off(빨강)
+  - `ModelScoresStrip` — main_prob + tft_prob 표시 (0.50* = stub)
+  - 백엔드: `advisor_regime`, `tft_prob`, `model_kind_used` → `RecommendationResult` → dashboard_bridge → snapshot
+- **테스트** — 신규 테스트 파일 다수 추가 (2026-05-29)
+  - `test_sprt_promotion_gate.py`, `test_tft_model.py`, `test_dashboard_wave4_fields.py`
+  - `test_sizing_*.py`, `test_recommendation_sizing.py`
+  - 1648 passed, coverage 83%
+
+### Changed
+
+- **`api_server.py`** — `sizing_kind`, `sizing_alpha`, `sizing_n_min` 파라미터 추가
+  - `sizing_kind=off` 기본값 (기존 동작 보존)
+  - invalid `sizing_kind` → HTTP 400
+- **`src/stock_rtx4060/recommendation_engine.py`** — additive 필드 추가
+  - `RecommendationResult`: `tft_prob`, `advisor_regime`, `model_kind_used` (default=None)
+  - `_apply_advisor_blend()`: `OrchestratorResult.outputs`에서 MacroRegime `regime_label` 추출
+- **`src/stock_rtx4060/dashboard_bridge.py`** — `_build_candidate()` passthrough 추가
+  - `tft_prob`, `advisor_regime`, `model_kind_used` 3개 필드
+
+### Safety Notes
+
+- CMRS sizing은 downgrade-only: score를 올리지 않고, `size_multiplier`가 낮으면 score를 감쇠한다.
+- `screening_output_only=True` 불변; sizing 결과는 참고용.
+- OpenBB tool-use는 PIT 가드 준수: `end_date ≤ as_of` 강제.
+- TFT stub: `TFT_MODEL_ENABLED=false` 기본값, 기존 ensemble 동작 100% 보존.
+
+---
+
 ## 2026-05-29 — Wave 4 최신 변경 정리 (RD-Agent · Advisor Memory/OpenBB · Dashboard REC · Docs)
 
 ### Summary

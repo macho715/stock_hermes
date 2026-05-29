@@ -47,7 +47,8 @@
 | 대시보드 | REC탭 — 후보카드·PBO뱃지·어드바이저게이지·투자등급 |
 | 모델 점수 | 앙상블·LogReg·XGBoost·GRU/RNN (LSTM 선택) |
 | 어드바이저 | LiteLLM 게이트웨이 · MLflow span tracing · AMH memory · OpenBB tool-use |
-| 자동화 | Prefect `daily_krx_flow` 9단계, `research_weekly_flow` RD-Agent 보조 태스크 |
+| CMRS Sizing | Mondrian conformal sizing — `size_multiplier` 기반 downgrade-only score 감쇠 |
+| 자동화 | Prefect `daily_krx_flow` 9단계, `research_weekly_flow` RD-Agent + SPRT 보조 태스크 |
 | 검증 | Hypothesis PBT · Chaos 테스트 · CPCV/PBO 백테스트 |
 
 ---

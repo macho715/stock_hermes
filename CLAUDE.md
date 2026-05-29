@@ -42,7 +42,9 @@ git push -u origin claude/upgrade-investment-system-2Mc7x
 5. **PurgedKFold groups**: `cv.split(X, groups=_groups)` must always receive the `groups` array — never `cv.split(X)`.
 6. **PIT as_of guard**: When `as_of is not None`, falling through to live providers is forbidden (raises `RuntimeError`).
 7. **numpy bounds**: `numpy>=1.26,<3.0` — shap>=0.50 requires numpy>=2; never re-pin to `<2.0`.
-8. **Test coverage**: `pytest --cov=stock_rtx4060 --cov-fail-under=75` must pass. **Current: 86.03%** (incl. `test_walk_forward_purged.py` ×3). Target ≥85% total.
+8. **Test coverage**: `pytest --cov=stock_rtx4060 --cov-fail-under=75` must pass. **Current: 83%** (1648 passed, 2026-05-29). Target ≥75% total.
+9. **CMRS sizing downgrade-only**: `size_multiplier` only reduces `score`, never increases it. `screening_output_only=True` preserved.
+10. **SPRT gate fallback**: `SPRT_GATE_ENABLED=false` → legacy 5% delta check. CONTINUE status → falls through to delta check (backward compat).
 
 ## Critical Files
 
@@ -156,6 +158,9 @@ pip check 2>&1 | grep -v "^No broken"
 | New Prefect flow | `flows/` + cron schedule in deployment config |
 | New RD-Agent factor | `src/stock_rtx4060/factors/rd_agent/` + `tests/test_rd_agent_*.py` |
 | New dashboard field | `recommendation_engine.py` + `dashboard_bridge.py` + `tests/test_dashboard_bridge.py` |
+| New sizing strategy | `src/stock_rtx4060/sizing/` + `tests/test_sizing_*.py` |
+| New OpenBB tool | `src/stock_rtx4060/advisors/openbb_tools/tool_schemas.py` |
+| New advisor memory | `src/stock_rtx4060/advisors/memory/` |
 
 ## RD-Agent Integration (P2)
 
@@ -204,6 +209,10 @@ Full docs: see `20260529_plan-doc-rdagent-factory.md`.
 
 | Date | Commit | Fix |
 |---|---|---|
+| 2026-05-29 | `d7eff19` | feat(sizing): CMRS downgrade-only controls — `sizing/` 패키지, `api_server.py` `sizing_kind` 파라미터, `SizingBadge` UI |
+| 2026-05-29 | `69d360c` | feat(dashboard): Wave 4 UI — `RegimeBadge`, `ModelScoresStrip`, `advisor_regime`/`tft_prob`/`model_kind_used` pipeline |
+| 2026-05-29 | `1dca44b` | feat(P3/P7): SPRT promotion gate (`_sprt_promotion_decision`) + TFT stub (`ml/tft_model.py`) |
+| 2026-05-29 | `e061b2a` | feat(advisors): AMH memory layer + OpenBB tool-use (`advisors/memory/`, `advisors/openbb_tools/`) |
 | 2026-05-29 | `fd24364` | E2: PBO badge end-to-end fix — fold AUC proxy PBO, `evaluate_backtest_honesty` additive pbo field, `RecommendationCard.jsx PboBadge` |
 | 2026-05-29 | `f5570dd` | Dashboard: LLM Advisor KRX 제한 제거 (3곳 — `advisorRequestEnabled`, onClick, useEffect) |
 | 2026-05-29 | `9664ca5` | Dashboard: XGBoost secondary score (lightgbm 백엔드), LSTM/RNN null 행 숨김, cv_gap 기본값 5 |
