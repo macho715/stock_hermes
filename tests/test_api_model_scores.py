@@ -40,9 +40,12 @@ def test_model_scores_api_applies_xgboost_and_lstm_when_requested(monkeypatch):
 
     class FakePredictor:
         def __init__(self, config):
-            calls["config"] = config
+            # Track all instantiations; first is primary, rest are secondary
+            calls.setdefault("configs", []).append(config)
+            calls["config"] = calls["configs"][0]  # primary config always first
             self.config = config
             self.oof_probabilities_ = pd.Series([0.55] * len(feature_df), index=feature_df.index)
+            self.feature_cols = ["feature_a"]
 
         def fit(self, features):
             calls["fit_rows"] = len(features)
@@ -62,6 +65,8 @@ def test_model_scores_api_applies_xgboost_and_lstm_when_requested(monkeypatch):
     monkeypatch.setattr(api_server, "load_ohlcv_with_provider", fake_load_ohlcv_with_provider)
     monkeypatch.setattr(api_server, "TechnicalIndicators", FakeIndicators)
     monkeypatch.setattr(api_server, "EnsemblePredictor", FakePredictor)
+    # Disable GRU/RNN computation in this unit test (no torch in test env path)
+    monkeypatch.setattr(api_server, "_has_torch", lambda: False)
 
     client = api_server.app.test_client()
     response = client.get(
@@ -70,13 +75,15 @@ def test_model_scores_api_applies_xgboost_and_lstm_when_requested(monkeypatch):
 
     assert response.status_code == 200
     payload = response.get_json()
+    # Primary model: model_kind=auto, use_lstm=True
     assert calls["config"].model_kind == "auto"
     assert calls["config"].use_lstm is True
     assert payload["model_kind"] == "xgb-cpu"
     assert payload["model_scores"]["main"] == 68.0
     assert payload["model_scores"]["xgboost"] == 72.0
     assert payload["model_scores"]["lstm"] == 59.0
-    assert payload["model_scores"]["logistic"] is None
+    # logistic is now always computed (secondary model) — must be a number not None
+    assert payload["model_scores"]["logistic"] is not None
     assert payload["evidence"]["lstm_enabled"] is True
 
 

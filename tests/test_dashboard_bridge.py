@@ -73,6 +73,8 @@ def _recommendation_payload() -> dict:
                 "model_auc": 0.55,
                 "oof_coverage": 0.88,
                 "backtest_return_pct": 3.5,
+                "alpha_pct": 1.4,
+                "completed_trades": 72,
                 "backtest_sharpe": 0.8,
                 "backtest_sortino": 1.1,
                 "backtest_mdd_pct": -4.2,
@@ -111,6 +113,12 @@ def test_build_dashboard_snapshot_preserves_report_only_contract():
     assert snapshot["backtest_honesty_summary"]["status"] == "PASS"
     assert snapshot["results"][0]["ticker"] == "SYNTH-A"
     assert snapshot["results"][0]["score"] == 73.5
+    assert snapshot["results"][0]["raw_score"] == 73.5
+    assert snapshot["results"][0]["investment_readiness_status"] == "READY_FOR_MANUAL_REVIEW"
+    assert snapshot["results"][0]["investment_readiness_score"] == 73.5
+    assert snapshot["results"][0]["new_capital_allowed"] is True
+    assert snapshot["results"][0]["paper_trading_only"] is False
+    assert snapshot["results"][0]["dashboard_warning"] is False
     assert snapshot["results"][0]["probability"] == 0.54
     assert snapshot["results"][0]["screening_output_only"] is True
     assert snapshot["results"][0]["backtest_honesty"]["status"] == "PASS"
@@ -181,3 +189,48 @@ def test_dashboard_snapshot_accepts_older_payload_without_provider_summary():
     assert snapshot["provider_summary"] is None
     assert snapshot["backtest_honesty_summary"] is None
     assert snapshot["results"][0]["backtest_honesty"] is None
+    assert snapshot["results"][0]["investment_readiness_status"] == "HARD_FAIL"
+    assert snapshot["results"][0]["new_capital_allowed"] is False
+
+
+def test_dashboard_snapshot_caps_readiness_and_blocks_live_queue_for_amber_gate_failure():
+    payload = _recommendation_payload()
+    result = payload["results"][0]
+    result["recommendation_rank_score"] = 88.81
+    result["model_accuracy"] = 0.433
+    result["model_auc"] = 0.4814
+    result["alpha_pct"] = -44.62
+    result["completed_trades"] = 4
+
+    snapshot = build_dashboard_snapshot(payload)
+    row = snapshot["results"][0]
+
+    assert row["score"] == 88.81
+    assert row["raw_score"] == 88.81
+    assert row["dashboard_status"] == "AMBER_WATCHLIST"
+    assert row["investment_readiness_status"] == "AMBER_WATCHLIST"
+    assert row["investment_readiness_score"] == 44.0
+    assert row["live_queue_action"] == "HARD_BLOCK"
+    assert row["research_queue_action"] == "AMBER_WATCHLIST"
+    assert row["live_investable"] is False
+    assert row["new_capital_allowed"] is False
+    assert row["paper_trading_only"] is True
+    assert row["ready_for_manual_review"] is False
+    assert row["dashboard_warning"] is True
+    assert row["dashboard_warning_message"].startswith("AMBER WATCHLIST")
+    assert "Accuracy 43.30% < 50.00%" in row["blocking_reasons"]
+    assert "AUC 0.4814 < 0.50" in row["blocking_reasons"]
+    assert "Alpha -44.62% < 0.00%" in row["blocking_reasons"]
+    assert "Completed trades 4 < 50" in row["blocking_reasons"]
+
+
+def test_dashboard_snapshot_blocks_live_queue_when_backtest_honesty_is_amber():
+    payload = _recommendation_payload()
+    payload["results"][0]["backtest_honesty"]["status"] = "AMBER"
+
+    row = build_dashboard_snapshot(payload)["results"][0]
+
+    assert row["investment_readiness_status"] == "AMBER_WATCHLIST"
+    assert row["new_capital_allowed"] is False
+    assert row["paper_trading_only"] is True
+    assert "Backtest honesty AMBER != PASS" in row["blocking_reasons"]

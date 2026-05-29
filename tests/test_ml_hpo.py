@@ -2,15 +2,13 @@
 from __future__ import annotations
 
 import sys
-from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from stock_rtx4060.ml.cv import PurgedKFold
-
 
 # ---------------------------------------------------------------------------
 # helpers / fixtures
@@ -137,8 +135,6 @@ def test_run_hpo_passes_groups_to_cv_split():
 
     mock_optuna, mock_study, mock_trial = _make_optuna_mock()
     xgb_est = _make_xgb_estimator_mock()
-    xgb_class = MagicMock(return_value=xgb_est)
-
     split_calls: list[dict] = []
     original_split = cv.split
 
@@ -154,6 +150,7 @@ def test_run_hpo_passes_groups_to_cv_split():
          patch("stock_rtx4060.ml.hpo.log_params"), \
          patch("stock_rtx4060.ml.hpo.log_metrics"):
         import importlib
+
         import stock_rtx4060.ml.hpo as hpo_mod
         importlib.reload(hpo_mod)
         hpo_mod.run_hpo(X, y, model="xgboost", n_trials=1, cv=cv, horizon=5)
@@ -180,6 +177,7 @@ def test_run_hpo_returns_expected_keys():
          patch("stock_rtx4060.ml.hpo.log_params"), \
          patch("stock_rtx4060.ml.hpo.log_metrics"):
         import importlib
+
         import stock_rtx4060.ml.hpo as hpo_mod
         importlib.reload(hpo_mod)
         result = hpo_mod.run_hpo(X, y, model="xgboost", n_trials=1, cv=cv)
@@ -202,6 +200,7 @@ def test_run_hpo_invalid_model_raises():
          patch("stock_rtx4060.ml.hpo.log_params"), \
          patch("stock_rtx4060.ml.hpo.log_metrics"):
         import importlib
+
         import stock_rtx4060.ml.hpo as hpo_mod
         importlib.reload(hpo_mod)
 
@@ -213,6 +212,7 @@ def test_run_hpo_optuna_missing_raises():
     """run_hpo must raise ImportError with a clear message when optuna absent."""
     with patch.dict(sys.modules, {"optuna": None}):
         import importlib
+
         import stock_rtx4060.ml.hpo as hpo_mod
         importlib.reload(hpo_mod)
 
@@ -222,6 +222,7 @@ def test_run_hpo_optuna_missing_raises():
 
     # restore
     import importlib
+
     import stock_rtx4060.ml.hpo as hpo_mod
     importlib.reload(hpo_mod)
 
@@ -237,10 +238,6 @@ def test_run_hpo_default_cv_created_when_none():
     mock_optuna, mock_study, mock_trial = _make_optuna_mock()
     xgb_est = _make_xgb_estimator_mock()
 
-    split_invocation_counts: list[int] = []
-
-    # Wrap the _objective call so we can observe the cv that was actually used.
-    captured_cv: list[PurgedKFold] = []
     original_optimize = mock_study.optimize.side_effect
 
     def _patched_optimize(objective, n_trials, **kw):
@@ -255,6 +252,7 @@ def test_run_hpo_default_cv_created_when_none():
          patch("stock_rtx4060.ml.hpo.log_params"), \
          patch("stock_rtx4060.ml.hpo.log_metrics"):
         import importlib
+
         import stock_rtx4060.ml.hpo as hpo_mod
         importlib.reload(hpo_mod)
         # Pass cv=None — hpo should create PurgedKFold(n_splits=5, embargo_pct=0.01)
@@ -280,6 +278,7 @@ def test_make_xgb_param_space():
 
     with patch.dict(sys.modules, {"xgboost": MagicMock(XGBClassifier=xgb_cls_mock)}):
         import importlib
+
         import stock_rtx4060.ml.hpo as hpo_mod
         importlib.reload(hpo_mod)
         _, params = hpo_mod._make_xgb(trial)
@@ -287,3 +286,61 @@ def test_make_xgb_param_space():
     expected_keys = {"n_estimators", "max_depth", "learning_rate", "subsample",
                      "colsample_bytree", "reg_lambda"}
     assert expected_keys.issubset(set(params.keys()))
+
+
+# ---------------------------------------------------------------------------
+# Optuna 4.8 upgrade — make_journal_storage + version tests
+# ---------------------------------------------------------------------------
+
+
+def test_optuna_version_gte_4_8():
+    """Optuna >=4.8 must be installed (requirements.in bump)."""
+    import optuna
+
+    ver = tuple(int(x) for x in optuna.__version__.split(".")[:2])
+    assert ver >= (4, 8), f"Optuna {optuna.__version__} < 4.8 — run: pip install 'optuna>=4.8'"
+
+
+def test_make_journal_storage_creates_storage(tmp_path):
+    """make_journal_storage returns a JournalStorage usable for a study."""
+    from optuna.storages import JournalStorage
+
+    from stock_rtx4060.ml.hpo import make_journal_storage
+
+    log_path = str(tmp_path / "test_study.log")
+    storage = make_journal_storage(log_path)
+    assert isinstance(storage, JournalStorage)
+
+
+def test_make_journal_storage_study_persists(tmp_path):
+    """A study created with JournalStorage is accessible across study loads."""
+    import optuna
+
+    from stock_rtx4060.ml.hpo import make_journal_storage
+
+    log_path = str(tmp_path / "persist_test.log")
+    storage = make_journal_storage(log_path)
+    study_name = "optuna_journal_test"
+
+    study = optuna.create_study(study_name=study_name, storage=storage, direction="minimize")
+    study.optimize(lambda t: t.suggest_float("x", -1, 1) ** 2, n_trials=3)
+
+    # Reload from same journal file
+    storage2 = make_journal_storage(log_path)
+    loaded = optuna.load_study(study_name=study_name, storage=storage2)
+    assert len(loaded.trials) == 3
+    assert loaded.best_value <= 1.0
+
+
+def test_grpc_storage_proxy_importable():
+    """GrpcStorageProxy must be importable from optuna.storages (4.2+)."""
+    from optuna.storages import GrpcStorageProxy  # noqa: F401 — import check only
+
+    assert GrpcStorageProxy is not None
+
+
+def test_make_journal_storage_exported_in_all():
+    """make_journal_storage must be in hpo.__all__."""
+    from stock_rtx4060.ml import hpo
+
+    assert "make_journal_storage" in hpo.__all__

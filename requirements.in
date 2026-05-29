@@ -15,7 +15,7 @@ loguru>=0.7
 mlflow>=3.0
 prometheus-client>=0.20
 # Phase 1 PIT data lake (DuckDB+Parquet default; ArcticDB optional)
-duckdb>=1.1
+duckdb>=1.5.3
 pyarrow>=17
 httpx>=0.27
 # Phase 4 portfolio optimization (all optional — pure-Python HRP fallback works without them)
@@ -23,7 +23,7 @@ skfolio>=0.4
 cvxpy>=1.5
 PyPortfolioOpt>=1.5
 # Phase 3 ML upgrade (all optional — engine uses XGBoost path when missing)
-optuna>=4.0
+optuna>=4.8  # 4.8.0 is current stable; v5 not yet on PyPI (2026-05-29)
 shap>=0.46
 lightgbm>=4.5
 # Phase 5 backtest hardening (all optional — pure-NumPy fallbacks ship in-repo)
@@ -33,6 +33,7 @@ statsmodels>=0.14
 # Phase 6 LLM advisor layer (all optional — engine has a deterministic
 # fallback when these are missing).
 anthropic>=0.40
+litellm>=1.55  # W2-B3: unified LLM gateway — Anthropic↔MiniMax fallback routing
 langgraph>=0.2
 feedparser
 sec-edgar-downloader

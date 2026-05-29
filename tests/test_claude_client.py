@@ -16,10 +16,22 @@ import pytest
 from stock_rtx4060.advisors.claude_client import (
     CACHE_READ_MULTIPLIER,
     CACHE_WRITE_MULTIPLIER,
+    DEFAULT_MINIMAX_BASE_URL,
+    DEFAULT_MINIMAX_MODEL,
     DEFAULT_MODEL,
     ClaudeClient,
     compute_cost_usd,
+    has_live_advisor_key,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("MINIMAX_API_KEY", raising=False)
+    monkeypatch.delenv("MINIMAX_BASE_URL", raising=False)
+    monkeypatch.delenv("MINIMAX_MODEL", raising=False)
+    monkeypatch.delenv("LLM_ADVISOR_PROVIDER", raising=False)
 
 # ─── fake message + client ────────────────────────────────────────────────
 
@@ -62,6 +74,31 @@ class _FakeClient:
         self.calls: list[dict[str, Any]] = []
         self.messages = _SyncMessages(self)
         self.error_queue: list[Exception | None] = []
+
+
+class _MiniMaxResponse:
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self.payload = payload
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict[str, Any]:
+        return self.payload
+
+
+class _MiniMaxClient:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, Any]] = []
+
+    def post(self, path: str, **kwargs: Any) -> _MiniMaxResponse:
+        self.calls.append({"path": path, **kwargs})
+        return _MiniMaxResponse(
+            {
+                "choices": [{"message": {"role": "assistant", "content": "{\"ok\": true}"}}],
+                "usage": {"prompt_tokens": 11, "completion_tokens": 7},
+            }
+        )
 
 
 # ─── cost arithmetic ──────────────────────────────────────────────────────
@@ -243,3 +280,169 @@ def test_prompt_hash_is_deterministic():
     assert a.prompt_hash == b.prompt_hash
     c = client.call(system="hello!", messages=[{"role": "user", "content": "x"}])
     assert a.prompt_hash != c.prompt_hash
+
+
+def test_has_live_advisor_key_accepts_minimax(monkeypatch: pytest.MonkeyPatch):
+    assert has_live_advisor_key() is False
+    monkeypatch.setenv("MINIMAX_API_KEY", "sk-cp-test")
+    assert has_live_advisor_key() is True
+
+
+def test_minimax_call_uses_openai_compatible_payload(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LLM_ADVISOR_PROVIDER", "minimax")
+    monkeypatch.setenv("MINIMAX_API_KEY", "sk-cp-test")
+
+    client = ClaudeClient()
+    fake = _MiniMaxClient()
+    client._sync_client = fake
+
+    result = client.call(system="sys", messages=[{"role": "user", "content": "hi"}])
+
+    assert result.text == "{\"ok\": true}"
+    assert result.tokens_in == 11
+    assert result.tokens_out == 7
+    assert result.cache_read_tokens == 0
+    assert result.cache_creation_tokens == 0
+    assert result.cost_usd == 0.0
+    assert result.model == DEFAULT_MINIMAX_MODEL
+    assert fake.calls[0]["path"] == "/chat/completions"
+    assert fake.calls[0]["headers"]["Authorization"] == "Bearer sk-cp-test"
+    assert fake.calls[0]["json"]["model"] == DEFAULT_MINIMAX_MODEL
+    assert fake.calls[0]["json"]["reasoning_split"] is True
+    assert fake.calls[0]["json"]["messages"][0] == {"role": "system", "content": "sys"}
+    assert fake.calls[0]["json"]["messages"][1] == {"role": "user", "content": "hi"}
+
+
+def test_minimax_can_reuse_sk_cp_anthropic_env_key(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-cp-test")
+
+    client = ClaudeClient()
+    fake = _MiniMaxClient()
+    client._sync_client = fake
+
+    result = client.call(system=None, messages=[{"role": "user", "content": "hi"}])
+
+    assert result.model == DEFAULT_MINIMAX_MODEL
+    assert fake.calls[0]["headers"]["Authorization"] == "Bearer sk-cp-test"
+
+
+def test_minimax_base_url_default_constant():
+    assert DEFAULT_MINIMAX_BASE_URL == "https://api.minimax.io/v1"
+
+
+def test_minimax_result_strips_think_blocks(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LLM_ADVISOR_PROVIDER", "minimax")
+    monkeypatch.setenv("MINIMAX_API_KEY", "sk-cp-test")
+
+    client = ClaudeClient()
+    result = client._build_minimax_call_result(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "<think>private reasoning {\"score\": 1}</think>{\"score\":0}",
+                    }
+                }
+            ],
+            "usage": {"prompt_tokens": 3, "completion_tokens": 4},
+        },
+        "hash",
+    )
+
+    assert result.text == "{\"score\":0}"
+
+
+# ---------------------------------------------------------------------------
+# W2-B3: LiteLLM gateway tests
+# ---------------------------------------------------------------------------
+
+
+def test_litellm_disabled_by_default(monkeypatch: pytest.MonkeyPatch):
+    """USE_LITELLM defaults to false — native path must be used."""
+    monkeypatch.delenv("USE_LITELLM", raising=False)
+    import importlib
+    import stock_rtx4060.advisors.claude_client as cc_mod
+
+    importlib.reload(cc_mod)
+    assert cc_mod._USE_LITELLM is False
+
+
+def test_litellm_enabled_by_env(monkeypatch: pytest.MonkeyPatch):
+    """USE_LITELLM=true activates the LiteLLM flag."""
+    monkeypatch.setenv("USE_LITELLM", "true")
+    import importlib
+    import stock_rtx4060.advisors.claude_client as cc_mod
+
+    importlib.reload(cc_mod)
+    assert cc_mod._USE_LITELLM is True
+    monkeypatch.delenv("USE_LITELLM", raising=False)
+    importlib.reload(cc_mod)
+
+
+def test_litellm_has_litellm_flag():
+    """litellm package should be installed in this environment."""
+    import stock_rtx4060.advisors.claude_client as cc_mod
+
+    assert cc_mod._HAS_LITELLM is True, (
+        "_HAS_LITELLM is False — install litellm: pip install litellm>=1.55"
+    )
+
+
+def test_audit_log_includes_provider_field(tmp_path: "pytest.tmp_path_factory"):
+    """W2-B3: log_advisor_call writes provider field to JSONL."""
+    import json
+    from pathlib import Path
+
+    from stock_rtx4060.advisors.audit import log_advisor_call
+    from stock_rtx4060.advisors.base import AdvisoryOutput
+
+    log_path = tmp_path / "test_advisor.jsonl"
+    output = AdvisoryOutput(
+        agent="news_sentiment",
+        ticker="AAPL",
+        score=0.3,
+        confidence=0.8,
+        rationale="test",
+        citations=[],
+        prompt_hash="abc123",
+        tokens_in=100,
+        tokens_out=10,
+        cost_usd=0.001,
+    )
+    log_advisor_call(output, path=log_path, provider="anthropic")
+
+    with log_path.open() as fh:
+        record = json.loads(fh.readline())
+
+    assert "provider" in record, "provider field missing from audit log"
+    assert record["provider"] == "anthropic"
+
+
+def test_audit_log_provider_null_when_not_set(tmp_path: "pytest.tmp_path_factory"):
+    """W2-B3: log_advisor_call writes provider=null when provider not passed."""
+    import json
+
+    from stock_rtx4060.advisors.audit import log_advisor_call
+    from stock_rtx4060.advisors.base import AdvisoryOutput
+
+    log_path = tmp_path / "test_advisor_null.jsonl"
+    output = AdvisoryOutput(
+        agent="macro_regime",
+        ticker="AAPL",
+        score=0.0,
+        confidence=0.5,
+        rationale="neutral",
+        citations=[],
+        prompt_hash="def456",
+        tokens_in=50,
+        tokens_out=5,
+        cost_usd=0.0,
+    )
+    log_advisor_call(output, path=log_path)  # no provider kwarg
+
+    with log_path.open() as fh:
+        record = json.loads(fh.readline())
+
+    assert "provider" in record, "provider field missing"
+    assert record["provider"] is None

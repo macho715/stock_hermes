@@ -1297,6 +1297,10 @@ function BackendTab({ snapshot, currentResult, backendError, accent }) {
         <Panel title={`BACKEND · ${selected.ticker} · TRACK-${selected.track}`} right={selected.verdict} rightColor={verdictColor(selected.verdict)}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, padding: 4 }}>
             <BackendKV label="SCORE" value={fmtNum(selected.score)} color={accent} />
+            <BackendKV label="READY" value={selected.investment_readiness_status || selected.dashboard_status || "—"} color={readinessColor(selected)} />
+            <BackendKV label="READINESS" value={fmtNum(selected.investment_readiness_score)} color={readinessColor(selected)} />
+            <BackendKV label="LIVE" value={selected.new_capital_allowed ? "ALLOWED" : "BLOCKED"} color={selected.new_capital_allowed ? C.green : C.red} />
+            <BackendKV label="PAPER" value={selected.paper_trading_only ? "ONLY" : "OPTIONAL"} color={selected.paper_trading_only ? C.amber : C.textDim} />
             <BackendKV label="PROB" value={`${fmtNum((selected.probability || 0) * 100)}%`} color={C.lr} />
             <BackendKV label="EV" value={`${fmtNum(selected.expected_value_pct)}%`} color={selected.expected_value_pct >= 0 ? C.green : C.red} />
             <BackendKV label="R/R" value={fmtNum(selected.risk_reward)} color={C.xgb} />
@@ -1305,6 +1309,13 @@ function BackendTab({ snapshot, currentResult, backendError, accent }) {
             <BackendKV label="TP2" value={fmtNum(selected.tp2)} color={C.green} />
             <BackendKV label="QTY" value={fmtNum(selected.suggested_quantity)} />
           </div>
+          {selected.dashboard_warning && (
+            <ReadinessWarning
+              message={selected.dashboard_warning_message}
+              reasons={selected.blocking_reasons}
+              status={selected.investment_readiness_status || selected.dashboard_status}
+            />
+          )}
           <div style={{ marginTop: 8 }}>
             {(selected.validations || []).slice(0, 8).map((v) => (
               <div
@@ -1344,7 +1355,7 @@ function BackendTab({ snapshot, currentResult, backendError, accent }) {
           >
             <span style={{ color: C.textMuted }}>{r.rank}</span>
             <span style={{ color: accent, fontWeight: 700 }}>{r.ticker}</span>
-            <span style={{ color: verdictColor(r.verdict), fontSize: 9 }}>{r.verdict}</span>
+            <span style={{ color: readinessColor(r), fontSize: 9 }}>{r.investment_readiness_status || r.verdict}</span>
             <span style={{ color: C.text, textAlign: "right" }}>{fmtNum(r.score)}</span>
           </div>
         ))}
@@ -1370,6 +1381,43 @@ function verdictColor(verdict) {
   if (String(verdict).startsWith("ZERO")) return C.red;
   if (String(verdict).startsWith("RED")) return C.red;
   return C.textDim;
+}
+
+function readinessColor(row) {
+  const status = String(row?.investment_readiness_status || row?.dashboard_status || row?.verdict || "");
+  if (status === "READY_FOR_MANUAL_REVIEW") return C.green;
+  if (status === "AMBER_WATCHLIST") return C.amber;
+  if (status === "HARD_FAIL") return C.red;
+  return verdictColor(status);
+}
+
+function ReadinessWarning({ message, reasons, status }) {
+  const normalized = String(message || "AMBER WATCHLIST\nModel failed one or more readiness gates.\nNew capital is not allowed.\nPaper trading and monitoring only.");
+  const lines = normalized.split(/\r?\n/).filter(Boolean);
+  const heading = lines[0] || status || "AMBER WATCHLIST";
+  const body = lines.slice(1);
+  const visibleReasons = Array.isArray(reasons) ? reasons.slice(0, 5) : [];
+  return (
+    <div style={{ marginTop: 8, padding: "8px 10px", background: "#1A1203", border: `1px solid ${C.amber}`, borderLeft: `3px solid ${C.amber}` }}>
+      <div style={{ color: C.amber, fontSize: 10, fontWeight: 700, letterSpacing: 1.4 }}>
+        {heading.replace("_", " ")}
+      </div>
+      {body.map((line) => (
+        <div key={line} style={{ color: C.text, fontSize: 10, lineHeight: 1.5, marginTop: 2 }}>
+          {line}
+        </div>
+      ))}
+      {visibleReasons.length > 0 && (
+        <div style={{ marginTop: 6 }}>
+          {visibleReasons.map((reason) => (
+            <div key={reason} style={{ color: C.textDim, fontSize: 9, lineHeight: 1.45 }}>
+              {reason}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ----------  ADVISOR OVERLAY  ---------- */

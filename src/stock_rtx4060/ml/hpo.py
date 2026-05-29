@@ -25,8 +25,43 @@ def _require_optuna() -> Any:
     try:
         import optuna  # type: ignore[import-not-found]
     except ImportError as exc:  # pragma: no cover - import guard
-        raise ImportError("optuna is required for run_hpo(). Install with: pip install 'optuna>=4.0'") from exc
+        raise ImportError("optuna is required for run_hpo(). Install with: pip install 'optuna>=4.8'") from exc
     return optuna
+
+
+def make_journal_storage(path: str) -> Any:
+    """Create an Optuna ``JournalStorage`` backed by a local file.
+
+    JournalStorage is the recommended zero-dependency storage for multi-process
+    HPO runs on a single machine (no RDB server required).  It uses file locking
+    internally so multiple workers can share the same study safely.
+
+    Parameters
+    ----------
+    path:
+        File path for the journal log (e.g. ``"./optuna_journal.log"``).
+        The file is created if it does not exist.
+
+    Returns
+    -------
+    ``optuna.storages.JournalStorage`` instance.
+
+    Example
+    -------
+    >>> storage = make_journal_storage("./runs/study.log")
+    >>> result = run_hpo(X, y, storage=storage, study_name="my_study")
+
+    Notes
+    -----
+    For large-scale distributed HPO across many nodes use
+    ``GrpcStorageProxy`` instead — see
+    https://optuna.readthedocs.io/en/stable/reference/generated/optuna.storages.GrpcStorageProxy.html
+    """
+    _require_optuna()
+    from optuna.storages import JournalStorage  # type: ignore[import-not-found]
+    from optuna.storages.journal import JournalFileBackend  # type: ignore[import-not-found]
+
+    return JournalStorage(JournalFileBackend(path))
 
 
 def _make_xgb(trial: Any) -> Any:
@@ -161,4 +196,4 @@ def _clone(estimator: Any) -> Any:
         return estimator.__class__(**params)
 
 
-__all__ = ["run_hpo"]
+__all__ = ["run_hpo", "make_journal_storage"]

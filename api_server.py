@@ -1,5 +1,5 @@
 """
-Flask API server for stock_rtx4060 unified — provides /api/recommend endpoint.
+Flask API server for stock_rtx4060 unified -provides /api/recommend endpoint.
 
 Run: python api_server.py [--port 5151]
 Serves dashboard_snapshot.v1 JSON for Vite dashboard integration.
@@ -28,7 +28,7 @@ if str(SRC) not in sys.path:
 
 from stock_rtx4060.dashboard_bridge import build_dashboard_snapshot
 from stock_rtx4060.data_providers import load_ohlcv_with_provider
-from stock_rtx4060.ensemble_model import EnsemblePredictor, ModelConfig
+from stock_rtx4060.ensemble_model import EnsemblePredictor, GRUPredictor, ModelConfig, _has_torch
 from stock_rtx4060.feature_engine import TechnicalIndicators
 from stock_rtx4060.paper_trading import load_paper_status
 from stock_rtx4060.recommendation_engine import RecommendationConfig, RecommendationEngine, parse_universe
@@ -201,7 +201,7 @@ def api_symbol():
                         command="symbol_chart",
                     )
                 except Exception:
-                    # Both pykrx and yfinance failed — use synthetic
+                    # Both pykrx and yfinance failed -use synthetic
                     provider_result = load_ohlcv_with_provider(
                         symbol,
                         period,
@@ -324,12 +324,46 @@ def api_model_scores():
         if model.oof_probabilities_ is not None:
             oof_coverage = float(model.oof_probabilities_.notna().mean())
 
+        # Secondary LogReg score -always computed (fast, no extra deps)
+        logistic_score: float | None
+        if backend_kind == "logistic":
+            logistic_score = primary_score
+        else:
+            try:
+                _lr = EnsemblePredictor(ModelConfig(
+                    horizon=horizon, n_splits=3, gap=horizon,
+                    model_kind="logistic", use_lstm=False, lite=True,
+                ))
+                _lr.fit(feature_df)
+                _lr_latest = _lr.predict_latest(feature_df)
+                logistic_score = round(float(_lr_latest["direction_prob"]) * 100.0, 2)
+            except Exception:
+                logistic_score = None
+
+        # RNN (GRU) score -computed when PyTorch is available
+        rnn_score: float | None = None
+        if _has_torch():
+            try:
+                _gru_cfg = ModelConfig(
+                    horizon=horizon, seq_len=model.config.seq_len, lite=True,
+                )
+                _gru = GRUPredictor(_gru_cfg)
+                _gru.fit(
+                    feature_df.loc[:, model.feature_cols],
+                    feature_df["target_direction"].astype(int),
+                )
+                _gru_prob = _gru.predict_proba(feature_df.loc[:, model.feature_cols])
+                if len(_gru_prob):
+                    rnn_score = round(float(_gru_prob[-1]) * 100.0, 2)
+            except Exception:
+                rnn_score = None
+
         model_scores = {
             "main": main_score,
             "xgboost": primary_score if backend_kind.startswith("xgb") else None,
-            "logistic": primary_score if backend_kind == "logistic" else None,
+            "logistic": logistic_score,
             "lstm": lstm_score,
-            "rnn": None,
+            "rnn": rnn_score,
         }
 
         return jsonify(
@@ -382,14 +416,14 @@ def api_model_scores():
 def api_recommend():
     """
     Query params:
-      universe  — comma-separated tickers (default: built-in sample)
-      track     — S | L | BOTH (default: BOTH)
-      period    — yfinance period (default: 3y)
-      top       — top N candidates (default: 5)
-      synthetic — 1 to use synthetic data (default: 0)
-      data_provider — auto | synthetic | yfinance | openbb | pykrx | fdr (default: auto)
-      model_kind — auto | xgb | logistic (default: logistic)
-      output_dir — directory for JSON output (default: reports/api_recommend)
+      universe  -comma-separated tickers (default: built-in sample)
+      track     -S | L | BOTH (default: BOTH)
+      period    -yfinance period (default: 3y)
+      top       -top N candidates (default: 5)
+      synthetic -1 to use synthetic data (default: 0)
+      data_provider -auto | synthetic | yfinance | openbb | pykrx | fdr (default: auto)
+      model_kind -auto | xgb | logistic (default: logistic)
+      output_dir -directory for JSON output (default: reports/api_recommend)
     Returns: dashboard_snapshot.v1 JSON
     """
     universe = request.args.get("universe")
@@ -402,9 +436,10 @@ def api_recommend():
     advisor_run = request.args.get("advisor_run", "0") == "1"
     advisor_blend_weight = float(request.args.get("advisor_blend_weight", "0.3"))
 
-    # Silently disable advisor when ANTHROPIC_API_KEY is absent
-    import os as _os
-    if advisor_run and not _os.getenv("ANTHROPIC_API_KEY"):
+    # Silently disable advisor when no supported live LLM key is available.
+    from stock_rtx4060.advisors.claude_client import has_live_advisor_key
+
+    if advisor_run and not has_live_advisor_key():
         advisor_run = False
 
     _tickers = parse_universe(universe)
@@ -495,14 +530,14 @@ def main(port: int = 5151):
     print(f"Starting stock_rtx4060 unified API server on http://0.0.0.0:{args.port}")
     print(f"Dashboard: {dashboard_url}/")
     print("Endpoints:")
-    print("  GET /                     — React dashboard (built static)")
-    print("  GET /api/health           — health check")
-    print("  GET /api/universe         — dashboard-selectable symbols")
-    print("  GET /api/symbol           — latest OHLCV for dashboard charts")
-    print("  GET /api/model-scores     — backend model evidence for one symbol")
-    print("  GET /api/paper-status     — latest paper-only virtual trading status")
-    print("  GET /api/recommend        — run recommendation + return snapshot")
-    print("  GET /api/snapshot?path=X  — serve existing recommendation JSON as snapshot")
+    print("  GET /                     -React dashboard (built static)")
+    print("  GET /api/health           -health check")
+    print("  GET /api/universe         -dashboard-selectable symbols")
+    print("  GET /api/symbol           -latest OHLCV for dashboard charts")
+    print("  GET /api/model-scores     -backend model evidence for one symbol")
+    print("  GET /api/paper-status     -latest paper-only virtual trading status")
+    print("  GET /api/recommend        -run recommendation + return snapshot")
+    print("  GET /api/snapshot?path=X  -serve existing recommendation JSON as snapshot")
     app.run(host=args.host, port=args.port, debug=False, use_reloader=False)
 
 

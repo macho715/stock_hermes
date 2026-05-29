@@ -673,3 +673,53 @@ def test_predict_proba_with_lstm_exception(feature_df):
     # Should not raise; falls back to main model
     proba = ep.predict_proba(X)
     assert len(proba) == len(X)
+
+
+# ---------------------------------------------------------------------------
+# LSTMPredictor — PyTorch backend (W-C patch)
+# ---------------------------------------------------------------------------
+
+
+def test_lstm_has_torch_function_importable():
+    """_has_torch must be importable from ensemble_model."""
+    from stock_rtx4060.ensemble_model import _has_torch
+
+    result = _has_torch()
+    assert isinstance(result, bool)
+
+
+def test_lstm_fit_raises_without_torch(monkeypatch):
+    """LSTMPredictor.fit() raises RuntimeError when torch is not installed."""
+    import sys
+    from unittest.mock import patch
+
+    from stock_rtx4060.ensemble_model import LSTMPredictor, ModelConfig
+
+    cfg = ModelConfig(seq_len=5)
+    lstm = LSTMPredictor(cfg)
+    X = pd.DataFrame(np.random.rand(30, 4))
+    y = pd.Series([0, 1] * 15)
+
+    with patch("stock_rtx4060.ensemble_model._has_torch", return_value=False):
+        with pytest.raises(RuntimeError, match="PyTorch not installed"):
+            lstm.fit(X, y)
+
+
+def test_lstm_torch_device_returns_string():
+    """_torch_device() always returns a non-empty string."""
+    from stock_rtx4060.ensemble_model import LSTMPredictor, ModelConfig
+
+    device = LSTMPredictor._torch_device()
+    assert isinstance(device, str)
+    assert device in ("cpu", "cuda")
+
+
+def test_lstm_build_sequences_interface_unchanged():
+    """_build_sequences output shape contract is preserved after PyTorch port."""
+    from stock_rtx4060.ensemble_model import LSTMPredictor, ModelConfig
+
+    cfg = ModelConfig(seq_len=3)
+    lstm = LSTMPredictor(cfg)
+    X = np.ones((10, 4), dtype=float)
+    seq = lstm._build_sequences(X)
+    assert seq.shape == (7, 3, 4), f"Expected (7,3,4) got {seq.shape}"

@@ -476,6 +476,7 @@ export default function StockPredV5() {
   const [tab, setTab] = useState("SIGNAL");
   const [recSource, setRecSource] = useState("api"); // "file" | "api"
   const [advisorEnabled, setAdvisorEnabled] = useState(false);
+  const [lstmEnabled, setLstmEnabled] = useState(false);
   const [bench, setBench] = useState({ open: false, rows: [], loading: false, progress: 0 });
   const [clock, setClock] = useState("");
   const [exportFlash, setExportFlash] = useState("");
@@ -623,19 +624,22 @@ export default function StockPredV5() {
   }, [selected, cache, symbolPeriod, symbolDataProvider, dashboardConfig]);
 
   /* backend model evidence for primary SIGNAL/MODELS */
+  const modelEvidenceCacheKey = `${selected}__lstm${lstmEnabled ? 1 : 0}`;
   useEffect(() => {
     if (!selected) return;
     if (Object.keys(modelScoreDefaults).length === 0) return;
-    if (modelEvidenceCache[selected]) return;
+    if (modelEvidenceCache[modelEvidenceCacheKey]) return;
     let cancelled = false;
     setModelEvidenceLoading(true);
-    fetchModelEvidence(selected, modelScoreDefaults)
+    const params = { ...modelScoreDefaults };
+    if (lstmEnabled) params.use_lstm = "1";
+    fetchModelEvidence(selected, params)
       .then((payload) => {
         if (cancelled) return;
-        setModelEvidenceCache((current) => ({ ...current, [selected]: payload }));
+        setModelEvidenceCache((current) => ({ ...current, [modelEvidenceCacheKey]: payload }));
         setModelEvidenceErrors((current) => {
           const next = { ...current };
-          delete next[selected];
+          delete next[modelEvidenceCacheKey];
           return next;
         });
       })
@@ -643,14 +647,14 @@ export default function StockPredV5() {
         if (cancelled) return;
         setModelEvidenceErrors((current) => ({
           ...current,
-          [selected]: e.message || "MODEL EVIDENCE UNAVAILABLE",
+          [modelEvidenceCacheKey]: e.message || "MODEL EVIDENCE UNAVAILABLE",
         }));
       })
       .finally(() => {
         if (!cancelled) setModelEvidenceLoading(false);
       });
     return () => { cancelled = true; };
-  }, [selected, modelEvidenceCache, modelScoreDefaults]);
+  }, [selected, modelEvidenceCache, modelScoreDefaults, lstmEnabled, modelEvidenceCacheKey]);
 
   /* paper-only trading status */
   useEffect(() => {
@@ -703,8 +707,8 @@ export default function StockPredV5() {
       rnn: rnnPredict(enriched, lastIdx),
     };
   }, [feat, enriched, lastIdx, last]);
-  const modelEvidence = modelEvidenceCache[selected] || null;
-  const modelEvidenceError = modelEvidenceErrors[selected] || "";
+  const modelEvidence = modelEvidenceCache[modelEvidenceCacheKey] || null;
+  const modelEvidenceError = modelEvidenceErrors[modelEvidenceCacheKey] || "";
   const scores = useMemo(() => scoresFromModelEvidence(modelEvidence), [modelEvidence]);
   const modelQualityWarning = useMemo(
     () => getModelQualityWarning(modelEvidence, modelQualityConfig),
@@ -1340,10 +1344,45 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                         LLM ADVISOR
                       </span>
                       <span style={{ color: C.textMuted, marginLeft: "auto" }}>
-                        {advisorEnabled ? "blend_weight=0.30 · requires ANTHROPIC_API_KEY" : "OFF"}
+                        {advisorEnabled ? "blend_weight=0.30 · requires ANTHROPIC_API_KEY or MINIMAX_API_KEY" : "OFF"}
                       </span>
                     </div>
                   )}
+                  {/* LSTM toggle — activates use_lstm=1 on /api/model-scores */}
+                  <div style={{
+                    margin: "4px 8px 0",
+                    padding: "5px 8px",
+                    border: `1px solid ${lstmEnabled ? "#BB66FF55" : C.border}`,
+                    background: lstmEnabled ? "#0A0D1A" : C.bgDeep,
+                    fontFamily: FONT,
+                    fontSize: 8,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    cursor: "pointer",
+                    userSelect: "none",
+                  }}
+                    onClick={() => setLstmEnabled((v) => !v)}
+                  >
+                    <div style={{
+                      width: 24, height: 12, borderRadius: 6,
+                      background: lstmEnabled ? C.lstm : C.border,
+                      position: "relative", transition: "background .15s", flexShrink: 0,
+                    }}>
+                      <div style={{
+                        position: "absolute", top: 2,
+                        left: lstmEnabled ? 14 : 2,
+                        width: 8, height: 8, borderRadius: "50%",
+                        background: "#fff", transition: "left .15s",
+                      }} />
+                    </div>
+                    <span style={{ color: lstmEnabled ? C.lstm : C.textMuted, fontWeight: 600, letterSpacing: 1.5 }}>
+                      LSTM
+                    </span>
+                    <span style={{ color: C.textMuted, marginLeft: "auto" }}>
+                      {lstmEnabled ? "use_lstm=1 · PyTorch GPU · re-fetches scores" : "OFF"}
+                    </span>
+                  </div>
                   {effectiveRecSource === "file" && (
                     <div style={{
                       margin: "8px 8px 0",
