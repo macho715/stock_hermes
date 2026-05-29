@@ -258,20 +258,18 @@ def test_recommendation_config_paper_candidate_defaults():
 
 def test_oof_coverage_simulation_5y_5splits():
     """5y data + 5 splits should give ≥85% OOF coverage with horizon=10."""
-    import numpy as np
     from stock_rtx4060.ml.cv import PurgedKFold
 
     # 5y KRX ≈ 1250 trading bars
     n = 1250
     horizon = 10
     rng = np.random.default_rng(42)
-    import pandas as pd
     X = pd.DataFrame(rng.standard_normal((n, 4)))
     groups = np.arange(n) + horizon
 
     cv = PurgedKFold(n_splits=5, embargo_pct=horizon / n)
     oof_count = 0
-    for train, test in cv.split(X, groups=groups):
+    for _train, test in cv.split(X, groups=groups):
         oof_count += len(test)
 
     coverage = oof_count / n
@@ -280,9 +278,7 @@ def test_oof_coverage_simulation_5y_5splits():
 
 def test_oof_coverage_simulation_5y_5splits_trade_count():
     """5y + 5 splits OOF rows should enable ~80+ trades in backtester."""
-    import numpy as np
     from stock_rtx4060.ml.cv import PurgedKFold
-    import pandas as pd
 
     n = 1250
     horizon = 10
