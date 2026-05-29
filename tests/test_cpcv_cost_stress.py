@@ -236,3 +236,65 @@ def test_evaluate_with_cpcv():
     assert cpcv_checks["CPCV_PBO"]["status"] == "PASS"   # 0.13 <= 0.20
     assert cpcv_checks["CPCV_DSR"]["status"] == "PASS"   # 0.45 > 0
     assert cpcv_checks["CPCV_PATH_RATE"]["status"] == "PASS"  # 0.73 >= 0.60
+
+
+# ---------------------------------------------------------------------------
+# PAPER_CANDIDATE config defaults (v5.1)
+# ---------------------------------------------------------------------------
+
+
+def test_recommendation_config_paper_candidate_defaults():
+    """v5.1 defaults must support PAPER_CANDIDATE thresholds."""
+    from stock_rtx4060.recommendation_engine import RecommendationConfig
+
+    cfg = RecommendationConfig()
+    assert cfg.period == "5y", f"period should be '5y', got {cfg.period!r}"
+    assert cfg.xgb_splits == 5, f"xgb_splits should be 5, got {cfg.xgb_splits}"
+    assert cfg.model_kind == "auto", f"model_kind should be 'auto', got {cfg.model_kind!r}"
+    assert cfg.horizon_s == 10, f"horizon_s should be 10, got {cfg.horizon_s}"
+    assert cfg.min_oof_coverage >= 0.75, f"min_oof_coverage should be >=0.75, got {cfg.min_oof_coverage}"
+
+
+def test_oof_coverage_simulation_5y_5splits():
+    """5y data + 5 splits should give ≥85% OOF coverage with horizon=10."""
+    import numpy as np
+    from stock_rtx4060.ml.cv import PurgedKFold
+
+    # 5y KRX ≈ 1250 trading bars
+    n = 1250
+    horizon = 10
+    rng = np.random.default_rng(42)
+    import pandas as pd
+    X = pd.DataFrame(rng.standard_normal((n, 4)))
+    groups = np.arange(n) + horizon
+
+    cv = PurgedKFold(n_splits=5, embargo_pct=horizon / n)
+    oof_count = 0
+    for train, test in cv.split(X, groups=groups):
+        oof_count += len(test)
+
+    coverage = oof_count / n
+    assert coverage >= 0.85, f"Expected OOF coverage >= 85%, got {coverage:.1%}"
+
+
+def test_oof_coverage_simulation_5y_5splits_trade_count():
+    """5y + 5 splits OOF rows should enable ~80+ trades in backtester."""
+    import numpy as np
+    from stock_rtx4060.ml.cv import PurgedKFold
+    import pandas as pd
+
+    n = 1250
+    horizon = 10
+    rng = np.random.default_rng(42)
+    X = pd.DataFrame(rng.standard_normal((n, 4)))
+    groups = np.arange(n) + horizon
+
+    cv = PurgedKFold(n_splits=5, embargo_pct=horizon / n)
+    total_test_rows = sum(len(test) for _, test in cv.split(X, groups=groups))
+
+    # Conservative estimate: 1 signal every 12 bars → trades = test_rows / 12
+    estimated_trades = total_test_rows // 12
+    assert estimated_trades >= 80, (
+        f"Expected ≥80 estimated trades, got {estimated_trades} "
+        f"(test_rows={total_test_rows})"
+    )

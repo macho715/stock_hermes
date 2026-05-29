@@ -39,7 +39,7 @@
       "data_provider": "yfinance"
     },
     "model_scores_krx": {
-      "period": "3y",
+      "period": "5y",
       "model_kind": "auto",
       "data_provider": "pykrx"
     },

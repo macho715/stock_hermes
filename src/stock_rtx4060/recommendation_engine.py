@@ -66,8 +66,8 @@ DEFAULT_UNIVERSE = [
 class RecommendationConfig:
     universe: list[str] = field(default_factory=lambda: DEFAULT_UNIVERSE.copy())
     track: Literal["S", "L", "BOTH"] = "BOTH"
-    period: str = "3y"
-    horizon_s: int = 20
+    period: str = "5y"              # v5.1 PAPER_CANDIDATE: 5y gives ~1250 rows (was 3y/~750)
+    horizon_s: int = 10             # v5.1: shorter short-term horizon (was 20) — KRX 2-week signal
     horizon_l: int = 63
     top_n: int = 5
     synthetic: bool = False
@@ -91,12 +91,12 @@ class RecommendationConfig:
     max_mdd_pct_s: float = 25.0
     max_mdd_pct_l: float = 35.0
     min_risk_reward: float = 2.0
-    model_kind: Literal["auto", "xgb", "logistic", "rf"] = "logistic"
+    model_kind: Literal["auto", "xgb", "logistic", "rf"] = "auto"    # v5.1: XGBoost preferred (was logistic)
     xgb_device: Literal["cpu", "cuda"] = "cpu"
     xgb_estimators: int = 160
-    xgb_splits: int = 3
+    xgb_splits: int = 5             # v5.1: 5 folds for ≥85% OOF (was 3)
     cv_gap: int | None = None
-    min_oof_coverage: float = 0.45
+    min_oof_coverage: float = 0.75  # v5.1 PAPER_CANDIDATE gate (was 0.45 — too lenient)
     min_backtest_sharpe: float = -0.25
     transaction_cost_buffer_pct: float = 0.50
     capital: float = 100_000.0
