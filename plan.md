@@ -4,6 +4,7 @@
 **Date:** 2026-05-29
 **Type:** FEATURE
 **Branch:** `claude/openbb-chaos-20260529`
+**Updated:** 2026-05-29T08:15
 
 ---
 
@@ -21,30 +22,31 @@
 
 **File:** `src/stock_rtx4060/data_lake/ingest/openbb_ingestor.py`
 
-| Task | Description |
-|------|-------------|
-| PR-O1 | OpenBB MMA ( macroeconomic analytics) 데이터 fetch |
-| PR-O2 | `panel_fetcher` → `advisors/macro_regime.py` 연동 |
-| PR-O3 | `advisors/orchestrator.py`에 OpenBB MCP tool 등록 |
+| Task | Description | Status |
+|------|-------------|--------|
+| PR-O1 | OpenBB MMA (macroeconomic analytics) 데이터 fetch | ✅ DONE (91 lines) |
+| PR-O2 | `panel_fetcher` → `advisors/macro_regime.py` 연동 | ✅ DONE (`panel_fetcher` attr at line 32) |
+| PR-O3 | `advisors/orchestrator.py`에 OpenBB MCP tool 등록 | 🔲 OPEN |
 
 **Dep:** `openbb>=4.4` (requirements-openbb.txt)
 
 **Design principles:**
-- Graceful degradation: OpenBB unavailable 시Warning 로그 + continue
-- No hard dependency on OpenBB in main trading path
-- Configurable via `config/data_providers.example.json`
+- Graceful degradation: OpenBB unavailable 시 Warning 로그 + continue ✅
+- No hard dependency on OpenBB in main trading path ✅
+- Configurable via `config/data_providers.example.json` ✅
 
 ### 2.2 Chaos Engineering Test Suite (PR-C)
 
 **File:** `tests/test_chaos_paper_trading.py`
 
-| Task | Description |
-|------|-------------|
-| PR-C1 | `test_chaos_open_positions_exceeded` — max_open_positions 초과 시 rejection |
-| PR-C2 | `test_chaos_daily_new_exceeded` — daily_new_count >= 3 rejection |
-| PR-C3 | `test_chaos_buy_score_below_threshold` — score < 56 rejection |
-| PR-C4 | `test_chaos_force_rerun_no_reason` — force_rerun=True + no rerun_reason → ValueError |
-| PR-C5 | `test_chaos_stale_bars` — _validate_bars가 과거 데이터陈旧判断하는지 검증 |
+| Task | Description | Status |
+|------|-------------|--------|
+| PR-C1 | `test_chaos_open_positions_exceeded` | ✅ DONE |
+| PR-C2 | `test_chaos_daily_new_exceeded` | ✅ DONE |
+| PR-C3 | `test_chaos_buy_score_below_threshold` | ✅ DONE |
+| PR-C4 | `test_chaos_force_rerun_no_reason` | ✅ DONE |
+| PR-C5 | `test_chaos_stale_bars` | ✅ DONE |
+| PR-C6–C10 | Boundary tests (at-threshold, fresh bars, valid signal) | ✅ DONE (5 extra) |
 
 **Dep:** `pytest`, `unittest.mock`
 
@@ -52,13 +54,13 @@
 
 ## 3. Files to Change
 
-| File | Action |
-|------|--------|
-| `src/stock_rtx4060/data_lake/ingest/openbb_ingestor.py` | Create |
-| `src/stock_rtx4060/advisors/macro_regime.py` | Modify (add panel_fetcher) |
-| `src/stock_rtx4060/advisors/orchestrator.py` | Modify (register OpenBB tool) |
-| `tests/test_chaos_paper_trading.py` | Create |
-| `requirements-openbb.txt` | Verify (`openbb>=4.4`) |
+| File | Action | Status |
+|------|--------|--------|
+| `src/stock_rtx4060/data_lake/ingest/openbb_ingestor.py` | Create | ✅ DONE |
+| `src/stock_rtx4060/advisors/macro_regime.py` | Modify (add panel_fetcher) | ✅ DONE |
+| `src/stock_rtx4060/advisors/orchestrator.py` | Modify (register OpenBB tool) | 🔲 OPEN |
+| `tests/test_chaos_paper_trading.py` | Create | ✅ DONE |
+| `requirements-openbb.txt` | Verify (`openbb>=4.4`) | ⚠️ VERIFY |
 
 ---
 
@@ -82,10 +84,61 @@ REFACTOR → clean up
 
 ## 6. Acceptance Criteria
 
-- [ ] `openbb_ingestor.py` passes `python3 -m py_compile`
-- [ ] `test_chaos_paper_trading.py` passes `pytest tests/test_chaos_paper_trading.py -v`
-- [ ] Varlock scan: no secrets in new files
-- [ ] No regression in existing tests (346 pass)
+| Criterion | Status |
+|-----------|--------|
+| `openbb_ingestor.py` passes `python3 -m py_compile` | ✅ PASS |
+| `test_chaos_paper_trading.py` passes `pytest -v` | ✅ 10/10 PASS |
+| Varlock scan: no secrets in new files | ⚠️ VERIFY |
+| No regression in existing tests (346 pass) | ⚠️ VERIFY |
+
+---
+
+## 7. Remaining Work
+
+### PR-O3: Orchestrator OpenBB MCP tool registration
+**What:** Register `ingest_openbb_macro` as a named MCP tool in `orchestrator.py`
+so it can be called from the LangGraph DAG or fallback path.
+
+**Approach options:**
+1. Add `openbb_ingestor` as a field on `Orchestrator` dataclass with a
+   `panel_fetcher` callback wired to `ingest_openbb_macro`
+2. Register as a top-level tool callable via `tool_registry` (existing pattern)
+
+**Suggested implementation** (option 1 — minimal change):
+```python
+from stock_rtx4060.data_lake.ingest.openbb_ingestor import ingest_openbb_macro
+
+@dataclass
+class Orchestrator:
+    ...
+    openbb_ingestor = staticmethod(ingest_openbb_macro)  # register as tool
+```
+
+### Pending Verification
+- [ ] Run full test suite: `PYTHONPATH=.:src pytest --cov=stock_rtx4060 --cov-fail-under=75 -q`
+- [ ] Verify `requirements-openbb.txt` has `openbb>=4.4`
+- [ ] Varlock / secret scan on new files
+
+---
+
+## 8. Risks
+
+| Risk | Likelihood | Impact | Mitigation |
+|------|-----------|--------|------------|
+| OpenBB API rate limits or outage breaks ingestor | Medium | Low | Graceful degradation already in place; returns 0 rows |
+| PR-O3 touches live LangGraph DAG — subtle side effects | Low | Medium | Add integration test before merge |
+| `test_chaos_paper_trading.py` tests mock internals directly | Medium | Low | Tests verify boundary logic; real impl is in `paper_trading.py` |
+
+---
+
+## 9. Success Criteria
+
+- [ ] `src/stock_rtx4060/data_lake/ingest/openbb_ingestor.py` compiles without error
+- [ ] `tests/test_chaos_paper_trading.py` — all 10 tests green
+- [ ] PR-O3: `orchestrator.py` has `ingest_openbb_macro` callable from advisor path
+- [ ] Full test suite: no regressions (target ≥346 tests pass)
+- [ ] `requirements-openbb.txt` documents `openbb>=4.4` dependency
+- [ ] No new secrets or API keys in new/modified files
 
 
 ## Hermes Documentation Update — 2026-05-28T23:02:20.364421+00:00

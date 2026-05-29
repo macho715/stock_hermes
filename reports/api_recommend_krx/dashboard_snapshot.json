@@ -1,0 +1,900 @@
+{
+  "schema_version": "dashboard_snapshot.v1",
+  "generated_at_utc": "2026-05-29T00:23:20+00:00",
+  "source": "stock_rtx4060_unified",
+  "source_recommendation_json": "reports\\api_recommend_krx\\recommendations_algo_v2_20260529_041945.json",
+  "mode": "report_only",
+  "disclaimer": "screening_output_only; manual approval required; no broker order execution; not financial advice",
+  "audit_log_path": "reports\\api_recommend_krx\\audit_log.jsonl",
+  "algorithm_patch": "v2 leak-safe CV + ATR risk plan + fixed-risk sizing + OOF backtest",
+  "provider_summary": {
+    "status": "AMBER",
+    "providers_used": [
+      "yfinance"
+    ],
+    "event_count": 9,
+    "row_count_min": null,
+    "last_date_max": null,
+    "freshness_days_max": null,
+    "fallbacks": []
+  },
+  "backtest_honesty_summary": {
+    "status": "AMBER",
+    "result_count": 5,
+    "passed": 14,
+    "amber": 11,
+    "failed": 0,
+    "generated_at_utc": "2026-05-29T00:19:45+00:00"
+  },
+  "config": {
+    "universe": [
+      "005930.KS",
+      "000660.KS",
+      "005380.KS",
+      "005490.KS",
+      "035420.KS",
+      "035720.KS",
+      "051910.KS",
+      "006400.KS",
+      "003670.KS"
+    ],
+    "track": "BOTH",
+    "period": "3y",
+    "top_n": 5,
+    "synthetic": false,
+    "data_provider": "yfinance",
+    "model_kind": "auto",
+    "xgb_device": "cpu",
+    "cv_gap": null
+  },
+  "result_count": 5,
+  "results": [
+    {
+      "rank": 1,
+      "ticker": "006400.KS",
+      "track": "L",
+      "verdict": "ACCUMULATE_RECOMMENDATION",
+      "dashboard_status": "AMBER_WATCHLIST",
+      "candidate_label": "Track-L 누적 후보: 수동 승인 필요",
+      "score": 97.6,
+      "raw_score": 97.6,
+      "investment_readiness_status": "AMBER_WATCHLIST",
+      "investment_readiness_score": 44.0,
+      "live_queue_action": "HARD_BLOCK",
+      "research_queue_action": "AMBER_WATCHLIST",
+      "live_investable": false,
+      "new_capital_allowed": false,
+      "paper_trading_only": true,
+      "ready_for_manual_review": false,
+      "dashboard_warning": true,
+      "dashboard_warning_message": "AMBER WATCHLIST\nModel failed one or more readiness gates.\nNew capital is not allowed.\nPaper trading and monitoring only.",
+      "blocking_reasons": [
+        "Backtest honesty AMBER != PASS",
+        "Accuracy 20.66% < 50.00%",
+        "Alpha missing",
+        "Completed trades missing"
+      ],
+      "readiness_gate_failures": [
+        "Backtest honesty AMBER != PASS",
+        "Accuracy 20.66% < 50.00%",
+        "Alpha missing",
+        "Completed trades missing"
+      ],
+      "probability": 0.9687,
+      "expected_value_pct": 18.986,
+      "entry": 676000.0,
+      "latest_close": 676000.0,
+      "stop": 592093.0106,
+      "tp1": 743600.0,
+      "tp2": 811200.0,
+      "stop_pct": 0.1241,
+      "tp2_pct": 0.2,
+      "risk_reward": 1.61,
+      "risk_budget_pct": 0.005,
+      "max_position_pct": 0.12,
+      "suggested_quantity": 0.006,
+      "suggested_position_value": 4028.27,
+      "model_accuracy": 0.2066,
+      "model_auc": 0.5133,
+      "oof_coverage": 1.0,
+      "backtest_return_pct": -1.02,
+      "alpha_pct": null,
+      "completed_trades": null,
+      "backtest_sharpe": -0.507,
+      "backtest_sortino": -0.501,
+      "backtest_mdd_pct": 2.0,
+      "profit_factor": 0.45,
+      "confirmations_passed": 7,
+      "confirmations_total": 9,
+      "screening_output_only": true,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=728, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=548663445750.00"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=95.00, atr_pct=0.0621"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "AMBER",
+          "evidence": "prob=0.9687, acc=0.2066, auc=0.5133, models=xgb-cpu"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=100.00%, gap=41"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "AMBER",
+          "evidence": "return=-1.02%, sharpe=-0.507, mdd=2.00%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=12.41%, tp2_pct=20.00%, rr=1.61, risk_budget=0.50%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "PASS",
+          "evidence": "score=97.60, green_threshold=80.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "backtest_honesty": {
+        "status": "AMBER",
+        "checks": [
+          {
+            "name": "OOF_COVERAGE",
+            "status": "PASS",
+            "value": 1.0,
+            "threshold": 0.45,
+            "reason": "oof_coverage=100.00%, threshold=45.00%"
+          },
+          {
+            "name": "SHARPE_FLOOR",
+            "status": "AMBER",
+            "value": -0.507,
+            "threshold": -0.25,
+            "reason": "sharpe_floor=-50.70%, threshold=-25.00%"
+          },
+          {
+            "name": "MAX_DRAWDOWN",
+            "status": "PASS",
+            "value": 2.0,
+            "threshold": 35.0,
+            "reason": "mdd=2.00%, max=35.00%"
+          },
+          {
+            "name": "TRANSACTION_COST_BUFFER",
+            "status": "AMBER",
+            "value": -1.02,
+            "threshold": 0.5,
+            "reason": "return=-1.02%, buffer=0.50%"
+          },
+          {
+            "name": "WALK_FORWARD_GAP",
+            "status": "AMBER",
+            "value": 41,
+            "threshold": 63,
+            "reason": "gap=41, horizon=63"
+          }
+        ],
+        "passed": 2,
+        "amber": 3,
+        "failed": 0,
+        "generated_at_utc": "2026-05-29T00:19:39+00:00"
+      },
+      "reasons": [
+        "data_source=yfinance:cache",
+        "cv_gap=41",
+        "장기 추세 구조 양호",
+        "52주 고점 대비 과열이 아닌 조정권",
+        "장기 MDD 한도 내",
+        "Track-L 누적 후보: 수동 승인 필요"
+      ],
+      "generated_at_utc": "2026-05-29T00:19:39+00:00",
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null,
+      "advisor_score": null,
+      "advisor_rationale": null
+    },
+    {
+      "rank": 2,
+      "ticker": "000660.KS",
+      "track": "S",
+      "verdict": "ELIGIBLE_RECOMMENDATION",
+      "dashboard_status": "AMBER_WATCHLIST",
+      "candidate_label": "Track-S 추천 후보: 수동 승인 필요",
+      "score": 95.38,
+      "raw_score": 95.38,
+      "investment_readiness_status": "AMBER_WATCHLIST",
+      "investment_readiness_score": 44.0,
+      "live_queue_action": "HARD_BLOCK",
+      "research_queue_action": "AMBER_WATCHLIST",
+      "live_investable": false,
+      "new_capital_allowed": false,
+      "paper_trading_only": true,
+      "ready_for_manual_review": false,
+      "dashboard_warning": true,
+      "dashboard_warning_message": "AMBER WATCHLIST\nModel failed one or more readiness gates.\nNew capital is not allowed.\nPaper trading and monitoring only.",
+      "blocking_reasons": [
+        "Accuracy 42.28% < 50.00%",
+        "Alpha missing",
+        "Completed trades missing"
+      ],
+      "readiness_gate_failures": [
+        "Accuracy 42.28% < 50.00%",
+        "Alpha missing",
+        "Completed trades missing"
+      ],
+      "probability": 0.9752,
+      "expected_value_pct": 9.628,
+      "entry": 2289000.0,
+      "latest_close": 2289000.0,
+      "stop": 2174550.0,
+      "tp1": 2414895.0,
+      "tp2": 2517900.0,
+      "stop_pct": 0.05,
+      "tp2_pct": 0.1,
+      "risk_reward": 2.0,
+      "risk_budget_pct": 0.0075,
+      "max_position_pct": 0.2,
+      "suggested_quantity": 0.0066,
+      "suggested_position_value": 15000.0,
+      "model_accuracy": 0.4228,
+      "model_auc": 0.6247,
+      "oof_coverage": 1.0,
+      "backtest_return_pct": 0.81,
+      "alpha_pct": null,
+      "completed_trades": null,
+      "backtest_sharpe": 0.233,
+      "backtest_sortino": 0.164,
+      "backtest_mdd_pct": 4.25,
+      "profit_factor": 1.146,
+      "confirmations_passed": 8,
+      "confirmations_total": 9,
+      "screening_output_only": true,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=728, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=10255196111796.17"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=95.00, atr_pct=0.0562"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "AMBER",
+          "evidence": "prob=0.9752, acc=0.4228, auc=0.6247, models=xgb-cpu"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=100.00%, gap=20"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "PASS",
+          "evidence": "return=0.81%, sharpe=0.233, mdd=4.25%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=5.00%, tp2_pct=10.00%, rr=2.00, risk_budget=0.75%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "PASS",
+          "evidence": "score=95.38, green_threshold=75.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "backtest_honesty": {
+        "status": "PASS",
+        "checks": [
+          {
+            "name": "OOF_COVERAGE",
+            "status": "PASS",
+            "value": 1.0,
+            "threshold": 0.45,
+            "reason": "oof_coverage=100.00%, threshold=45.00%"
+          },
+          {
+            "name": "SHARPE_FLOOR",
+            "status": "PASS",
+            "value": 0.233,
+            "threshold": -0.25,
+            "reason": "sharpe_floor=23.30%, threshold=-25.00%"
+          },
+          {
+            "name": "MAX_DRAWDOWN",
+            "status": "PASS",
+            "value": 4.25,
+            "threshold": 25.0,
+            "reason": "mdd=4.25%, max=25.00%"
+          },
+          {
+            "name": "TRANSACTION_COST_BUFFER",
+            "status": "PASS",
+            "value": 0.81,
+            "threshold": 0.5,
+            "reason": "return=0.81%, buffer=0.50%"
+          },
+          {
+            "name": "WALK_FORWARD_GAP",
+            "status": "PASS",
+            "value": 20,
+            "threshold": 20,
+            "reason": "gap=20, horizon=20"
+          }
+        ],
+        "passed": 5,
+        "amber": 0,
+        "failed": 0,
+        "generated_at_utc": "2026-05-29T00:18:40+00:00"
+      },
+      "reasons": [
+        "data_source=yfinance:cache",
+        "cv_gap=20",
+        "모델 상승확률 97.52%",
+        "단기/중기 추세 확인",
+        "백테스트 MDD 4.25%",
+        "R/R 2.00 통과",
+        "기대값 9.63%",
+        "Track-S 추천 후보: 수동 승인 필요"
+      ],
+      "generated_at_utc": "2026-05-29T00:18:40+00:00",
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null,
+      "advisor_score": null,
+      "advisor_rationale": null
+    },
+    {
+      "rank": 3,
+      "ticker": "005380.KS",
+      "track": "L",
+      "verdict": "ACCUMULATE_RECOMMENDATION",
+      "dashboard_status": "AMBER_WATCHLIST",
+      "candidate_label": "Track-L 누적 후보: 수동 승인 필요",
+      "score": 90.69,
+      "raw_score": 90.69,
+      "investment_readiness_status": "AMBER_WATCHLIST",
+      "investment_readiness_score": 44.0,
+      "live_queue_action": "HARD_BLOCK",
+      "research_queue_action": "AMBER_WATCHLIST",
+      "live_investable": false,
+      "new_capital_allowed": false,
+      "paper_trading_only": true,
+      "ready_for_manual_review": false,
+      "dashboard_warning": true,
+      "dashboard_warning_message": "AMBER WATCHLIST\nModel failed one or more readiness gates.\nNew capital is not allowed.\nPaper trading and monitoring only.",
+      "blocking_reasons": [
+        "Backtest honesty AMBER != PASS",
+        "Accuracy 17.50% < 50.00%",
+        "AUC 0.4771 < 0.50",
+        "Alpha missing",
+        "Completed trades missing"
+      ],
+      "readiness_gate_failures": [
+        "Backtest honesty AMBER != PASS",
+        "Accuracy 17.50% < 50.00%",
+        "AUC 0.4771 < 0.50",
+        "Alpha missing",
+        "Completed trades missing"
+      ],
+      "probability": 0.8821,
+      "expected_value_pct": 16.069,
+      "entry": 677000.0,
+      "latest_close": 677000.0,
+      "stop": 586780.1684,
+      "tp1": 744700.0,
+      "tp2": 812400.0,
+      "stop_pct": 0.1333,
+      "tp2_pct": 0.2,
+      "risk_reward": 1.5,
+      "risk_budget_pct": 0.005,
+      "max_position_pct": 0.12,
+      "suggested_quantity": 0.0055,
+      "suggested_position_value": 3751.95,
+      "model_accuracy": 0.175,
+      "model_auc": 0.4771,
+      "oof_coverage": 1.0,
+      "backtest_return_pct": -0.78,
+      "alpha_pct": null,
+      "completed_trades": null,
+      "backtest_sharpe": -0.556,
+      "backtest_sortino": -0.548,
+      "backtest_mdd_pct": 1.41,
+      "profit_factor": 0.169,
+      "confirmations_passed": 7,
+      "confirmations_total": 9,
+      "screening_output_only": true,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=728, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=1522226115689.29"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=95.00, atr_pct=0.0666"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "AMBER",
+          "evidence": "prob=0.8821, acc=0.1750, auc=0.4771, models=xgb-cpu"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=100.00%, gap=41"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "AMBER",
+          "evidence": "return=-0.78%, sharpe=-0.556, mdd=1.41%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=13.33%, tp2_pct=20.00%, rr=1.50, risk_budget=0.50%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "PASS",
+          "evidence": "score=90.69, green_threshold=80.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "backtest_honesty": {
+        "status": "AMBER",
+        "checks": [
+          {
+            "name": "OOF_COVERAGE",
+            "status": "PASS",
+            "value": 1.0,
+            "threshold": 0.45,
+            "reason": "oof_coverage=100.00%, threshold=45.00%"
+          },
+          {
+            "name": "SHARPE_FLOOR",
+            "status": "AMBER",
+            "value": -0.556,
+            "threshold": -0.25,
+            "reason": "sharpe_floor=-55.60%, threshold=-25.00%"
+          },
+          {
+            "name": "MAX_DRAWDOWN",
+            "status": "PASS",
+            "value": 1.41,
+            "threshold": 35.0,
+            "reason": "mdd=1.41%, max=35.00%"
+          },
+          {
+            "name": "TRANSACTION_COST_BUFFER",
+            "status": "AMBER",
+            "value": -0.78,
+            "threshold": 0.5,
+            "reason": "return=-0.78%, buffer=0.50%"
+          },
+          {
+            "name": "WALK_FORWARD_GAP",
+            "status": "AMBER",
+            "value": 41,
+            "threshold": 63,
+            "reason": "gap=41, horizon=63"
+          }
+        ],
+        "passed": 2,
+        "amber": 3,
+        "failed": 0,
+        "generated_at_utc": "2026-05-29T00:18:53+00:00"
+      },
+      "reasons": [
+        "data_source=yfinance:cache",
+        "cv_gap=41",
+        "장기 추세 구조 양호",
+        "52주 고점 대비 과열이 아닌 조정권",
+        "장기 MDD 한도 내",
+        "Track-L 누적 후보: 수동 승인 필요"
+      ],
+      "generated_at_utc": "2026-05-29T00:18:53+00:00",
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null,
+      "advisor_score": null,
+      "advisor_rationale": null
+    },
+    {
+      "rank": 4,
+      "ticker": "005930.KS",
+      "track": "S",
+      "verdict": "ELIGIBLE_RECOMMENDATION",
+      "dashboard_status": "AMBER_WATCHLIST",
+      "candidate_label": "Track-S 추천 후보: 수동 승인 필요",
+      "score": 88.85,
+      "raw_score": 88.85,
+      "investment_readiness_status": "AMBER_WATCHLIST",
+      "investment_readiness_score": 44.0,
+      "live_queue_action": "HARD_BLOCK",
+      "research_queue_action": "AMBER_WATCHLIST",
+      "live_investable": false,
+      "new_capital_allowed": false,
+      "paper_trading_only": true,
+      "ready_for_manual_review": false,
+      "dashboard_warning": true,
+      "dashboard_warning_message": "AMBER WATCHLIST\nModel failed one or more readiness gates.\nNew capital is not allowed.\nPaper trading and monitoring only.",
+      "blocking_reasons": [
+        "Backtest honesty AMBER != PASS",
+        "Accuracy 30.73% < 50.00%",
+        "AUC 0.4559 < 0.50",
+        "Alpha missing",
+        "Completed trades missing"
+      ],
+      "readiness_gate_failures": [
+        "Backtest honesty AMBER != PASS",
+        "Accuracy 30.73% < 50.00%",
+        "AUC 0.4559 < 0.50",
+        "Alpha missing",
+        "Completed trades missing"
+      ],
+      "probability": 0.984,
+      "expected_value_pct": 9.76,
+      "entry": 299500.0,
+      "latest_close": 299500.0,
+      "stop": 284525.0,
+      "tp1": 315972.5,
+      "tp2": 329450.0,
+      "stop_pct": 0.05,
+      "tp2_pct": 0.1,
+      "risk_reward": 2.0,
+      "risk_budget_pct": 0.0075,
+      "max_position_pct": 0.2,
+      "suggested_quantity": 0.0501,
+      "suggested_position_value": 15000.0,
+      "model_accuracy": 0.3073,
+      "model_auc": 0.4559,
+      "oof_coverage": 1.0,
+      "backtest_return_pct": -1.34,
+      "alpha_pct": null,
+      "completed_trades": null,
+      "backtest_sharpe": -0.505,
+      "backtest_sortino": -0.356,
+      "backtest_mdd_pct": 3.75,
+      "profit_factor": 0.721,
+      "confirmations_passed": 7,
+      "confirmations_total": 9,
+      "screening_output_only": true,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=728, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=8889591259675.00"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=95.00, atr_pct=0.0552"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "AMBER",
+          "evidence": "prob=0.9840, acc=0.3073, auc=0.4559, models=xgb-cpu"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=100.00%, gap=20"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "AMBER",
+          "evidence": "return=-1.34%, sharpe=-0.505, mdd=3.75%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=5.00%, tp2_pct=10.00%, rr=2.00, risk_budget=0.75%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "PASS",
+          "evidence": "score=88.85, green_threshold=75.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "backtest_honesty": {
+        "status": "AMBER",
+        "checks": [
+          {
+            "name": "OOF_COVERAGE",
+            "status": "PASS",
+            "value": 1.0,
+            "threshold": 0.45,
+            "reason": "oof_coverage=100.00%, threshold=45.00%"
+          },
+          {
+            "name": "SHARPE_FLOOR",
+            "status": "AMBER",
+            "value": -0.505,
+            "threshold": -0.25,
+            "reason": "sharpe_floor=-50.50%, threshold=-25.00%"
+          },
+          {
+            "name": "MAX_DRAWDOWN",
+            "status": "PASS",
+            "value": 3.75,
+            "threshold": 25.0,
+            "reason": "mdd=3.75%, max=25.00%"
+          },
+          {
+            "name": "TRANSACTION_COST_BUFFER",
+            "status": "AMBER",
+            "value": -1.34,
+            "threshold": 0.5,
+            "reason": "return=-1.34%, buffer=0.50%"
+          },
+          {
+            "name": "WALK_FORWARD_GAP",
+            "status": "PASS",
+            "value": 20,
+            "threshold": 20,
+            "reason": "gap=20, horizon=20"
+          }
+        ],
+        "passed": 3,
+        "amber": 2,
+        "failed": 0,
+        "generated_at_utc": "2026-05-29T00:18:33+00:00"
+      },
+      "reasons": [
+        "data_source=yfinance:cache",
+        "cv_gap=20",
+        "모델 상승확률 98.40%",
+        "단기/중기 추세 확인",
+        "백테스트 MDD 3.75%",
+        "R/R 2.00 통과",
+        "기대값 9.76%",
+        "Track-S 추천 후보: 수동 승인 필요"
+      ],
+      "generated_at_utc": "2026-05-29T00:18:33+00:00",
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null,
+      "advisor_score": null,
+      "advisor_rationale": null
+    },
+    {
+      "rank": 5,
+      "ticker": "003670.KS",
+      "track": "L",
+      "verdict": "ACCUMULATE_RECOMMENDATION",
+      "dashboard_status": "AMBER_WATCHLIST",
+      "candidate_label": "Track-L 누적 후보: 수동 승인 필요",
+      "score": 88.75,
+      "raw_score": 88.75,
+      "investment_readiness_status": "AMBER_WATCHLIST",
+      "investment_readiness_score": 44.0,
+      "live_queue_action": "HARD_BLOCK",
+      "research_queue_action": "AMBER_WATCHLIST",
+      "live_investable": false,
+      "new_capital_allowed": false,
+      "paper_trading_only": true,
+      "ready_for_manual_review": false,
+      "dashboard_warning": true,
+      "dashboard_warning_message": "AMBER WATCHLIST\nModel failed one or more readiness gates.\nNew capital is not allowed.\nPaper trading and monitoring only.",
+      "blocking_reasons": [
+        "Backtest honesty AMBER != PASS",
+        "Accuracy 32.59% < 50.00%",
+        "Alpha missing",
+        "Completed trades missing"
+      ],
+      "readiness_gate_failures": [
+        "Backtest honesty AMBER != PASS",
+        "Accuracy 32.59% < 50.00%",
+        "Alpha missing",
+        "Completed trades missing"
+      ],
+      "probability": 0.9347,
+      "expected_value_pct": 18.278,
+      "entry": 238000.0,
+      "latest_close": 238000.0,
+      "stop": 205454.9234,
+      "tp1": 262408.8075,
+      "tp2": 286817.6149,
+      "stop_pct": 0.1367,
+      "tp2_pct": 0.2051,
+      "risk_reward": 1.5,
+      "risk_budget_pct": 0.005,
+      "max_position_pct": 0.12,
+      "suggested_quantity": 0.0154,
+      "suggested_position_value": 3656.47,
+      "model_accuracy": 0.3259,
+      "model_auc": 0.518,
+      "oof_coverage": 1.0,
+      "backtest_return_pct": -1.4,
+      "alpha_pct": null,
+      "completed_trades": null,
+      "backtest_sharpe": -0.677,
+      "backtest_sortino": -0.719,
+      "backtest_mdd_pct": 2.31,
+      "profit_factor": 0.622,
+      "confirmations_passed": 7,
+      "confirmations_total": 9,
+      "screening_output_only": true,
+      "validations": [
+        {
+          "name": "DATA_ROWS",
+          "status": "PASS",
+          "evidence": "rows=728, min_rows=260"
+        },
+        {
+          "name": "LIQUIDITY",
+          "status": "PASS",
+          "evidence": "avg_dollar_volume_20d=111843074550.00"
+        },
+        {
+          "name": "MARKET_REGIME",
+          "status": "PASS",
+          "evidence": "regime_score=75.00, atr_pct=0.0684"
+        },
+        {
+          "name": "MODEL_EDGE",
+          "status": "AMBER",
+          "evidence": "prob=0.9347, acc=0.3259, auc=0.5180, models=xgb-cpu"
+        },
+        {
+          "name": "OOF_COVERAGE",
+          "status": "PASS",
+          "evidence": "coverage=100.00%, gap=41"
+        },
+        {
+          "name": "BACKTEST_SANITY",
+          "status": "AMBER",
+          "evidence": "return=-1.40%, sharpe=-0.677, mdd=2.31%"
+        },
+        {
+          "name": "RISK_PLAN",
+          "status": "PASS",
+          "evidence": "stop_pct=13.67%, tp2_pct=20.51%, rr=1.50, risk_budget=0.50%"
+        },
+        {
+          "name": "TRACK_SCORE",
+          "status": "PASS",
+          "evidence": "score=88.75, green_threshold=80.00"
+        },
+        {
+          "name": "AUTOMATION_BOUNDARY",
+          "status": "PASS",
+          "evidence": "screening_output_only; broker_order_execution=False"
+        }
+      ],
+      "backtest_honesty": {
+        "status": "AMBER",
+        "checks": [
+          {
+            "name": "OOF_COVERAGE",
+            "status": "PASS",
+            "value": 1.0,
+            "threshold": 0.45,
+            "reason": "oof_coverage=100.00%, threshold=45.00%"
+          },
+          {
+            "name": "SHARPE_FLOOR",
+            "status": "AMBER",
+            "value": -0.677,
+            "threshold": -0.25,
+            "reason": "sharpe_floor=-67.70%, threshold=-25.00%"
+          },
+          {
+            "name": "MAX_DRAWDOWN",
+            "status": "PASS",
+            "value": 2.31,
+            "threshold": 35.0,
+            "reason": "mdd=2.31%, max=35.00%"
+          },
+          {
+            "name": "TRANSACTION_COST_BUFFER",
+            "status": "AMBER",
+            "value": -1.4,
+            "threshold": 0.5,
+            "reason": "return=-1.40%, buffer=0.50%"
+          },
+          {
+            "name": "WALK_FORWARD_GAP",
+            "status": "AMBER",
+            "value": 41,
+            "threshold": 63,
+            "reason": "gap=41, horizon=63"
+          }
+        ],
+        "passed": 2,
+        "amber": 3,
+        "failed": 0,
+        "generated_at_utc": "2026-05-29T00:19:45+00:00"
+      },
+      "reasons": [
+        "data_source=yfinance:cache",
+        "cv_gap=41",
+        "장기 추세 구조 양호",
+        "52주 고점 대비 과열이 아닌 조정권",
+        "장기 MDD 한도 내",
+        "Track-L 누적 후보: 수동 승인 필요"
+      ],
+      "generated_at_utc": "2026-05-29T00:19:45+00:00",
+      "kevpe_available": false,
+      "kevpe_regime": null,
+      "kevpe_score": null,
+      "kevpe_expected_return_pct": null,
+      "kevpe_ci": null,
+      "kevpe_confidence": null,
+      "kevpe_reason": null,
+      "advisor_score": null,
+      "advisor_rationale": null
+    }
+  ],
+  "meta": null
+}
