@@ -353,6 +353,40 @@ class AutoForwardRecorder:
         self._save_state(state)
         return "RECORDED"
 
+    def record_today(self) -> dict[str, object]:
+        """[E3] Prefect-compatible wrapper around ``run_once()``.
+
+        Returns a JSON-serialisable dict so Prefect can store it as a task
+        result without custom serialisers.
+
+        Return keys:
+        * ``status``   — one of RECORDED, SKIPPED_*, ALREADY_COMPLETED, or "error"
+        * ``date``     — ISO date string
+        * ``symbol``   — ticker
+        * ``row_count``— total rows in the CSV log after this call
+        * ``reason``   — non-None only when status == "error"
+        """
+        import traceback
+
+        try:
+            status = self.run_once()
+            return {
+                "status": status,
+                "date": _today().isoformat(),
+                "symbol": self.symbol,
+                "row_count": self._count_recorded(),
+                "reason": None,
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("AutoForwardRecorder.record_today() failed: %s", exc)
+            return {
+                "status": "error",
+                "date": _today().isoformat(),
+                "symbol": self.symbol,
+                "row_count": 0,
+                "reason": str(exc),
+            }
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------

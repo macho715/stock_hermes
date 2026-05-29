@@ -18,6 +18,12 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+# [E3] Feature flag — set FORWARD_TRACKING_ENABLED=false to disable the
+# AutoForwardRecorder step without redeploying the flow.
+_FORWARD_TRACKING_ENABLED: bool = (
+    os.environ.get("FORWARD_TRACKING_ENABLED", "true").lower() not in ("0", "false", "no")
+)
+
 from .utils import flow, get_run_logger, slack_on_failure, with_retries
 
 logger = logging.getLogger("flows.daily_krx")
@@ -167,7 +173,12 @@ def snapshot_dashboard_task(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 @with_retries(retries=1, retry_delay_seconds=10)
-def alert_task(summary: dict[str, Any], *, dry_run: bool = False) -> dict[str, Any]:
+def alert_task(
+    summary: dict[str, Any],
+    *,
+    dry_run: bool = False,
+    forward_tracking_status: str | None = None,
+) -> dict[str, Any]:
     """Dispatch a daily-summary alert via every registered channel."""
     from stock_rtx4060.alert_engine import (
         ALERT_TYPE_DAILY_SUMMARY,
@@ -177,15 +188,43 @@ def alert_task(summary: dict[str, Any], *, dry_run: bool = False) -> dict[str, A
     )
 
     priority = AlertPriority.LOW if dry_run else AlertPriority.MEDIUM
+    ft_suffix = f" | forward_tracking={forward_tracking_status}" if forward_tracking_status else ""
     alert = Alert(
         alert_type=ALERT_TYPE_DAILY_SUMMARY,
         ticker=None,
         track="KRX",
         priority=priority,
-        message=f"daily_krx_flow finished — {summary.get('result_count', 0)} candidates (dry_run={dry_run})",
-        metadata=summary,
+        message=(
+            f"daily_krx_flow finished — {summary.get('result_count', 0)} candidates"
+            f" (dry_run={dry_run}){ft_suffix}"
+        ),
+        metadata={**summary, "forward_tracking_status": forward_tracking_status},
     )
     return dispatch([alert])
+
+
+@with_retries(retries=2, retry_delay_seconds=60)
+def forward_tracking_task(
+    ticker: str = "005930.KS",
+    evidence_dir: str = "reports/live_review/005930",
+) -> dict[str, Any]:
+    """[E3] Record one day of AutoForwardRecorder evidence for the primary KRX ticker.
+
+    Disabled when ``FORWARD_TRACKING_ENABLED=false``.  Returns a JSON-serialisable
+    dict with keys ``status``, ``date``, ``symbol``, ``row_count``, ``reason``.
+    """
+    if not _FORWARD_TRACKING_ENABLED:
+        return {"status": "disabled", "ticker": ticker, "reason": "FORWARD_TRACKING_ENABLED=false"}
+    try:
+        from pathlib import Path
+
+        from stock_rtx4060.live_review.auto_forward_recorder import AutoForwardRecorder
+
+        rec = AutoForwardRecorder(symbol=ticker, evidence_dir=str(Path(evidence_dir)))
+        return dict(rec.record_today())
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("forward_tracking_task failed: %s", exc)
+        return {"status": "error", "ticker": ticker, "reason": str(exc)}
 
 
 # ---------------------------------------------------------------------------
@@ -207,7 +246,12 @@ def daily_krx_flow(*, dry_run: bool = False, as_of: str | None = None) -> dict[s
         results["portfolio"] = portfolio_optimize_task(universe)
         results["recommend"] = recommend_task(universe, dry_run=dry_run)
         results["dashboard"] = snapshot_dashboard_task(results["recommend"])
-        results["alert"] = alert_task(results["recommend"], dry_run=dry_run)
+        results["forward_tracking"] = forward_tracking_task()  # [E3] paper evidence
+        results["alert"] = alert_task(
+            results["recommend"],
+            dry_run=dry_run,
+            forward_tracking_status=results["forward_tracking"].get("status"),
+        )
     except Exception as exc:  # noqa: BLE001 - notify and re-raise so Prefect marks failed
         slack_on_failure(f"daily_krx_flow failed: {exc}")
         log.error("daily_krx_flow failed: %s", exc)
@@ -226,6 +270,7 @@ __all__ = [
     "recommend_task",
     "snapshot_dashboard_task",
     "alert_task",
+    "forward_tracking_task",    # [E3]
     "KRX_FLOW_CRON",
     "KRX_FLOW_TIMEZONE",
 ]
