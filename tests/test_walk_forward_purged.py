@@ -6,8 +6,8 @@ P0 fixes — plan_p0_fix_20260511.md
 """
 from __future__ import annotations
 
-import sys
 import os
+import sys
 
 import numpy as np
 import pandas as pd
@@ -16,20 +16,18 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import api_server
-from stock_rtx4060.feature_engine import make_synthetic_ohlcv, TechnicalIndicators
+from stock_rtx4060.feature_engine import TechnicalIndicators, make_synthetic_ohlcv
 from stock_rtx4060.ml.cv import PurgedKFold
 from stock_rtx4060.recommendation_engine import (
     RecommendationConfig,
     _fit_walk_forward_model,
 )
 
-
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _make_feature_df(n_rows: int = 500, horizon: int = 5) -> pd.DataFrame:
     """Return a feature DataFrame guaranteed to have both target classes."""
-    rng = np.random.default_rng(42)
-    for seed in range(10):
+    for _ in range(10):
         ohlcv = make_synthetic_ohlcv(n_rows)
         df = TechnicalIndicators(ohlcv).build_all(horizon=horizon)
         if len(df) >= 80 and df["target_direction"].nunique() >= 2:
