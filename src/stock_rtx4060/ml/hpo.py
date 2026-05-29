@@ -173,11 +173,13 @@ def run_hpo(
         _groups = np.arange(len(X)) + horizon
         for fold_idx, (tr, te) in enumerate(cv.split(X, groups=_groups)):
             est = _clone(estimator)
-            est.fit(X_arr[tr], y_arr[tr])
+            X_tr = X.iloc[tr] if isinstance(X, pd.DataFrame) else X_arr[tr]
+            X_te = X.iloc[te] if isinstance(X, pd.DataFrame) else X_arr[te]
+            est.fit(X_tr, y_arr[tr])
             try:
-                prob = est.predict_proba(X_arr[te])[:, 1]
+                prob = est.predict_proba(X_te)[:, 1]
             except Exception:
-                prob = est.predict(X_arr[te]).astype(float)
+                prob = est.predict(X_te).astype(float)
             brier_scores.append(_safe_brier(y_arr[te], prob))
             auc_scores.append(_safe_auc(y_arr[te], prob))
             # Report composite score for pruning
@@ -209,7 +211,7 @@ def run_hpo(
                 try:
                     import mlflow  # type: ignore[import-not-found]
                     if hasattr(mlflow, 'log_input'):
-                        input_ds = mlflow.data.from_numpy(X_arr[tr], targets=y_arr[tr], name="hpo_trial_train")
+                        input_ds = mlflow.data.from_numpy(np.asarray(X_tr), targets=y_arr[tr], name="hpo_trial_train")
                         mlflow.log_input(input_ds, context="training")
                 except Exception:  # pragma: no cover - mlflow 3.x optional
                     pass
