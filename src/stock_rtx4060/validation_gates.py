@@ -172,6 +172,66 @@ def g09_approval(all_gates_pass: bool, any_red: bool, amber_cleared: bool, has_a
     return GateEvidence(gate="G-09_APPROVAL", result=GateResult.AMBER, evidence={"approval_status": "PENDING_REVIEW"})
 
 
+@dataclass(frozen=True)
+class GateSpec:
+    """Metadata entry in GATE_REGISTRY."""
+    gate_id: str
+    name: str
+    severity: str          # "RED" | "AMBER"
+    category: str          # "data" | "model" | "backtest" | "risk" | "safety"
+    layer: str             # "validation_gates" | "recommendation_engine"
+    description: str
+
+
+# Canonical registry of all validation gates across both layers.
+# Layer "validation_gates": G01-G10 in this file (data/provider checks).
+# Layer "recommendation_engine": _validation_checks() checks (scoring pipeline).
+# This registry is documentation-only — it does not drive runtime behaviour.
+GATE_REGISTRY: dict[str, GateSpec] = {
+    # --- validation_gates.py layer ---
+    "G01_DATA_FRESHNESS":       GateSpec("G01", "DATA_FRESHNESS",       "RED",   "data",     "validation_gates", "Price data is within allowed staleness window"),
+    "G02_PRICE_CROSSCHECK":     GateSpec("G02", "PRICE_CROSSCHECK",     "AMBER", "data",     "validation_gates", "Dual-source price delta <= 3%"),
+    "G03_SCHEMA_COMPLETENESS":  GateSpec("G03", "SCHEMA_COMPLETENESS",  "RED",   "data",     "validation_gates", "OHLCV columns present and row count sufficient"),
+    "G04_CORP_ACTION_SANITY":   GateSpec("G04", "CORP_ACTION_SANITY",   "AMBER", "data",     "validation_gates", "No unexplained price drops suggesting corp action"),
+    "G05_MODEL_HEALTH":         GateSpec("G05", "MODEL_HEALTH",         "RED",   "model",    "validation_gates", "AUC >= 0.55 and accuracy >= 0.50"),
+    "G06_OOF_COVERAGE":         GateSpec("G06", "OOF_COVERAGE",         "RED",   "model",    "validation_gates", "Out-of-fold coverage >= 70%"),
+    "G07_RISK_PLAN":            GateSpec("G07", "RISK_PLAN",            "RED",   "risk",     "validation_gates", "Valid stop/target, R/R meets track threshold"),
+    "G08_BACKTEST_SANITY":      GateSpec("G08", "BACKTEST_SANITY",      "AMBER", "backtest", "validation_gates", "Sharpe >= 0 and MDD < 20%"),
+    "G09_APPROVAL":             GateSpec("G09", "APPROVAL",             "RED",   "safety",   "validation_gates", "State machine final approval gate"),
+    "G10_AUDIT_EVIDENCE":       GateSpec("G10", "AUDIT_EVIDENCE",       "RED",   "safety",   "validation_gates", "Provider + recommend audit events present"),
+    # --- recommendation_engine.py layer (_validation_checks) ---
+    "RE_DATA_ROWS":             GateSpec("RE01", "DATA_ROWS",           "RED",   "data",     "recommendation_engine", "Sufficient rows for walk-forward training"),
+    "RE_LIQUIDITY":             GateSpec("RE02", "LIQUIDITY",           "AMBER", "data",     "recommendation_engine", "Volume / dollar liquidity check"),
+    "RE_MARKET_REGIME":         GateSpec("RE03", "MARKET_REGIME",       "AMBER", "market",   "recommendation_engine", "Market regime score acceptable"),
+    "RE_MODEL_EDGE":            GateSpec("RE04", "MODEL_EDGE",          "AMBER", "model",    "recommendation_engine", "OOF direction probability > 0.5"),
+    "RE_OOF_COVERAGE":          GateSpec("RE05", "OOF_COVERAGE",        "AMBER", "model",    "recommendation_engine", "OOF coverage >= min_oof_coverage"),
+    "RE_BACKTEST_SANITY":       GateSpec("RE06", "BACKTEST_SANITY",     "AMBER", "backtest", "recommendation_engine", "Backtest Sharpe / MDD thresholds"),
+    "RE_RISK_PLAN":             GateSpec("RE07", "RISK_PLAN",           "RED",   "risk",     "recommendation_engine", "Stop below entry, R/R valid"),
+    "RE_TRACK_SCORE":           GateSpec("RE08", "TRACK_SCORE",         "AMBER", "score",    "recommendation_engine", "Score meets track green threshold"),
+    "RE_AUTOMATION_BOUNDARY":   GateSpec("RE09", "AUTOMATION_BOUNDARY", "RED",  "safety",   "recommendation_engine", "screening_output_only; no broker execution"),
+    # --- Provider trust scores ---
+    "PT_PROVIDER_TRUST":        GateSpec("PT01", "PROVIDER_TRUST",      "AMBER", "data",     "data_providers", "Provider-specific data reliability score"),
+}
+
+# Provider trust scores — used by data_providers.py and dashboard_bridge.py.
+PROVIDER_TRUST_SCORES: dict[str, float] = {
+    "yfinance":    0.85,
+    "pykrx":       0.90,
+    "fdr":         0.75,
+    "openbb":      0.80,
+    "alpaca":      0.88,
+    "ibkr":        0.92,
+    "kis":         0.88,
+    "synthetic":   0.30,
+    "auto":        0.80,  # resolved at runtime
+}
+
+
+def get_provider_trust(provider: str) -> float:
+    """Return trust score [0.0, 1.0] for ``provider``. Defaults to 0.70 for unknowns."""
+    return PROVIDER_TRUST_SCORES.get(str(provider).lower(), 0.70)
+
+
 def g10_audit_evidence(audit_event_count: int, has_provider_event: bool, has_recommend_event: bool) -> GateEvidence:
     """G-10: AUDIT_EVIDENCE — trace completeness check."""
     if has_provider_event and has_recommend_event:

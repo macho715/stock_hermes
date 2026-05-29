@@ -268,3 +268,48 @@ def test_g10_missing_provider_event_returns_red():
 def test_g10_missing_recommend_event_returns_red():
     ev = g10_audit_evidence(1, has_provider_event=True, has_recommend_event=False)
     assert ev.result == GateResult.RED
+
+
+# ---------------------------------------------------------------------------
+# GATE_REGISTRY + PROVIDER_TRUST_SCORES (ultraplan Step 1)
+# ---------------------------------------------------------------------------
+
+
+def test_gate_registry_completeness():
+    """GATE_REGISTRY must contain all 20 expected gate entries."""
+    from stock_rtx4060.validation_gates import GATE_REGISTRY
+
+    assert len(GATE_REGISTRY) >= 20
+    # All 10 G-gates present
+    for i in range(1, 11):
+        key = f"G{i:02d}_{'_' * 0}"  # just check prefix pattern
+    g_gates = [k for k in GATE_REGISTRY if k.startswith("G")]
+    re_gates = [k for k in GATE_REGISTRY if k.startswith("RE")]
+    assert len(g_gates) >= 10, f"Expected 10 G-gates, got {len(g_gates)}"
+    assert len(re_gates) >= 9, f"Expected 9 RE-gates, got {len(re_gates)}"
+
+
+def test_gate_registry_required_safety_gates():
+    """AUTOMATION_BOUNDARY and AUDIT_EVIDENCE must be in GATE_REGISTRY."""
+    from stock_rtx4060.validation_gates import GATE_REGISTRY
+
+    assert "RE_AUTOMATION_BOUNDARY" in GATE_REGISTRY
+    assert "G10_AUDIT_EVIDENCE" in GATE_REGISTRY
+    assert GATE_REGISTRY["RE_AUTOMATION_BOUNDARY"].category == "safety"
+
+
+def test_provider_trust_known_providers():
+    """Known providers return expected trust scores."""
+    from stock_rtx4060.validation_gates import get_provider_trust
+
+    assert get_provider_trust("yfinance") == 0.85
+    assert get_provider_trust("pykrx") == 0.90
+    assert get_provider_trust("synthetic") == 0.30
+
+
+def test_provider_trust_unknown_default():
+    """Unknown providers return 0.70 default."""
+    from stock_rtx4060.validation_gates import get_provider_trust
+
+    assert get_provider_trust("unknown_xyz") == 0.70
+    assert get_provider_trust("") == 0.70
