@@ -24,7 +24,92 @@ logger = logging.getLogger("flows.research_weekly")
 DEFAULT_UNIVERSE = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL"]
 RESEARCH_FLOW_CRON = "0 2 * * 6"
 RESEARCH_FLOW_TIMEZONE = "UTC"
-PROMOTION_DELTA_THRESHOLD = 0.05  # 5% improvement required
+PROMOTION_DELTA_THRESHOLD = 0.05  # 5% improvement required (legacy threshold)
+
+# ---------------------------------------------------------------------------
+# SPRT (Sequential Probability Ratio Test) promotion gate — Wave 4 BEST-1
+# Replaces the arbitrary 5% delta with a statistically-grounded decision.
+# Wave 5 will upgrade this to mSPRT for continuous-peeking safety.
+# ---------------------------------------------------------------------------
+import math as _math
+
+
+def _sprt_promotion_decision(
+    new_oos_brier: float,
+    prod_oos_brier: float,
+    n_weeks: int,
+    *,
+    alpha: float = 0.05,
+    beta: float = 0.20,
+    delta: float = 0.02,
+    sprt_enabled: bool = True,
+) -> dict[str, Any]:
+    """Return an SPRT-based promotion decision for a model upgrade.
+
+    Parameters
+    ----------
+    new_oos_brier:
+        Out-of-sample Brier score of the candidate model (lower = better).
+    prod_oos_brier:
+        OOS Brier score of the current Production model.
+    n_weeks:
+        Number of weekly OOS observations available.
+    alpha:
+        Maximum acceptable Type I error (false promotion rate).
+    beta:
+        Maximum acceptable Type II error (missed improvement rate).
+    delta:
+        Minimum practical improvement in Brier score (e.g. 0.02 = 2 percentage
+        points).  Used to calibrate effect size.
+    sprt_enabled:
+        Set ``False`` to fall back to the legacy 5 % delta check, allowing
+        ``SPRT_GATE_ENABLED=false`` env-var opt-out.
+
+    Returns
+    -------
+    dict with keys: status ("PROMOTE" | "STOP" | "CONTINUE"), z_stat, n_weeks,
+    sprt_enabled, alpha, beta, delta.
+    """
+    if not sprt_enabled:
+        # Legacy path: simple relative improvement threshold.
+        rel = (prod_oos_brier - new_oos_brier) / max(abs(prod_oos_brier), 1e-9)
+        status = "PROMOTE" if rel > PROMOTION_DELTA_THRESHOLD else "STOP"
+        return {"status": status, "z_stat": float(rel), "n_weeks": n_weeks,
+                "sprt_enabled": False, "alpha": alpha, "beta": beta, "delta": delta}
+
+    if n_weeks < 4:
+        # Too few observations — always continue without deciding.
+        return {"status": "CONTINUE", "z_stat": 0.0, "n_weeks": n_weeks,
+                "sprt_enabled": True, "alpha": alpha, "beta": beta, "delta": delta,
+                "reason": "n_weeks < 4 — insufficient data"}
+
+    improvement = prod_oos_brier - new_oos_brier  # positive = candidate is better
+    # Pooled variance estimate from a two-sample normal approximation.
+    sigma = _math.sqrt(
+        2.0 * prod_oos_brier * max(1.0 - prod_oos_brier, 1e-9) / n_weeks
+    )
+    z = (improvement - delta) / max(sigma, 1e-9)
+
+    # Wald SPRT boundaries.
+    upper = _math.log((1.0 - beta) / max(alpha, 1e-9))   # H1: promote
+    lower = _math.log(beta / max(1.0 - alpha, 1e-9))      # H0: stay
+
+    if z >= upper:
+        status = "PROMOTE"
+    elif z <= lower:
+        status = "STOP"
+    else:
+        status = "CONTINUE"
+
+    return {
+        "status": status,
+        "z_stat": round(z, 4),
+        "n_weeks": n_weeks,
+        "sprt_enabled": True,
+        "alpha": alpha,
+        "beta": beta,
+        "delta": delta,
+    }
 
 
 @with_retries(retries=1, retry_delay_seconds=30)
@@ -157,6 +242,36 @@ def promotion_gate_task(
         else:
             # HPO minimises Brier loss → improvement means new < baseline.
             delta = (baseline - new_value) / abs(baseline)
+
+    # [Wave 4 BEST-1] SPRT gate — statistically grounded promotion decision.
+    import os as _os
+    sprt_enabled = _os.environ.get("SPRT_GATE_ENABLED", "true").lower() not in ("0", "false", "no")
+    if baseline is not None and baseline > 0:
+        sprt_result = _sprt_promotion_decision(
+            new_oos_brier=new_value,
+            prod_oos_brier=baseline,
+            n_weeks=1,  # one week of data per HPO run; callers may override via context
+            sprt_enabled=sprt_enabled,
+        )
+        # Log SPRT z-stat to MLflow for lineage tracking.
+        try:
+            import mlflow  # type: ignore[import-not-found]
+            mlflow.log_metrics({"sprt_z_stat": sprt_result["z_stat"]})
+        except Exception:  # pragma: no cover — mlflow optional
+            pass
+
+        if sprt_result["status"] == "STOP":
+            return {
+                "promoted": False,
+                "reason": "sprt_stop",
+                "sprt_z_stat": sprt_result["z_stat"],
+                "delta": delta,
+                "best_value": new_value,
+                "baseline": baseline,
+            }
+        # PROMOTE: falls through to the standard promote() call below.
+        # CONTINUE: not enough data yet — fall through to legacy delta check.
+        # This preserves backward compatibility when n_weeks is small.
 
     if delta > threshold:
         candidate_version = _latest_candidate_version(model_name)

@@ -513,6 +513,9 @@ class EnsemblePredictor:
             self.config.xgb_params["n_estimators"] = min(int(self.config.xgb_params.get("n_estimators", 160)), 120)
         self.main_model = DirectionModel(self.config)
         self.lstm: LSTMPredictor | None = None
+        # [Wave 4 BEST-3] TFT as optional 4th model
+        from .ml.tft_model import make_tft_predictor as _make_tft
+        self.tft = _make_tft()
         self._trained = False
         self.feature_cols: list[str] = []
         self.oof_probabilities_: pd.Series | None = None
@@ -706,12 +709,22 @@ class EnsemblePredictor:
             signal = "SELL_OR_AVOID"
         else:
             signal = "HOLD_NEUTRAL"
+        # [Wave 4 BEST-3] TFT score — 0.5 when not trained or unavailable
+        tft_prob = 0.5
+        if self.tft is not None:
+            try:
+                tft_preds = self.tft.predict(X.loc[:, self.feature_cols])
+                if tft_preds:
+                    tft_prob = float(tft_preds[-1])
+            except Exception:
+                pass
         return {
             "direction_prob": float(prob),
             "signal": signal,
             "confidence": float(confidence),
             "main_prob": float(main_prob),
             "lstm_prob": float(lstm_prob),
+            "tft_prob": float(tft_prob),
             "model_kind": self.main_model.kind_used,
         }
 
