@@ -1328,7 +1328,7 @@ ${backtest ? `## Backtest (\\$10,000 initial)
               ))}
             </div>
 
-            <div style={{ padding: 12 }}>
+            <div style={{ padding: "14px 16px" }}>
               {tab === "SIGNAL" && (
                 <SignalTab
                   last={last}

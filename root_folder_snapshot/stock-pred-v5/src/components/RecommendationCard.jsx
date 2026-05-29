@@ -272,32 +272,50 @@ export default function RecommendationCard({ result, currency = "$", accent = "#
       onClick={onClick}
       style={{
         background: C.panel,
-        border: `1px solid ${borderColor}55`,
+        border: `1px solid ${borderColor}44`,
         borderLeft: `3px solid ${borderColor}`,
-        padding: "10px 12px",
-        marginBottom: 8,
+        borderRadius: 6,
+        padding: "12px 14px",
+        marginBottom: 10,
         cursor: onClick ? "pointer" : "default",
-        transition: "background .15s",
+        transition: "background .15s, box-shadow .15s",
+        boxShadow: `0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 ${borderColor}22`,
       }}
-      onMouseEnter={(e) => { if (onClick) e.currentTarget.style.background = C.panel2; }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = C.panel; }}
+      onMouseEnter={(e) => {
+        if (onClick) {
+          e.currentTarget.style.background = C.panel2;
+          e.currentTarget.style.boxShadow = `0 4px 16px rgba(0,0,0,0.5), inset 0 1px 0 ${borderColor}33`;
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = C.panel;
+        e.currentTarget.style.boxShadow = `0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 ${borderColor}22`;
+      }}
     >
       {sourceConflict && <SourceConflictBanner result={result} />}
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: 2 }}>
+          <span style={{ fontSize: 16, fontWeight: 800, color: accent, letterSpacing: "0.12em" }}>
             {result.ticker?.replace(".KS", "") || result.rank + "."}
           </span>
           <RiskGateBadge verdict={result.verdict} size={9} />
           <KevpeBadge result={result} size={8} />
         </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: borderColor }}>
+        {/* Score pill */}
+        <div style={{
+          background: `${borderColor}22`,
+          border: `1px solid ${borderColor}66`,
+          borderRadius: 4,
+          padding: "3px 10px",
+          textAlign: "center",
+          minWidth: 44,
+        }}>
+          <div style={{ fontSize: 20, fontWeight: 800, color: borderColor, lineHeight: 1.1 }}>
             {result.score != null ? Math.round(result.score) : "—"}
           </div>
-          <div style={{ fontSize: 8, color: C.textMuted, letterSpacing: 1 }}>SCORE</div>
+          <div style={{ fontSize: 7, color: C.textMuted, letterSpacing: "0.12em", marginTop: 1 }}>SCORE</div>
         </div>
       </div>
 
@@ -330,8 +348,10 @@ export default function RecommendationCard({ result, currency = "$", accent = "#
       {result.entry != null && (
         <div style={{
           display: "grid", gridTemplateColumns: "1fr 1fr 1fr",
-          gap: 4, padding: "6px 8px",
-          background: C.bgDeep, borderRadius: 3, marginBottom: 4,
+          gap: 4, padding: "8px 10px",
+          background: C.bgDeep, borderRadius: 4,
+          border: `1px solid ${C.border}`,
+          marginBottom: 6,
         }}>
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: 7, color: C.textMuted, letterSpacing: 1 }}>ENTRY</div>
