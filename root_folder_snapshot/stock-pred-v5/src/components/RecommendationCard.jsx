@@ -3,6 +3,59 @@ import RiskGateBadge from "./RiskGateBadge";
 import KevpeBadge from "./KevpeBadge";
 
 // ---------------------------------------------------------------------------
+// Regime badge — [Wave 4 Dashboard] MacroRegime LLM label
+// ---------------------------------------------------------------------------
+const REGIME_CFG = {
+  risk_on:  { bg: "#00FF8822", color: "#00FF88", label: "RISK ON ↑"  },
+  neutral:  { bg: "#3F506044", color: "#8899AA", label: "NEUTRAL —"  },
+  risk_off: { bg: "#FF336622", color: "#FF3366", label: "RISK OFF ↓" },
+};
+const REGIME_TIP = "Market regime from LLM MacroRegime advisor. risk_on=bullish macro, neutral=mixed, risk_off=bearish macro.";
+
+function RegimeBadge({ regime }) {
+  if (!regime) return null;
+  const cfg = REGIME_CFG[regime];
+  if (!cfg) return null;
+  return (
+    <div title={REGIME_TIP} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+      <span style={{ fontSize: 8, color: C.textMuted, letterSpacing: 1 }}>REGIME</span>
+      <span style={{
+        background: cfg.bg, color: cfg.color,
+        borderRadius: 3, padding: "1px 7px",
+        fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.03em",
+      }}>{cfg.label}</span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Model scores strip — [Wave 4 Dashboard] main_prob + tft_prob
+// ---------------------------------------------------------------------------
+function ModelScoresStrip({ mainProb, tftProb, modelKind }) {
+  if (mainProb == null && tftProb == null) return null;
+  const isStub = tftProb != null && Math.abs(tftProb - 0.5) < 0.001;
+  const probColor = (p) => p == null ? C.textMuted : p >= 0.56 ? C.green : p <= 0.44 ? C.red : C.textDim;
+  return (
+    <div style={{ display: "flex", gap: 12, marginTop: 5, fontSize: 8, color: C.textDim, letterSpacing: 0.5 }}>
+      {mainProb != null && (
+        <span>
+          {modelKind ? <span style={{ color: C.textMuted }}>{String(modelKind).toUpperCase().slice(0,3)} </span> : "MAIN "}
+          <b style={{ color: probColor(mainProb) }}>{Number(mainProb).toFixed(2)}</b>
+        </span>
+      )}
+      {tftProb != null && (
+        <span title={isStub ? "TFT stub — pytorch_forecasting not installed" : "TFT model score"}>
+          TFT{" "}
+          <b style={{ color: isStub ? C.textMuted : probColor(tftProb) }}>
+            {Number(tftProb).toFixed(2)}{isStub ? "*" : ""}
+          </b>
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // PBO badge — [E2 Wave 3]
 // ---------------------------------------------------------------------------
 const PBO_CFG = {
@@ -26,6 +79,37 @@ function PboBadge({ pbo, pboStatus }) {
         borderRadius: 3, padding: "1px 5px",
         fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.03em",
       }}>{cfg.icon} {cfg.label}</span>
+    </div>
+  );
+}
+
+const SIZING_CFG = {
+  PASS: { color: "#00FF88" },
+  AMBER: { color: "#FFB800" },
+  ZERO: { color: "#FF3366" },
+  NO_DATA: { color: "#6B7E8E" },
+};
+
+function SizingBadge({ result }) {
+  const strategy = result?.sizing_strategy_used;
+  if (!strategy || strategy === "off" || result?.size_multiplier == null) return null;
+  const status = result.sizing_coverage_status || "NO_DATA";
+  const cfg = SIZING_CFG[status] ?? SIZING_CFG.NO_DATA;
+  const mult = Number(result.size_multiplier);
+  return (
+    <div title="CMRS sizing is downgrade-only and report-only." style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(3, auto)",
+      gap: 6,
+      marginTop: 6,
+      alignItems: "center",
+      fontSize: 8,
+      color: C.textDim,
+      letterSpacing: 0.8,
+    }}>
+      <span>SIZE <b style={{ color: C.text }}>{Number.isFinite(mult) ? mult.toFixed(3) : "N/A"}</b></span>
+      <span>SIZER <b style={{ color: C.text }}>{strategy}</b></span>
+      <span>COVERAGE <b style={{ color: cfg.color }}>{status}</b></span>
     </div>
   );
 }
@@ -160,6 +244,11 @@ export default function RecommendationCard({ result, currency = "$", accent = "#
         return <PboBadge pbo={bhs.pbo} pboStatus={bhs.pbo_status} />;
       })()}
 
+      <SizingBadge result={result} />
+
+      {/* [Wave 4] Regime badge */}
+      <RegimeBadge regime={result.advisor_regime} />
+
       {/* LLM Advisor overlay */}
       {result.advisor_score != null && !isNaN(parseFloat(result.advisor_score)) && (() => {
         const score = parseFloat(result.advisor_score);
@@ -198,6 +287,12 @@ export default function RecommendationCard({ result, currency = "$", accent = "#
                 {result.advisor_rationale}
               </div>
             )}
+            {/* [Wave 4] Model scores strip inside advisor section */}
+            <ModelScoresStrip
+              mainProb={result.direction_prob}
+              tftProb={result.tft_prob}
+              modelKind={result.model_kind_used}
+            />
           </div>
         );
       })()}

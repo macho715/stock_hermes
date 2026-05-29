@@ -450,7 +450,7 @@ def _normalize_result(result: Any, *, rank: int, provider_summary: Any = None) -
         "dashboard_status": readiness["investment_readiness_status"],
         "candidate_label": result.get("candidate_label"),
         "score": result["recommendation_rank_score"],
-        "raw_score": result["recommendation_rank_score"],
+        "raw_score": result.get("raw_score", result["recommendation_rank_score"]),
         **readiness,
         "probability": result["direction_prob"],
         "expected_value_pct": result["expected_value_pct"],
@@ -483,6 +483,9 @@ def _normalize_result(result: Any, *, rank: int, provider_summary: Any = None) -
         "backtest_honesty": result.get("backtest_honesty"),
         # [E2] Per-candidate PBO summary for RecommendationCard badge
         "backtest_honesty_summary": _pbo_summary_for_card(result.get("backtest_honesty")),
+        "size_multiplier": result.get("size_multiplier"),
+        "sizing_strategy_used": result.get("sizing_strategy_used"),
+        "sizing_coverage_status": result.get("sizing_coverage_status"),
         "reasons": result.get("reasons", []),
         "generated_at_utc": result.get("generated_at_utc"),
         # KEVPE overlay (optional — only present when kevpe_adapter was used)
@@ -498,4 +501,8 @@ def _normalize_result(result: Any, *, rank: int, provider_summary: Any = None) -
         # compatibility.
         "advisor_score": result.get("advisor_score"),
         "advisor_rationale": _truncate_advisor_rationale(result.get("advisor_rationale")),
+        # [Wave 4 Dashboard] New optional display fields — None when not computed.
+        "tft_prob": result.get("tft_prob"),
+        "advisor_regime": result.get("advisor_regime"),
+        "model_kind_used": result.get("model_kind_used"),
     }

@@ -27,6 +27,13 @@ from .ensemble_model import DirectionModel, ModelConfig, _safe_auc
 from .feature_engine import TechnicalIndicators, build_features, feature_columns
 from .kevpe_adapter import get_kevpe_adapter, kevpe_signal_to_supplement
 from .ml.cv import PurgedKFold
+from .sizing import (
+    build_sizing_inputs,
+    coverage_hits_for_result,
+    coverage_honesty_gate,
+    make_sizer,
+)
+from .sizing.integration import apply_sizing
 
 Track = Literal["S", "L"]
 Verdict = Literal[
@@ -121,8 +128,19 @@ class RecommendationConfig:
     # :func:`_verdict` and the safety contract test).
     advisor_run: bool = False
     advisor_blend_weight: float = 0.0
+    # Optional CMRS sizing overlay.  Off by default: existing recommendation
+    # scores remain unchanged unless the caller explicitly enables sizing.
+    sizing_kind: Literal["off", "global", "mondrian", "auto"] = "off"
+    sizing_alpha: float = 0.1
+    sizing_n_min: int = 30
 
     def __post_init__(self) -> None:
+        if self.sizing_kind not in {"off", "global", "mondrian", "auto"}:
+            raise ValueError("sizing_kind must be one of: off, global, mondrian, auto")
+        if not 0.0 < float(self.sizing_alpha) < 1.0:
+            raise ValueError("sizing_alpha must be between 0 and 1")
+        if int(self.sizing_n_min) < 1:
+            raise ValueError("sizing_n_min must be >= 1")
         if self.prefer_gpu:
             self.xgb_device = "cuda"
         if self.lite:
@@ -213,6 +231,10 @@ class RecommendationResult:
     reasons: list[str]
     generated_at_utc: str
     backtest_honesty: dict | None = None
+    raw_score: float = 0.0
+    size_multiplier: float = 1.0
+    sizing_strategy_used: str = "off"
+    sizing_coverage_status: str = "NO_DATA"
     # KEVPE risk overlay (optional — populated when KEVPE adapter is available)
     kevpe_available: bool = False
     kevpe_regime: str | None = None
@@ -231,6 +253,13 @@ class RecommendationResult:
     # fields — see ``_verdict`` and the safety contract test.
     advisor_score: float | None = None
     advisor_rationale: str | None = None
+    # [Wave 4 Dashboard] Additive optional fields — None when not computed.
+    # tft_prob: TFT 4th model probability stub (0.0–1.0); None when TFT disabled.
+    # advisor_regime: MacroRegime LLM label ("risk_on"|"neutral"|"risk_off").
+    # model_kind_used: Primary model algorithm ("lightgbm"|"xgb"|"logistic"|...).
+    tft_prob: float | None = None
+    advisor_regime: str | None = None
+    model_kind_used: str | None = None
 
     def to_dict(self) -> dict:
         data = asdict(self)
@@ -393,6 +422,7 @@ def _fit_walk_forward_model(feature_df: pd.DataFrame, horizon: int, cfg: Recomme
         "model": final_model,
         "feature_cols": cols,
         "oof_probs": oof,
+        "oof_targets": y,
         "backtest_probs": neutral_probs,
         "latest_prob": latest_prob,
         "latest_prob_used_for_backtest": False,            # OOF-only guarantee
@@ -423,6 +453,32 @@ def _clip(value: float, low: float = 0.0, high: float = 1.0) -> float:
 
 def _pct(value: float) -> float:
     return round(float(value) * 100.0, 2)
+
+
+def _coverage_gate_dict(gate, *, status: str | None = None, error: str | None = None) -> dict:
+    payload = {
+        "status": status or str(getattr(gate, "status", "NO_DATA")),
+        "empirical": getattr(gate, "empirical", None),
+        "claimed": getattr(gate, "claimed", None),
+        "n": int(getattr(gate, "n", 0) or 0),
+        "screening_output_only": True,
+    }
+    if error:
+        payload["error"] = error
+    return payload
+
+
+def _no_data_sizing_coverage(error: str | None = None) -> dict:
+    payload = {
+        "status": "NO_DATA",
+        "empirical": None,
+        "claimed": None,
+        "n": 0,
+        "screening_output_only": True,
+    }
+    if error:
+        payload["error"] = error
+    return payload
 
 
 def _safe_pct_change(close: pd.Series, period: int) -> float:
@@ -767,6 +823,12 @@ def _apply_advisor_blend(
     advisor_rationale = "; ".join(
         f"[{out.agent}] {out.rationale}" for out in result.outputs if out.rationale
     )[:240] or None
+    # [Wave 4 Dashboard] Extract regime_label from MacroRegime advisor output.
+    advisor_regime: str | None = None
+    for _out in result.outputs:
+        if _out.agent == "macro_regime" and getattr(_out, "regime_label", ""):
+            advisor_regime = _out.regime_label
+            break
 
     # Advisor audit strict gate: if score is non-zero, the call MUST appear
     # in audit_log/advisor.jsonl. Missing audit → reset score to 0.0 so the
@@ -794,7 +856,7 @@ def _apply_advisor_blend(
     advisory_pct = 50.0 + advisory_score * 50.0
     blended = deterministic * (1.0 - weight) + advisory_pct * weight
     blended = max(0.0, min(100.0, blended))
-    return advisory_score, advisor_rationale, float(blended)
+    return advisory_score, advisor_rationale, float(blended), advisor_regime
 
 
 def _verdict(track: Track, score: float, checks: list[ValidationCheck], cfg: RecommendationConfig) -> tuple[Verdict, str]:
@@ -969,6 +1031,30 @@ class RecommendationEngine:
             if _proxy_pbo is not None
             else None
         )
+        sizing_inputs = None
+        sizing_coverage_result = None
+        sizing_coverage_status = "NO_DATA"
+        if cfg.sizing_kind != "off":
+            try:
+                sizing_inputs = build_sizing_inputs(feature_df, model_stats, horizon=horizon)
+                sizing_result = make_sizer(cfg.sizing_kind, n_min=cfg.sizing_n_min).size(
+                    sizing_inputs.horizon_scores,
+                    sizing_inputs.calib_book,
+                    sizing_inputs.regime,
+                    sizing_inputs.regime_probs,
+                    cfg.sizing_alpha,
+                )
+                hits = coverage_hits_for_result(
+                    sizing_inputs.calib_book,
+                    sizing_result,
+                    regime=sizing_inputs.regime,
+                )
+                gate = coverage_honesty_gate(hits, alpha=cfg.sizing_alpha)
+                sizing_coverage_status = "NO_DATA" if gate.n == 0 else gate.status
+                sizing_coverage_result = _coverage_gate_dict(gate, status=sizing_coverage_status)
+            except Exception as exc:  # pragma: no cover - defensive, keeps report-only path alive
+                sizing_coverage_status = "NO_DATA"
+                sizing_coverage_result = _no_data_sizing_coverage(str(exc))
         honesty = evaluate_backtest_honesty(
             oof_coverage=float(model_stats["oof_coverage"]),
             min_oof_coverage=cfg.min_oof_coverage,
@@ -981,6 +1067,7 @@ class RecommendationEngine:
             cv_gap=int(model_stats["gap"]),
             horizon=horizon,
             cpcv_result=_cpcv_result,
+            sizing_coverage_result=sizing_coverage_result,
         )
         # Deterministic verdict — ALWAYS computed from the unblended score.
         # The LLM advisor is forbidden from upgrading this; it can only
@@ -1004,10 +1091,11 @@ class RecommendationEngine:
         # ── Phase-6 LLM advisor blend (optional, never overrides gate up) ──
         advisor_score: float | None = None
         advisor_rationale: str | None = None
+        advisor_regime: str | None = None
         final_score = score
         if cfg.advisor_run and cfg.advisor_blend_weight > 0.0:
             try:
-                advisor_score, advisor_rationale, final_score = _apply_advisor_blend(
+                advisor_score, advisor_rationale, final_score, advisor_regime = _apply_advisor_blend(
                     ticker=ticker,
                     deterministic_score=score,
                     cfg=cfg,
@@ -1036,6 +1124,57 @@ class RecommendationEngine:
         if advisor_score is not None:
             reasons.append(f"advisor_score={advisor_score:+.3f}")
 
+        raw_score = round(float(final_score), 2)
+        rank_score = raw_score
+        size_multiplier = 1.0
+        sizing_strategy_used = "off"
+        if cfg.sizing_kind != "off":
+            if sizing_inputs is not None:
+                app = apply_sizing(
+                    {
+                        "ticker": ticker,
+                        "verdict": verdict,
+                        "recommendation_rank_score": raw_score,
+                    },
+                    sizing_inputs.horizon_scores,
+                    sizing_inputs.calib_book,
+                    sizing_inputs.regime,
+                    sizing_inputs.regime_probs,
+                    sizing_kind=cfg.sizing_kind,
+                    alpha=cfg.sizing_alpha,
+                    n_min=cfg.sizing_n_min,
+                    coverage_status=sizing_coverage_status,
+                )
+                rank_score = round(float(app.new_rank_score), 2)
+                size_multiplier = round(float(app.size_multiplier), 6)
+                sizing_strategy_used = app.strategy_used
+                self.audit_logger.write(
+                    AuditEvent(
+                        event_type="sizing_strategy_selected",
+                        status="SUCCESS",
+                        command=cfg.audit_command,
+                        ticker=ticker,
+                        metadata=app.audit_event,
+                    )
+                )
+            else:
+                rank_score = 0.0
+                size_multiplier = 0.0
+                sizing_strategy_used = cfg.sizing_kind
+                self.audit_logger.write(
+                    AuditEvent(
+                        event_type="sizing_strategy_selected",
+                        status="FAIL",
+                        command=cfg.audit_command,
+                        ticker=ticker,
+                        message="sizing calibration unavailable",
+                        metadata=sizing_coverage_result or _no_data_sizing_coverage(),
+                    )
+                )
+            reasons.append(
+                f"sizing={sizing_strategy_used} x{size_multiplier:.3f} coverage={sizing_coverage_status}"
+            )
+
         # ── KEVPE risk overlay (supplementary only — never overrides Risk Gate) ──
         kevpe_result = get_kevpe_adapter().get_signal_for_ticker(df, self._events_for_ticker(ticker), as_of=pd.Timestamp.now().normalize())
         kevpe_supp = kevpe_signal_to_supplement(kevpe_result)
@@ -1044,7 +1183,7 @@ class RecommendationEngine:
             ticker=ticker,
             track=track,
             verdict=verdict,
-            recommendation_rank_score=round(final_score, 2),
+            recommendation_rank_score=rank_score,
             candidate_label=label,
             screening_output_only=True,
             latest_close=round(float(snap["latest"]), 4),
@@ -1081,6 +1220,10 @@ class RecommendationEngine:
             reasons=reasons,
             generated_at_utc=datetime.now(UTC).isoformat(timespec="seconds"),
             backtest_honesty=honesty,
+            raw_score=raw_score,
+            size_multiplier=size_multiplier,
+            sizing_strategy_used=sizing_strategy_used,
+            sizing_coverage_status=sizing_coverage_status,
             # KEVPE overlay fields (populated from supplementary signal)
             kevpe_available=kevpe_supp.get("kevpe_available", False),
             kevpe_regime=kevpe_supp.get("kevpe_regime"),
@@ -1091,6 +1234,12 @@ class RecommendationEngine:
             kevpe_reason=kevpe_supp.get("kevpe_reason"),
             advisor_score=advisor_score,
             advisor_rationale=advisor_rationale,
+            # [Wave 4 Dashboard] tft_prob is None until TFT is wired into
+            # this path (Phase 2); model_kind_used and advisor_regime are
+            # available now.
+            tft_prob=None,
+            advisor_regime=advisor_regime,
+            model_kind_used=model_stats.get("models_used", [None])[-1],
         )
 
     def _events_for_ticker(self, ticker: str) -> list[dict]:
@@ -1140,7 +1289,7 @@ class RecommendationEngine:
             "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
             "config": asdict(self.config),
             "disclaimer": "screening_output_only; manual approval required; no broker order execution; not financial advice",
-            "algorithm_patch": "v2 leak-safe CV + ATR risk plan + fixed-risk sizing + OOF backtest",
+            "algorithm_patch": "v2 leak-safe CV + ATR risk plan + fixed-risk sizing + OOF backtest + CMRS sizing optional downgrade-only",
             "audit_log_path": str(self.audit_logger.path),
             "provider_summary": self._provider_summary(),
             "backtest_honesty_summary": honesty_summary,
@@ -1276,20 +1425,21 @@ def render_markdown(results: list[RecommendationResult], cfg: RecommendationConf
         "",
         "Boundary: `screening_output_only`; manual approval required; no broker order execution; not financial advice.",
         "",
-        "Algorithm: leak-safe purged walk-forward CV, out-of-fold backtest signals, ATR-adjusted stop/target, fixed-risk position sizing.",
+        "Algorithm: leak-safe purged walk-forward CV, out-of-fold backtest signals, ATR-adjusted stop/target, fixed-risk position sizing, optional CMRS downgrade-only sizing.",
         "",
         f"Universe: {', '.join(cfg.universe)}",
         f"Track: {cfg.track} | Period: {cfg.period} | Top-N: {cfg.top_n}",
         f"Data provider: {cfg.data_provider} | Synthetic flag: {cfg.synthetic}",
         f"Audit log: {Path(cfg.output_dir) / 'audit_log.jsonl'}",
         "",
-        "| Rank | Ticker | Track | Verdict | Score | Prob | EV% | Entry | Stop | TP2 | R/R | Risk% | MaxPos% | Qty | Confirms | Evidence |",
-        "|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+        "| Rank | Ticker | Track | Verdict | Score | Raw | Size | Sizer | Prob | EV% | Entry | Stop | TP2 | R/R | Risk% | MaxPos% | Qty | Confirms | Evidence |",
+        "|---:|---|---|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for rank, r in enumerate(results, start=1):
         evidence = "; ".join(r.reasons[:4]).replace("|", "/")
         lines.append(
             f"| {rank} | {r.ticker} | {r.track} | {r.verdict} | {r.recommendation_rank_score:.2f} | "
+            f"{r.raw_score:.2f} | {r.size_multiplier:.3f} | {r.sizing_strategy_used} | "
             f"{r.direction_prob:.2%} | {r.expected_value_pct:.2f} | {r.entry:.2f} | {r.stop:.2f} | {r.tp2:.2f} | "
             f"{r.risk_reward:.2f} | {r.risk_budget_pct:.2%} | {r.max_position_pct:.2%} | {r.suggested_quantity:.2f} | "
             f"{r.confirmations_passed}/{r.confirmations_total} | {evidence} |"
@@ -1325,6 +1475,9 @@ def run_recommendation_cli(args) -> int:
         cv_gap=args.cv_gap,
         data_provider=getattr(args, "data_provider", "auto"),
         provider_config=getattr(args, "provider_config", None),
+        sizing_kind=getattr(args, "sizing_kind", "off"),
+        sizing_alpha=getattr(args, "sizing_alpha", 0.1),
+        sizing_n_min=getattr(args, "sizing_n_min", 30),
     )
     engine = RecommendationEngine(cfg)
     results = engine.run()
