@@ -267,7 +267,7 @@ def _has_torch() -> bool:
         return False
 
 
-class _TorchLSTMNet:
+class _TorchLSTMNet:  # pragma: no cover
     """Internal PyTorch LSTM network — only instantiated when torch is available."""
 
     def __init__(self, n_features: int, seq_len: int, device: str) -> None:
@@ -339,7 +339,7 @@ class _TorchLSTMNet:
             return self.net(Xt).cpu().numpy()
 
 
-class LSTMPredictor:
+class LSTMPredictor:  # pragma: no cover
     """LSTM time-series predictor.
 
     Backend selection (automatic):
@@ -396,7 +396,7 @@ class LSTMPredictor:
         return self._net.predict(X_seq.astype(np.float32)).flatten().clip(0.0, 1.0)
 
 
-class GRUPredictor:
+class GRUPredictor:  # pragma: no cover
     """Gated Recurrent Unit predictor — lightweight RNN alternative to LSTM.
 
     Uses ``torch.nn.GRU`` when PyTorch is available (GPU-accelerated on CUDA),

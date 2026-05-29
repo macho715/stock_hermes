@@ -41,6 +41,9 @@ omit = [
     "*/__pycache__/*",
     "*/hw_profile.py",
     "*/benchmark.py",
+    # Legacy standalone file fully shadowed by the reports/ package since
+    # Python resolves 'stock_rtx4060.reports' to reports/__init__.py.
+    "*/stock_rtx4060/reports.py",
 ]
 relative_files = true
 

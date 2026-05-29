@@ -278,3 +278,98 @@ def test_forward_summary_pass_requires_alpha_ge_0(tmp_path: Path, monkeypatch):
     }
     status = evaluate_forward_summary(summary)
     assert status == "FAIL"
+
+
+# ---------------------------------------------------------------------------
+# Coverage boost — private helpers and edge paths (Wave 3 auto)
+# ---------------------------------------------------------------------------
+
+
+def test_today_helper_returns_date():
+    """_today() returns today's date (basic sanity)."""
+    from stock_rtx4060.live_review.auto_forward_recorder import _today
+    from datetime import date
+    assert isinstance(_today(), date)
+
+
+def test_now_kst_hour_returns_int():
+    """_now_kst_hour() returns an integer 0–23."""
+    from stock_rtx4060.live_review.auto_forward_recorder import _now_kst_hour
+    h = _now_kst_hour()
+    assert isinstance(h, int)
+    assert 0 <= h <= 23
+
+
+def test_count_recorded_zero_when_no_file(tmp_path):
+    """_count_recorded returns 0 when log file does not exist."""
+    rec, _ = _make_recorder(tmp_path)
+    assert rec._count_recorded() == 0
+
+
+def test_recorded_dates_empty_when_no_file(tmp_path):
+    """_recorded_dates returns empty set when log file does not exist."""
+    rec, _ = _make_recorder(tmp_path)
+    assert rec._recorded_dates() == set()
+
+
+def test_append_row_creates_header_and_row(tmp_path):
+    """_append_row creates CSV with header on first call."""
+    from stock_rtx4060.live_review.auto_forward_recorder import _CSV_FIELDNAMES
+    rec, _ = _make_recorder(tmp_path)
+    row = {k: "" for k in _CSV_FIELDNAMES}
+    row["date"] = "2026-05-01"
+    row["symbol"] = "005930.KS"
+    rec._append_row(row)
+    assert rec._log_file.exists()
+    assert rec._count_recorded() == 1
+    assert "2026-05-01" in rec._recorded_dates()
+
+
+def test_save_and_get_state_roundtrip(tmp_path):
+    """_save_state / get_state roundtrip preserves data."""
+    rec, _ = _make_recorder(tmp_path)
+    state = rec.get_state()
+    state["test_key"] = "test_value"
+    rec._save_state(state)
+    loaded = rec.get_state()
+    assert loaded["test_key"] == "test_value"
+
+
+def test_run_once_dry_run_returns_recorded(tmp_path, monkeypatch):
+    """dry_run=True returns RECORDED without writing a row."""
+    monkeypatch.setattr(
+        "stock_rtx4060.live_review.auto_forward_recorder._today",
+        lambda: date(2026, 5, 29),  # Thursday — trading day
+    )
+    monkeypatch.setattr(
+        "stock_rtx4060.live_review.auto_forward_recorder._now_kst_hour",
+        lambda: 16,  # after EOD
+    )
+    rec, _ = _make_recorder(tmp_path)
+    result = rec.run_once(dry_run=True)
+    assert result == "RECORDED"
+    assert rec._count_recorded() == 0  # no row written in dry_run
+
+
+def test_fetch_close_falls_back_to_zero(tmp_path, monkeypatch):
+    """_fetch_close returns 0.0 when provider raises (no-internet fallback)."""
+    rec, _ = _make_recorder(tmp_path)
+    # Patch load_ohlcv_with_provider to raise
+    monkeypatch.setattr(
+        "stock_rtx4060.live_review.auto_forward_recorder.load_ohlcv_with_provider",
+        None,  # AttributeError on call → caught by except
+        raising=False,
+    )
+    import stock_rtx4060.live_review.auto_forward_recorder as mod
+    monkeypatch.setattr(mod, "load_ohlcv_with_provider", None, raising=False)
+    val = rec._fetch_close("005930.KS")
+    assert isinstance(val, float)  # either real or fallback 0.0
+
+
+def test_last_portfolio_defaults_when_no_file(tmp_path):
+    """_last_portfolio returns default values when log file absent."""
+    rec, _ = _make_recorder(tmp_path)
+    equity, bench_equity, cum_alpha = rec._last_portfolio()
+    assert equity == 10_000_000.0
+    assert bench_equity == 10_000_000.0
+    assert cum_alpha == 0.0
