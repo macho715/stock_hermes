@@ -4,12 +4,17 @@ from pathlib import Path
 import pytest
 
 from stock_rtx4060.paper_trading import (
+    ForwardPaperEntry,
     PaperTradingConfig,
     PaperTradingEngine,
     PaperTradingSignal,
+    append_forward_log,
     calculate_promotion_drawdown,
+    load_forward_paper_summary,
     load_paper_status,
     rebuild_daily_report,
+    summarize_forward_paper,
+    write_forward_paper_summary,
 )
 
 
@@ -48,6 +53,59 @@ def _signal(**overrides):
 
 def _read_jsonl(path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def test_paper_trading_legacy_api_still_exists():
+    assert PaperTradingConfig
+    assert PaperTradingEngine
+    assert load_paper_status
+    assert calculate_promotion_drawdown
+
+
+def test_forward_paper_log_rejects_duplicate_rows_by_default(tmp_path):
+    entry = ForwardPaperEntry(
+        date="2026-05-01",
+        symbol="005930",
+        signal="BUY",
+        close=70_000.0,
+        action="OPEN_LONG",
+        equity=1_000_000.0,
+        benchmark_equity=1_000_000.0,
+        cumulative_alpha_pct=0.0,
+    )
+    path = append_forward_log([entry], "005930", reports_root=tmp_path)
+
+    assert path.exists()
+    with pytest.raises(ValueError, match="duplicate forward paper entry"):
+        append_forward_log([entry], "005930", reports_root=tmp_path)
+
+
+def test_forward_paper_summary_and_loader(tmp_path):
+    entries = [
+        ForwardPaperEntry(
+            date=f"2026-05-{day:02d}",
+            symbol="005930",
+            signal="BUY",
+            close=70_000.0 + day,
+            action="HOLD",
+            equity=1_000_000.0 + day * 1_000.0,
+            benchmark_equity=1_000_000.0,
+            cumulative_alpha_pct=0.01 * day,
+        )
+        for day in range(1, 31)
+    ]
+    append_forward_log(entries, "005930", reports_root=tmp_path)
+
+    summary = summarize_forward_paper("005930", reports_root=tmp_path)
+    summary_path = write_forward_paper_summary(summary, reports_root=tmp_path)
+    loaded = load_forward_paper_summary("005930", reports_root=tmp_path)
+
+    assert summary.status == "PASS"
+    assert summary.days == 30
+    assert summary.rule_violation_count == 0
+    assert summary_path.exists()
+    assert loaded["forward_paper_days"] == 30
+    assert loaded["new_capital_allowed"] is False
 
 
 def test_paper_trading_rejects_weak_model_and_krx(tmp_path):

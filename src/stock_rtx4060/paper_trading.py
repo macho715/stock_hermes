@@ -21,11 +21,28 @@ from .krx_calendar import KRXCalendarUnavailable, load_krx_calendar_fixture, nex
 
 SCHEMA_VERSION = "paper_trading.v1"
 STATUS_SCHEMA_VERSION = "paper_status.v1"
+FORWARD_PAPER_SCHEMA_VERSION = "forward_paper.v1"
 PAPER_ONLY_LABEL = "Paper trading only - no broker orders"
 KRX_PILOT_LABEL = "KRX paper trading pilot"
 KRX_DEFAULT_UNIVERSE = ("005930.KS", "000660.KS", "005380.KS", "035420.KS", "035720.KS")
 KRX_BENCHMARK_TICKER = "069500.KS"
 KRX_APPROVED_PROVIDERS = {"pykrx", "financedatareader", "fdr"}
+FORWARD_CSV_COLS = [
+    "date",
+    "symbol",
+    "signal",
+    "raw_score",
+    "readiness_status",
+    "close",
+    "action",
+    "position_quantity",
+    "equity",
+    "benchmark_equity",
+    "daily_alpha_pct",
+    "cumulative_alpha_pct",
+    "rule_violation",
+    "notes",
+]
 
 
 @dataclass(frozen=True)
@@ -131,6 +148,81 @@ class PaperDecision:
             "timezone": self.timezone,
             "fill_date": self.fill_date,
             "paper_trading_only": self.paper_trading_only,
+        }
+
+
+@dataclass(frozen=True)
+class ForwardPaperEntry:
+    """Single append-only row for live-review forward paper evidence."""
+
+    date: str
+    symbol: str
+    signal: str
+    raw_score: float | None = None
+    readiness_status: str = "PAPER_PASS"
+    close: float | None = None
+    action: str = ""
+    position_quantity: float | None = None
+    equity: float | None = None
+    benchmark_equity: float | None = None
+    daily_alpha_pct: float | None = None
+    cumulative_alpha_pct: float | None = None
+    rule_violation: bool = False
+    notes: str = ""
+
+    def to_record(self, *, rerun_reason: str | None = None) -> dict[str, Any]:
+        notes = self.notes
+        if rerun_reason:
+            notes = f"{notes}; rerun_reason={rerun_reason}" if notes else f"rerun_reason={rerun_reason}"
+        return {
+            "date": self.date,
+            "symbol": self.symbol,
+            "signal": self.signal,
+            "raw_score": _blank_if_none(self.raw_score),
+            "readiness_status": self.readiness_status,
+            "close": _blank_if_none(self.close),
+            "action": self.action,
+            "position_quantity": _blank_if_none(self.position_quantity),
+            "equity": _blank_if_none(self.equity),
+            "benchmark_equity": _blank_if_none(self.benchmark_equity),
+            "daily_alpha_pct": _blank_if_none(self.daily_alpha_pct),
+            "cumulative_alpha_pct": _blank_if_none(self.cumulative_alpha_pct),
+            "rule_violation": "1" if self.rule_violation else "0",
+            "notes": notes,
+        }
+
+
+@dataclass(frozen=True)
+class ForwardPaperSummary:
+    """Aggregated forward paper evidence for live-review gates."""
+
+    symbol: str
+    days: int = 0
+    alpha_pct: float | None = None
+    rule_violation_count: int = 0
+    critical_data_missing_count: int = 0
+    max_forward_drawdown_pct: float | None = None
+    status: str = "NOT_EVALUATED"
+    generated_at_utc: str = ""
+    schema_version: str = FORWARD_PAPER_SCHEMA_VERSION
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema_version": self.schema_version,
+            "symbol": self.symbol,
+            "days": self.days,
+            "forward_paper_days": self.days,
+            "alpha_pct": self.alpha_pct,
+            "forward_paper_alpha": self.alpha_pct,
+            "rule_violation_count": self.rule_violation_count,
+            "rule_violations": self.rule_violation_count,
+            "critical_data_missing_count": self.critical_data_missing_count,
+            "max_forward_drawdown_pct": self.max_forward_drawdown_pct,
+            "status": self.status,
+            "generated_at_utc": self.generated_at_utc,
+            "report_only": True,
+            "broker_order_execution": False,
+            "new_capital_allowed": False,
         }
 
 
@@ -501,6 +593,137 @@ def rebuild_daily_report(run_dir: Path | str) -> Path:
     return report
 
 
+def append_forward_log(
+    entries: Iterable[ForwardPaperEntry],
+    symbol: str | None = None,
+    *,
+    reports_root: Path | str = Path("reports"),
+    force_rerun: bool = False,
+    rerun_reason: str | None = None,
+) -> Path:
+    """Append forward paper rows without replacing the paper trading engine.
+
+    Duplicate ``date``/``symbol`` rows are rejected by default.  A rerun can
+    append duplicates only when the caller supplies an explicit reason.
+    """
+
+    entry_list = list(entries)
+    if not entry_list:
+        raise ValueError("entries must contain at least one ForwardPaperEntry")
+    if force_rerun and not (rerun_reason or "").strip():
+        raise ValueError("rerun_reason is required when force_rerun=True")
+
+    normalized_symbol = (symbol or entry_list[0].symbol).upper()
+    mismatched = [entry.symbol for entry in entry_list if entry.symbol.upper() != normalized_symbol]
+    if mismatched:
+        raise ValueError(f"forward paper entries must match symbol {normalized_symbol}: {mismatched}")
+
+    path = _forward_log_path(normalized_symbol, reports_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    seen = _existing_forward_pairs(path)
+    batch_seen: set[tuple[str, str]] = set()
+    duplicates: list[tuple[str, str]] = []
+    for entry in entry_list:
+        pair = (entry.date, entry.symbol.upper())
+        if pair in seen or pair in batch_seen:
+            duplicates.append(pair)
+        batch_seen.add(pair)
+    if duplicates and not force_rerun:
+        rendered = ", ".join(f"{day}/{sym}" for day, sym in duplicates)
+        raise ValueError(f"duplicate forward paper entry: {rendered}")
+
+    file_exists = path.exists()
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=FORWARD_CSV_COLS)
+        if not file_exists:
+            writer.writeheader()
+        for entry in entry_list:
+            writer.writerow(entry.to_record(rerun_reason=rerun_reason if force_rerun else None))
+    return path
+
+
+def summarize_forward_paper(
+    symbol: str,
+    *,
+    reports_root: Path | str = Path("reports"),
+) -> ForwardPaperSummary:
+    """Summarize append-only forward paper evidence for live-review gates."""
+
+    normalized_symbol = symbol.upper()
+    path = _forward_log_path(normalized_symbol, reports_root)
+    if not path.exists():
+        return ForwardPaperSummary(symbol=normalized_symbol, status="NO_LOG", generated_at_utc=_now_utc())
+
+    rows = _read_forward_rows(path)
+    if not rows:
+        return ForwardPaperSummary(symbol=normalized_symbol, status="EMPTY_LOG", generated_at_utc=_now_utc())
+
+    rows = [row for row in rows if str(row.get("symbol", "")).upper() == normalized_symbol]
+    unique_days = {str(row.get("date", "")).strip() for row in rows if str(row.get("date", "")).strip()}
+    rule_violations = sum(1 for row in rows if _truthy(row.get("rule_violation")))
+    critical_missing = _count_critical_forward_missing(rows)
+    alpha_pct = _forward_alpha_pct(rows)
+    drawdown = _forward_drawdown_pct(rows)
+
+    if len(unique_days) < 30:
+        status = "FAIL"
+    elif alpha_pct is None or alpha_pct < 0.0:
+        status = "FAIL"
+    elif rule_violations > 0 or critical_missing > 0:
+        status = "FAIL"
+    else:
+        status = "PASS"
+
+    return ForwardPaperSummary(
+        symbol=normalized_symbol,
+        days=len(unique_days),
+        alpha_pct=alpha_pct,
+        rule_violation_count=rule_violations,
+        critical_data_missing_count=critical_missing,
+        max_forward_drawdown_pct=drawdown,
+        status=status,
+        generated_at_utc=_now_utc(),
+    )
+
+
+def write_forward_paper_summary(
+    summary: ForwardPaperSummary | dict[str, Any],
+    symbol: str | None = None,
+    *,
+    reports_root: Path | str = Path("reports"),
+) -> Path:
+    """Write a forward paper summary JSON evidence file."""
+
+    payload = summary.to_dict() if isinstance(summary, ForwardPaperSummary) else dict(summary)
+    normalized_symbol = (symbol or payload.get("symbol") or payload.get("ticker") or "").upper()
+    if not normalized_symbol:
+        raise ValueError("symbol is required to write a forward paper summary")
+    path = Path(reports_root) / "live_review" / normalized_symbol / f"forward_paper_summary_{normalized_symbol}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(path, payload)
+    return path
+
+
+def load_forward_paper_summary(
+    symbol_or_path: str | Path,
+    *,
+    reports_root: Path | str = Path("reports"),
+) -> dict[str, Any] | None:
+    """Load a forward paper summary by symbol or explicit JSON path."""
+
+    raw = Path(symbol_or_path)
+    if raw.exists() and raw.is_file():
+        return _read_json(raw)
+    symbol = str(symbol_or_path).upper()
+    return _read_json(Path(reports_root) / "live_review" / symbol / f"forward_paper_summary_{symbol}.json")
+
+
+# Compatibility aliases for the backup prototype names.
+compute_summary = summarize_forward_paper
+write_summary = write_forward_paper_summary
+
+
 def _with_run_identity(status: dict[str, Any], run_id: str, run_dir: Path, *, reused: bool = True) -> dict[str, Any]:
     return {
         **status,
@@ -508,6 +731,79 @@ def _with_run_identity(status: dict[str, Any], run_id: str, run_dir: Path, *, re
         "run_dir": str(run_dir),
         "reused": reused,
     }
+
+
+def _blank_if_none(value: Any) -> Any:
+    return "" if value is None else value
+
+
+def _now_utc() -> str:
+    return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+def _forward_log_path(symbol: str, reports_root: Path | str) -> Path:
+    return Path(reports_root) / "live_review" / symbol.upper() / f"paper_trading_log_{symbol.upper()}.csv"
+
+
+def _existing_forward_pairs(path: Path) -> set[tuple[str, str]]:
+    return {
+        (str(row.get("date", "")).strip(), str(row.get("symbol", "")).strip().upper())
+        for row in _read_forward_rows(path)
+        if str(row.get("date", "")).strip() and str(row.get("symbol", "")).strip()
+    }
+
+
+def _read_forward_rows(path: Path) -> list[dict[str, str]]:
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            return [dict(row) for row in csv.DictReader(handle)]
+    except FileNotFoundError:
+        return []
+
+
+def _truthy(value: Any) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _count_critical_forward_missing(rows: list[dict[str, Any]]) -> int:
+    required = ("date", "symbol", "close", "action", "equity")
+    return sum(
+        1
+        for row in rows
+        if any(not str(row.get(name, "")).strip() for name in required)
+    )
+
+
+def _forward_alpha_pct(rows: list[dict[str, Any]]) -> float | None:
+    for row in reversed(rows):
+        value = _to_float(row.get("cumulative_alpha_pct"))
+        if value is not None:
+            return value
+
+    equities = [_to_float(row.get("equity")) for row in rows]
+    bench = [_to_float(row.get("benchmark_equity")) for row in rows]
+    equities = [value for value in equities if value is not None and value > 0]
+    bench = [value for value in bench if value is not None and value > 0]
+    if len(equities) >= 2 and len(bench) >= 2:
+        model_return = equities[-1] / equities[0] - 1.0
+        benchmark_return = bench[-1] / bench[0] - 1.0
+        return round((model_return - benchmark_return) * 100.0, 6)
+    if len(equities) >= 2:
+        return round((equities[-1] / equities[0] - 1.0) * 100.0, 6)
+    return None
+
+
+def _forward_drawdown_pct(rows: list[dict[str, Any]]) -> float | None:
+    values = [_to_float(row.get("equity")) for row in rows]
+    values = [value for value in values if value is not None and value > 0]
+    if not values:
+        return None
+    peak = values[0]
+    max_dd = 0.0
+    for value in values:
+        peak = max(peak, value)
+        max_dd = min(max_dd, value / peak - 1.0)
+    return round(abs(max_dd) * 100.0, 6)
 
 
 def _is_krx_ticker(ticker: str) -> bool:
