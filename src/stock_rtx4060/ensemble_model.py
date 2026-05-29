@@ -276,7 +276,7 @@ class _TorchLSTMNet:
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=0.001)
         self.criterion = torch.nn.BCELoss()
 
-    def fit(self, X_seq: "np.ndarray", y_seq: "np.ndarray", epochs: int = 40) -> None:
+    def fit(self, X_seq: np.ndarray, y_seq: np.ndarray, epochs: int = 40) -> None:
         import torch
         from torch.utils.data import DataLoader, TensorDataset
 
@@ -306,7 +306,7 @@ class _TorchLSTMNet:
         if best_state is not None:
             self.net.load_state_dict(best_state)
 
-    def predict(self, X_seq: "np.ndarray") -> "np.ndarray":
+    def predict(self, X_seq: np.ndarray) -> np.ndarray:
         import torch
         self.net.eval()
         with torch.no_grad():
@@ -343,7 +343,7 @@ class LSTMPredictor:
             return np.empty((0, self.config.seq_len, X.shape[1]), dtype=float)
         return np.stack([X[i - self.config.seq_len : i] for i in range(self.config.seq_len, len(X))])
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "LSTMPredictor":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> LSTMPredictor:
         if not _has_torch():
             raise RuntimeError(
                 "PyTorch not installed — install with: "
@@ -398,7 +398,7 @@ class GRUPredictor:
         except ImportError:
             return "cpu"
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> "GRUPredictor":
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> GRUPredictor:
         if not _has_torch():
             raise RuntimeError(
                 "PyTorch not installed — install with: "
