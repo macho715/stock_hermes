@@ -215,6 +215,120 @@ test("REC API mode shows request defaults and FILE mode keeps static snapshot bo
   await expect(page.getByText("API REQUEST DEFAULTS")).toHaveCount(0);
 });
 
+test("KRX REC API uses KRX provider defaults and requests the full universe", async ({ page }) => {
+  const krxSymbols = [
+    "005930.KS",
+    "000660.KS",
+    "005380.KS",
+    "005490.KS",
+    "035420.KS",
+    "035720.KS",
+    "051910.KS",
+    "006400.KS",
+    "003670.KS",
+  ].map((symbol) => ({ symbol, name: symbol }));
+  const recommendUrls = [];
+
+  await page.route("**/dashboard_config.json", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        markets: {
+          US: { fallback_symbols: [{ symbol: "MSFT", name: "Microsoft" }] },
+          KRX: { fallback_symbols: krxSymbols },
+        },
+        api_defaults: {
+          symbol_period: "6mo",
+          symbol_data_provider: { US: "yfinance", KRX: "pykrx" },
+          model_scores: { period: "3y", model_kind: "auto", data_provider: "yfinance" },
+          model_scores_krx: { period: "5y", model_kind: "auto", data_provider: "pykrx" },
+          recommend: {
+            track: "BOTH",
+            period: "3y",
+            top: "5",
+            synthetic: "0",
+            data_provider: "yfinance",
+            model_kind: "auto",
+          },
+          recommend_krx: {
+            track: "BOTH",
+            period: "5y",
+            top: "9",
+            synthetic: "0",
+            data_provider: "pykrx",
+            model_kind: "auto",
+          },
+        },
+      }),
+    });
+  });
+
+  await page.route("**/api/universe?**", async (route) => {
+    const url = new URL(route.request().url());
+    const market = url.searchParams.get("market");
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        market,
+        source: "backend_config",
+        symbols: market === "KRX" ? krxSymbols : [{ symbol: "MSFT", name: "Microsoft" }],
+      }),
+    });
+  });
+
+  await page.route("**/api/symbol?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ source: "PYKRX", data: ohlcvRows }),
+    });
+  });
+
+  await page.route("**/api/model-scores?**", async (route) => {
+    const url = new URL(route.request().url());
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...modelEvidence(url.searchParams.get("symbol") || "005930.KS"),
+        provider: url.searchParams.get("data_provider"),
+      }),
+    });
+  });
+
+  await page.route("**/api/recommend?**", async (route) => {
+    recommendUrls.push(route.request().url());
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...snapshotPayload(),
+        config: {
+          ...snapshotPayload().config,
+          universe: krxSymbols.map((item) => item.symbol),
+          data_provider: "pykrx",
+        },
+      }),
+    });
+  });
+
+  await page.goto("http://127.0.0.1:5173/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "KRX" }).click();
+  await expect(page.getByText("UNIVERSE: API")).toBeVisible({ timeout: 15000 });
+
+  await page.getByRole("button", { name: "REC" }).click();
+
+  const defaults = page.locator("div", { hasText: "API REQUEST DEFAULTS" }).first();
+  await expect(defaults).toContainText("period=5y");
+  await expect(defaults).toContainText("top=9");
+  await expect(defaults).toContainText("data_provider=pykrx");
+  await expect(page.getByRole("button", { name: "FILE" }).first()).toBeEnabled();
+
+  await expect.poll(() => recommendUrls.length).toBeGreaterThan(0);
+  const url = new URL(recommendUrls.at(-1));
+  expect(url.searchParams.get("data_provider")).toBe("pykrx");
+  expect(url.searchParams.get("period")).toBe("5y");
+  expect(url.searchParams.get("top")).toBe("9");
+  expect(url.searchParams.get("universe")?.split(",")).toHaveLength(9);
+});
+
 test("initial selected ticker waits for backend universe before requesting symbol data", async ({ page }) => {
   const requestedSymbols = [];
 

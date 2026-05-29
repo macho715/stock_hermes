@@ -167,6 +167,7 @@ def test_alert_task_message_includes_forward_tracking_status(monkeypatch):
 def test_record_today_returns_serializable(tmp_path):
     """AutoForwardRecorder.record_today() returns JSON-serialisable dict."""
     import json
+
     from stock_rtx4060.live_review.auto_forward_recorder import AutoForwardRecorder
 
     rec = AutoForwardRecorder(symbol="005930.KS", evidence_dir=str(tmp_path))

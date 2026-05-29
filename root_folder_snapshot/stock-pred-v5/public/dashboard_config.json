@@ -50,6 +50,14 @@
       "synthetic": "0",
       "data_provider": "yfinance",
       "model_kind": "auto"
+    },
+    "recommend_krx": {
+      "track": "BOTH",
+      "period": "5y",
+      "top": "9",
+      "synthetic": "0",
+      "data_provider": "pykrx",
+      "model_kind": "auto"
     }
   },
   "signal_thresholds": {

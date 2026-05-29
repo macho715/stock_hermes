@@ -366,8 +366,6 @@ class AutoForwardRecorder:
         * ``row_count``— total rows in the CSV log after this call
         * ``reason``   — non-None only when status == "error"
         """
-        import traceback
-
         try:
             status = self.run_once()
             return {

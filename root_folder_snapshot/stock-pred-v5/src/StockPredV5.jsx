@@ -78,7 +78,9 @@ function normalizeDashboardConfig(raw) {
       symbol_period: String(raw?.api_defaults?.symbol_period || ""),
       symbol_data_provider: raw?.api_defaults?.symbol_data_provider || {},
       model_scores: raw?.api_defaults?.model_scores || {},
+      model_scores_krx: raw?.api_defaults?.model_scores_krx || {},
       recommend: raw?.api_defaults?.recommend || {},
+      recommend_krx: raw?.api_defaults?.recommend_krx || {},
     },
     signal_thresholds: raw?.signal_thresholds || {},
     model_quality: raw?.model_quality || {},
@@ -524,7 +526,24 @@ export default function StockPredV5() {
     }
     return base;
   }, [dashboardConfig, market]);
-  const recApiDefaults = dashboardConfig?.api_defaults?.recommend || {};
+  const recApiDefaults = useMemo(() => {
+    const base = dashboardConfig?.api_defaults?.recommend || {};
+    if (market !== "KRX") return base;
+
+    const krx = dashboardConfig?.api_defaults?.recommend_krx || {};
+    const merged = {
+      ...base,
+      period: "5y",
+      data_provider: "pykrx",
+      ...krx,
+    };
+    const configuredTop = Number.parseInt(String(merged.top || ""), 10);
+    const fullUniverseTop = symbols.length || 9;
+    const top = Number.isFinite(configuredTop)
+      ? Math.max(configuredTop, fullUniverseTop)
+      : fullUniverseTop;
+    return { ...merged, top: String(top) };
+  }, [dashboardConfig, market, symbols.length]);
   const signalThresholds = dashboardConfig?.signal_thresholds || {};
   const signalThresholdLabel = signalThresholds.label || "";
   const modelQualityConfig = dashboardConfig?.model_quality || {};
@@ -532,20 +551,21 @@ export default function StockPredV5() {
   const universeIsLoading = universeSource === "loading";
   const universeIsFallback = universeSource === "fallback";
   const universeLabel = universeIsLoading ? "LOADING" : (universeIsFallback ? "FALLBACK" : "API");
-  const effectiveRecSource = market === "KRX" ? "api" : recSource;
+  const effectiveRecSource = recSource;
   const recApiReady = effectiveRecSource === "api" && !universeIsLoading && recUniverse.length > 0;
+  const advisorRequestEnabled = advisorEnabled && market !== "KRX";
   const recApiUrl = useMemo(() => {
     const params = new URLSearchParams({
       universe: recUniverse,
       ...recApiDefaults,
       output_dir: `reports/api_recommend_${market.toLowerCase()}`,
     });
-    if (advisorEnabled) {
+    if (advisorRequestEnabled) {
       params.set("advisor_run", "1");
       params.set("advisor_blend_weight", "0.3");
     }
     return apiUrl(`/api/recommend?${params.toString()}`);
-  }, [market, recUniverse, recApiDefaults, advisorEnabled]);
+  }, [market, recUniverse, recApiDefaults, advisorRequestEnabled]);
   const recApiDefaultText = useMemo(
     () => Object.entries(recApiDefaults).map(([key, value]) => `${key}=${value}`).join(" · "),
     [recApiDefaults]
@@ -577,6 +597,12 @@ export default function StockPredV5() {
       try { document.head.removeChild(link); } catch (e) {}
     };
   }, []);
+
+  useEffect(() => {
+    if (market === "KRX" && advisorEnabled) {
+      setAdvisorEnabled(false);
+    }
+  }, [market, advisorEnabled]);
 
   /* runtime dashboard config */
   useEffect(() => {
@@ -1312,16 +1338,15 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                     ].map((s) => (
                       <button
                         key={s.k}
-                        disabled={market === "KRX" && s.k === "file"}
                         onClick={() => setRecSource(s.k)}
                         style={{
                           flex: 1, padding: "4px 0",
                           background: effectiveRecSource === s.k ? C.panelHi : "transparent",
                           border: `1px solid ${effectiveRecSource === s.k ? accent : C.border}`,
-                          color: market === "KRX" && s.k === "file" ? C.textMuted : (effectiveRecSource === s.k ? accent : C.textMuted),
-                          opacity: market === "KRX" && s.k === "file" ? 0.45 : 1,
+                          color: effectiveRecSource === s.k ? accent : C.textMuted,
+                          opacity: 1,
                           fontFamily: FONT, fontSize: 8, letterSpacing: 1.5, fontWeight: 600,
-                          cursor: market === "KRX" && s.k === "file" ? "not-allowed" : "pointer",
+                          cursor: "pointer",
                         }}
                       >
                         {s.l}
@@ -1358,25 +1383,31 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                       cursor: "pointer",
                       userSelect: "none",
                     }}
-                      onClick={() => setAdvisorEnabled((v) => !v)}
+                      onClick={() => {
+                        if (market !== "KRX") setAdvisorEnabled((v) => !v);
+                      }}
                     >
                       <div style={{
                         width: 24, height: 12, borderRadius: 6,
-                        background: advisorEnabled ? "#BB66FF" : C.border,
+                        background: advisorRequestEnabled ? "#BB66FF" : C.border,
                         position: "relative", transition: "background .15s", flexShrink: 0,
                       }}>
                         <div style={{
                           position: "absolute", top: 2,
-                          left: advisorEnabled ? 14 : 2,
+                          left: advisorRequestEnabled ? 14 : 2,
                           width: 8, height: 8, borderRadius: "50%",
                           background: "#fff", transition: "left .15s",
                         }} />
                       </div>
-                      <span style={{ color: advisorEnabled ? "#BB66FF" : C.textMuted, fontWeight: 600, letterSpacing: 1.5 }}>
+                      <span style={{ color: advisorRequestEnabled ? "#BB66FF" : C.textMuted, fontWeight: 600, letterSpacing: 1.5 }}>
                         LLM ADVISOR
                       </span>
                       <span style={{ color: C.textMuted, marginLeft: "auto" }}>
-                        {advisorEnabled ? "blend_weight=0.30 · requires ANTHROPIC_API_KEY or MINIMAX_API_KEY" : "OFF"}
+                        {market === "KRX"
+                          ? "OFF for KRX full-universe scan"
+                          : advisorRequestEnabled
+                            ? "blend_weight=0.30 · requires ANTHROPIC_API_KEY or MINIMAX_API_KEY"
+                            : "OFF"}
                       </span>
                     </div>
                   )}

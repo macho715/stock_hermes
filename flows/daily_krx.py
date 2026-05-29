@@ -18,13 +18,13 @@ import os
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from .utils import flow, get_run_logger, slack_on_failure, with_retries
+
 # [E3] Feature flag — set FORWARD_TRACKING_ENABLED=false to disable the
 # AutoForwardRecorder step without redeploying the flow.
 _FORWARD_TRACKING_ENABLED: bool = (
     os.environ.get("FORWARD_TRACKING_ENABLED", "true").lower() not in ("0", "false", "no")
 )
-
-from .utils import flow, get_run_logger, slack_on_failure, with_retries
 
 logger = logging.getLogger("flows.daily_krx")
 

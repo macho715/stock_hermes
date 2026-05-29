@@ -287,8 +287,10 @@ def test_forward_summary_pass_requires_alpha_ge_0(tmp_path: Path, monkeypatch):
 
 def test_today_helper_returns_date():
     """_today() returns today's date (basic sanity)."""
-    from stock_rtx4060.live_review.auto_forward_recorder import _today
     from datetime import date
+
+    from stock_rtx4060.live_review.auto_forward_recorder import _today
+
     assert isinstance(_today(), date)
 
 
