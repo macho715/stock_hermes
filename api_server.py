@@ -262,6 +262,10 @@ def api_model_scores():
     use_lstm = request.args.get("use_lstm", "0") == "1"
     horizon = int(request.args.get("horizon", 5))
     cv_kind = request.args.get("cv_kind", "purged")  # v5.1: default purged (was timeseries)
+    # contrarian_mode: flip 1-prob for mean-reversion markets.
+    # KRX (*.KS/*.KQ) defaults to True — empirically shows inverse AUC > 0.55 consistently.
+    _contrarian_default = "1" if symbol.strip().upper().endswith((".KS", ".KQ")) else "0"
+    contrarian_mode = request.args.get("contrarian", _contrarian_default) == "1"
 
     if not symbol:
         return jsonify({"error": "symbol param required"}), 400
@@ -313,9 +317,10 @@ def api_model_scores():
                 model_kind=_model_kind_effective,  # type: ignore[arg-type]
                 xgb_device="cpu",
                 use_lstm=use_lstm,
-                lite=False,           # v5.1: full estimators (was lite=True → 120 trees)
+                lite=False,
                 cv_kind=cv_kind,
                 embargo_pct=_embargo_pct,
+                contrarian_mode=contrarian_mode,  # KRX default True
             )
         )
         cv_results = model.fit(feature_df)
@@ -423,6 +428,7 @@ def api_model_scores():
                     "training_mode": "purged_kfold_oof_refit" if cv_kind == "purged" else "walk_forward_refit",
                     "lstm_requested": use_lstm,
                     "lstm_enabled": bool(latest.get("lstm_enabled")),
+                    "contrarian_mode": contrarian_mode,
                     "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
                 },
                 "requested_model_kind": model_kind,

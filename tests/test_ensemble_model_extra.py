@@ -723,3 +723,43 @@ def test_lstm_build_sequences_interface_unchanged():
     X = np.ones((10, 4), dtype=float)
     seq = lstm._build_sequences(X)
     assert seq.shape == (7, 3, 4), f"Expected (7,3,4) got {seq.shape}"
+
+
+# ---------------------------------------------------------------------------
+# contrarian_mode (KRX mean-reversion)
+# ---------------------------------------------------------------------------
+
+
+def test_contrarian_mode_flips_probability():
+    """contrarian_mode=True flips prob → 1-prob in predict()."""
+    from stock_rtx4060.ensemble_model import EnsemblePredictor, ModelConfig
+    import numpy as np, pandas as pd
+
+    rng = np.random.default_rng(99)
+    n = 200
+    X = pd.DataFrame(rng.standard_normal((n, 4)), columns=["a", "b", "c", "d"])
+    X["target_direction"] = (rng.standard_normal(n) > 0).astype(int)
+    X["target_return"] = rng.standard_normal(n) * 0.01
+
+    cfg_normal = ModelConfig(horizon=5, n_splits=3, cv_kind="purged", embargo_pct=0.01, lite=True)
+    cfg_contr = ModelConfig(horizon=5, n_splits=3, cv_kind="purged", embargo_pct=0.01, lite=True, contrarian_mode=True)
+
+    ep_n = EnsemblePredictor(cfg_normal)
+    ep_n.fit(X)
+    pred_n = ep_n.predict(X)
+
+    ep_c = EnsemblePredictor(cfg_contr)
+    ep_c.fit(X)
+    pred_c = ep_c.predict(X)
+
+    # Both should have same train data → raw probs are identical before flip
+    # Flipped: prob_c ≈ 1 - prob_n
+    assert abs(pred_c["direction_prob"] + pred_n["direction_prob"] - 1.0) < 0.01, (
+        f"Contrarian prob {pred_c['direction_prob']:.4f} + normal {pred_n['direction_prob']:.4f} != 1.0"
+    )
+
+
+def test_contrarian_mode_config_default_false():
+    """ModelConfig.contrarian_mode defaults to False."""
+    from stock_rtx4060.ensemble_model import ModelConfig
+    assert ModelConfig().contrarian_mode is False

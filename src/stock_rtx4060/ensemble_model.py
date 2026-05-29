@@ -87,6 +87,7 @@ class ModelConfig:
     cv_kind: CVKind = "timeseries"
     embargo_pct: float = 0.01
     max_features: int | None = None   # fold-local feature cap; None = use all
+    contrarian_mode: bool = False      # flip 1-prob for mean-reversion markets (e.g. KRX)
     xgb_params: dict[str, Any] = field(
         default_factory=lambda: {
             "n_estimators": 240,
@@ -622,6 +623,11 @@ class EnsemblePredictor:
             model = DirectionModel(self.config).fit(X_tr, y_tr)
             prob = model.predict_proba(X_te)
 
+            # Contrarian mode: flip 1-prob for mean-reversion markets.
+            # Applied BEFORE blending so downstream OOF metrics are correct.
+            if self.config.contrarian_mode:
+                prob = 1.0 - prob
+
             # Optional fold-local LSTM.  It must never see the test labels.
             if self.config.use_lstm and len(X_tr) > self.config.seq_len * 3:
                 try:
@@ -683,6 +689,11 @@ class EnsemblePredictor:
             prob = main_prob
         else:
             prob = self.config.xgb_weight * main_prob + self.config.lstm_weight * lstm_prob
+        # Contrarian mode: flip for mean-reversion markets (e.g. KRX)
+        if self.config.contrarian_mode:
+            prob = 1.0 - prob
+            main_prob = 1.0 - main_prob
+            lstm_prob = 1.0 - lstm_prob
         confidence = abs(prob - 0.5) * 2.0
         if prob >= 0.56:
             signal = "BUY_REVIEW"
