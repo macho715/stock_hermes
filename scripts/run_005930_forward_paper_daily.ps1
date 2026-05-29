@@ -13,11 +13,14 @@ $ErrorActionPreference = "Stop"
 $Repo = "C:\Users\jichu\Downloads\주식\stock_1901"
 Set-Location $Repo
 
+# Set PYTHONPATH so stock_rtx4060 package is importable
+$env:PYTHONPATH = "$Repo\src;$Repo"
+
 # Prefer project venv, fall back to system Python 3.12
 $Python = Join-Path $Repo ".venv\Scripts\python.exe"
 if (!(Test-Path $Python)) {
-    $Python = "py"
-    $PythonArgs = @("-3.12")
+    $Python = "C:\Users\jichu\AppData\Local\Programs\Python\Python312\python.exe"
+    $PythonArgs = @()
 } else {
     $PythonArgs = @()
 }
