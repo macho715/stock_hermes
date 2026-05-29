@@ -37,7 +37,7 @@ def test_backtest_honesty_flags_weak_oof_and_cost_buffer():
     assert summary["status"] == "AMBER"
     assert {check["name"]: check["status"] for check in summary["checks"]}["OOF_COVERAGE"] == "AMBER"
     assert {check["name"]: check["status"] for check in summary["checks"]}["TRANSACTION_COST_BUFFER"] == "AMBER"
-    assert {check["name"]: check["status"] for check in summary["checks"]}["WALK_FORWARD_GAP"] == "AMBER"
+    assert {check["name"]: check["status"] for check in summary["checks"]}["EMBARGO_VS_HORIZON"] == "AMBER"
 
 
 def test_backtest_honesty_fails_on_excessive_drawdown():

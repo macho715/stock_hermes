@@ -23,9 +23,19 @@ def evaluate_backtest_honesty(
     transaction_cost_buffer_pct: float,
     cv_gap: int | None,
     horizon: int,
+    # v5.1 P1 additions — optional, None = not yet run
+    cost_stress_result: dict[str, Any] | None = None,
+    cpcv_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return additive PASS/AMBER/FAIL evidence without changing ranking."""
+    """Return additive PASS/AMBER/FAIL evidence without changing ranking.
 
+    v5.1 additions (P1):
+    - ``cost_stress_result``: output of :func:`run_cost_stress`.  When
+      provided, a ``COST_STRESS`` check is added.
+    - ``cpcv_result``: dict with keys ``pbo``, ``path_pass_rate``,
+      ``deflated_sharpe``.  When provided, ``CPCV_PBO`` and ``CPCV_DSR``
+      checks are added.
+    """
     checks = [
         _numeric_floor_check(
             name="OOF_COVERAGE",
@@ -45,8 +55,17 @@ def evaluate_backtest_honesty(
         _cost_buffer_check(total_return_pct=total_return_pct, transaction_cost_buffer_pct=transaction_cost_buffer_pct),
         _walk_forward_gap_check(cv_gap=cv_gap, horizon=horizon),
     ]
+
+    # v5.1 P1: cost stress check
+    if cost_stress_result is not None:
+        checks.append(_cost_stress_check(cost_stress_result))
+
+    # v5.1 P1: CPCV/PBO/DSR checks
+    if cpcv_result is not None:
+        checks.extend(_cpcv_checks(cpcv_result))
+
     status = _worst_status(check["status"] for check in checks)
-    return {
+    result: dict[str, Any] = {
         "status": status,
         "checks": checks,
         "passed": sum(1 for check in checks if check["status"] == "PASS"),
@@ -54,6 +73,13 @@ def evaluate_backtest_honesty(
         "failed": sum(1 for check in checks if check["status"] == "FAIL"),
         "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
     }
+    if cost_stress_result is not None:
+        result["cost_stress"] = {
+            k: v for k, v in cost_stress_result.items() if k != "scenarios"
+        }
+    if cpcv_result is not None:
+        result["cpcv"] = cpcv_result
+    return result
 
 
 def summarize_honesty(items: list[dict[str, Any]]) -> dict[str, Any]:
@@ -110,10 +136,57 @@ def _cost_buffer_check(*, total_return_pct: float | None, transaction_cost_buffe
 
 
 def _walk_forward_gap_check(*, cv_gap: int | None, horizon: int) -> dict[str, Any]:
+    """Renamed to EMBARGO_VS_HORIZON (v5.1 §2 CV-03).  Legacy key kept for compat."""
     if cv_gap is None:
-        return _check("WALK_FORWARD_GAP", "AMBER", cv_gap, horizon, "cv_gap missing; cannot verify purge gap")
+        return _check("EMBARGO_VS_HORIZON", "AMBER", cv_gap, horizon, "embargo_samples missing; cannot verify purge adequacy")
     status: HonestyStatus = "PASS" if int(cv_gap) >= int(horizon) else "AMBER"
-    return _check("WALK_FORWARD_GAP", status, cv_gap, horizon, f"gap={cv_gap}, horizon={horizon}")
+    return _check(
+        "EMBARGO_VS_HORIZON",
+        status,
+        cv_gap,
+        horizon,
+        f"embargo_samples={cv_gap}, label_horizon_bars={horizon}; "
+        f"{'embargo >= horizon (purge adequate)' if int(cv_gap) >= int(horizon) else 'embargo < horizon (purge may be insufficient)'}",
+    )
+
+
+def _cost_stress_check(cost_stress_result: dict[str, Any]) -> dict[str, Any]:
+    """COST_STRESS: alpha_after_1x > 0 AND alpha_after_3x >= 0."""
+    status_str = str(cost_stress_result.get("cost_stress_status", "AMBER"))
+    status: HonestyStatus = "PASS" if status_str == "PASS" else "AMBER"
+    a1 = cost_stress_result.get("alpha_after_1x_cost")
+    a3 = cost_stress_result.get("alpha_after_3x_cost")
+    reason = f"alpha_1x={a1}, alpha_3x={a3}; need 1x>0 and 3x>=0"
+    return _check("COST_STRESS", status, a1, 0.0, reason)
+
+
+def _cpcv_checks(cpcv_result: dict[str, Any]) -> list[dict[str, Any]]:
+    """CPCV_PBO and CPCV_DSR checks from CombinatorialPurgedCV results."""
+    checks: list[dict[str, Any]] = []
+    pbo = cpcv_result.get("pbo")
+    dsr = cpcv_result.get("deflated_sharpe")
+    path_pass = cpcv_result.get("path_pass_rate")
+
+    # PBO check: pbo <= 0.20 required for LIVE_REVIEW_CANDIDATE
+    if pbo is not None:
+        pbo_status: HonestyStatus = "PASS" if float(pbo) <= 0.20 else "AMBER"
+        checks.append(_check("CPCV_PBO", pbo_status, pbo, 0.20, f"pbo={pbo:.3f}; need <=0.20"))
+    else:
+        checks.append(_check("CPCV_PBO", "AMBER", None, 0.20, "CPCV not run"))
+
+    # DSR check: deflated_sharpe > 0
+    if dsr is not None:
+        dsr_status: HonestyStatus = "PASS" if float(dsr) > 0.0 else "AMBER"
+        checks.append(_check("CPCV_DSR", dsr_status, dsr, 0.0, f"deflated_sharpe={dsr:.4f}; need >0"))
+    else:
+        checks.append(_check("CPCV_DSR", "AMBER", None, 0.0, "CPCV not run"))
+
+    # Path pass rate check: >= 60% required
+    if path_pass is not None:
+        pp_status: HonestyStatus = "PASS" if float(path_pass) >= 0.60 else "AMBER"
+        checks.append(_check("CPCV_PATH_RATE", pp_status, path_pass, 0.60, f"path_pass_rate={path_pass:.2%}; need >=60%"))
+
+    return checks
 
 
 def _check(name: str, status: HonestyStatus, value: Any, threshold: Any, reason: str) -> dict[str, Any]:
