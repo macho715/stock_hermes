@@ -23,6 +23,8 @@ from .recommendation_engine import RecommendationConfig, RecommendationEngine, p
 from .reports import ReportWriter
 from .risk_rules import RiskConfig, evaluate_track_l_candidate, evaluate_track_s_candidate
 
+PROVIDER_CHOICES = ["auto", "synthetic", "yfinance", "openbb", "pykrx", "krx_final", "broker_final", "fdr"]
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="stock_rtx4060 investment OS")
@@ -66,8 +68,9 @@ def build_parser() -> argparse.ArgumentParser:
     recommend.add_argument("--period", default="3y")
     recommend.add_argument("--top", type=int, default=5)
     recommend.add_argument("--synthetic", action="store_true", help="use deterministic synthetic OHLCV for offline validation")
-    recommend.add_argument("--data-provider", choices=["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"], default="auto", help="OHLCV provider; CLI value overrides provider config")
+    recommend.add_argument("--data-provider", choices=PROVIDER_CHOICES, default="auto", help="OHLCV provider; CLI value overrides provider config")
     recommend.add_argument("--provider-config", help="optional JSON provider config; see config/data_providers.example.json")
+    recommend.add_argument("--after-market-close", action="store_true", help="use authoritative final-bar provider policy for post-close KRX recommendation runs")
     recommend.add_argument("--kevpe-events", help="optional KEVPE event JSON/CSV file with date/headline/ticker fields")
     recommend.add_argument("--capital", type=float, default=100_000.0)
     recommend.add_argument("--prefer-gpu", action="store_true")
@@ -86,8 +89,9 @@ def build_parser() -> argparse.ArgumentParser:
     paper.add_argument("--period", default="3y")
     paper.add_argument("--top", type=int, default=5)
     paper.add_argument("--synthetic", action="store_true", help="use deterministic synthetic OHLCV")
-    paper.add_argument("--data-provider", choices=["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"], default="auto")
+    paper.add_argument("--data-provider", choices=PROVIDER_CHOICES, default="auto")
     paper.add_argument("--provider-config", help="optional JSON provider config")
+    paper.add_argument("--after-market-close", action="store_true", help="use authoritative final-bar provider policy for post-close KRX paper runs")
     paper.add_argument("--kevpe-events", help="optional KEVPE event JSON/CSV file")
     paper.add_argument("--capital", type=float, default=100_000.0)
     paper.add_argument("--prefer-gpu", action="store_true")
@@ -120,8 +124,9 @@ def build_parser() -> argparse.ArgumentParser:
     ops.add_argument("--period", default="3y")
     ops.add_argument("--top", type=int, default=5)
     ops.add_argument("--synthetic", action="store_true", help="use deterministic synthetic OHLCV for offline validation")
-    ops.add_argument("--data-provider", choices=["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"], default="auto", help="OHLCV provider; CLI value overrides provider config")
+    ops.add_argument("--data-provider", choices=PROVIDER_CHOICES, default="auto", help="OHLCV provider; CLI value overrides provider config")
     ops.add_argument("--provider-config", help="optional JSON provider config; see config/data_providers.example.json")
+    ops.add_argument("--after-market-close", action="store_true", help="use authoritative final-bar provider policy for post-close KRX ops runs")
     ops.add_argument("--kevpe-events", help="optional KEVPE event JSON/CSV file with date/headline/ticker fields")
     ops.add_argument("--capital", type=float, default=100_000.0)
     ops.add_argument("--prefer-gpu", action="store_true")
@@ -300,6 +305,7 @@ def cmd_recommend(args: argparse.Namespace) -> int:
         output_dir=args.output_dir,
         data_provider=args.data_provider,
         provider_config=args.provider_config,
+        after_market_close=getattr(args, "after_market_close", False),
         kevpe_events=args.kevpe_events,
         sizing_kind=getattr(args, "sizing_kind", "off"),
         sizing_alpha=getattr(args, "sizing_alpha", 0.1),
@@ -344,6 +350,7 @@ def cmd_paper_run(args: argparse.Namespace) -> int:
         output_dir=args.output_dir,
         data_provider=args.data_provider,
         provider_config=args.provider_config,
+        after_market_close=getattr(args, "after_market_close", False),
         kevpe_events=args.kevpe_events,
         sizing_kind=getattr(args, "sizing_kind", "off"),
         sizing_alpha=getattr(args, "sizing_alpha", 0.1),
@@ -487,6 +494,7 @@ def cmd_ops_v1(args: argparse.Namespace) -> int:
         cv_gap=args.cv_gap,
         data_provider=args.data_provider,
         provider_config=args.provider_config,
+        after_market_close=getattr(args, "after_market_close", False),
         kevpe_events=args.kevpe_events,
         sizing_kind=getattr(args, "sizing_kind", "off"),
         sizing_alpha=getattr(args, "sizing_alpha", 0.1),

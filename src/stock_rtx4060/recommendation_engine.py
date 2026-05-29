@@ -35,6 +35,7 @@ from .sizing import (
 )
 from .sizing.integration import apply_sizing
 
+ProviderName = Literal["auto", "synthetic", "yfinance", "openbb", "pykrx", "krx_final", "broker_final", "fdr"]
 Track = Literal["S", "L"]
 Verdict = Literal[
     "ELIGIBLE_RECOMMENDATION",
@@ -111,8 +112,9 @@ class RecommendationConfig:
     prefer_gpu: bool = False
     lite: bool = True
     output_dir: str = "recommendation_reports"
-    data_provider: Literal["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"] = "auto"
+    data_provider: ProviderName = "auto"
     provider_config: str | None = None
+    after_market_close: bool = False
     kevpe_events: str | None = None
     audit_command: str = "recommend"
     factor_set: Literal["technical", "alpha101", "cross_sectional", "all"] = "technical"
@@ -295,14 +297,47 @@ def make_synthetic_ohlcv(n: int = 760, seed: int = 42, drift: float = 0.00035) -
     return pd.DataFrame({"Open": open_, "High": high, "Low": low, "Close": close, "Volume": volume}, index=idx)
 
 
+def _is_krx_ticker(ticker: str) -> bool:
+    text = str(ticker or "").strip().upper()
+    return text.endswith((".KS", ".KQ"))
+
+
+def _load_provider_config_for_policy(path: str | None) -> dict:
+    if not path:
+        return {}
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def select_post_close_provider(
+    *,
+    ticker: str,
+    requested_provider: str,
+    after_market_close: bool,
+    provider_config: dict | None,
+) -> str:
+    requested = str(requested_provider or "auto").lower()
+    if not after_market_close or not _is_krx_ticker(ticker):
+        return requested
+    if requested not in {"auto", "pykrx"}:
+        return requested
+    config = provider_config or {}
+    if config.get("broker_final_ohlcv_path"):
+        return "broker_final"
+    return "krx_final"
+
+
 def load_ohlcv(
     ticker: str,
     period: str,
     synthetic: bool = False,
-    data_provider: Literal["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"] = "auto",
+    data_provider: ProviderName = "auto",
     provider_config: str | None = None,
     audit_logger: AuditLogger | None = None,
     command: str = "recommend",
+    after_market_close: bool = False,
 ) -> tuple[pd.DataFrame, str]:
     provider_result = load_ohlcv_result(
         ticker,
@@ -312,6 +347,7 @@ def load_ohlcv(
         provider_config=provider_config,
         audit_logger=audit_logger,
         command=command,
+        after_market_close=after_market_close,
     )
     return provider_result.frame, provider_result.source
 
@@ -320,19 +356,29 @@ def load_ohlcv_result(
     ticker: str,
     period: str,
     synthetic: bool = False,
-    data_provider: Literal["auto", "synthetic", "yfinance", "openbb", "pykrx", "fdr"] = "auto",
+    data_provider: ProviderName = "auto",
     provider_config: str | None = None,
     audit_logger: AuditLogger | None = None,
     command: str = "recommend",
+    after_market_close: bool = False,
 ) -> ProviderResult:
+    provider_config_dict = _load_provider_config_for_policy(provider_config)
+    effective_provider = select_post_close_provider(
+        ticker=ticker,
+        requested_provider=data_provider,
+        after_market_close=after_market_close,
+        provider_config=provider_config_dict,
+    )
     provider_result = load_ohlcv_with_provider(
         ticker,
         period,
         synthetic=synthetic,
-        data_provider=data_provider,
+        data_provider=effective_provider,
         provider_config_path=provider_config,
+        provider_config=provider_config_dict or None,
         audit_logger=audit_logger,
         command=command,
+        after_market_close=after_market_close,
     )
     return provider_result
 
@@ -930,14 +976,14 @@ class RecommendationEngine:
     def __init__(self, config: RecommendationConfig | None = None):
         self.config = config or RecommendationConfig()
         self.audit_logger = AuditLogger.for_output_dir(self.config.output_dir)
-        self._ohlcv_cache: dict[tuple[str, str, bool, str, str | None], tuple[pd.DataFrame, str, dict]] = {}
-        self._ohlcv_error_cache: dict[tuple[str, str, bool, str, str | None], str] = {}
+        self._ohlcv_cache: dict[tuple[str, str, bool, str, str | None, bool], tuple[pd.DataFrame, str, dict]] = {}
+        self._ohlcv_error_cache: dict[tuple[str, str, bool, str, str | None, bool], str] = {}
         self._provider_metadata: list[dict] = []
         self._kevpe_events = load_kevpe_events(self.config.kevpe_events)
 
-    def _ohlcv_cache_key(self, ticker: str) -> tuple[str, str, bool, str, str | None]:
+    def _ohlcv_cache_key(self, ticker: str) -> tuple[str, str, bool, str, str | None, bool]:
         cfg = self.config
-        return (ticker.strip().upper(), cfg.period, cfg.synthetic, cfg.data_provider, cfg.provider_config)
+        return (ticker.strip().upper(), cfg.period, cfg.synthetic, cfg.data_provider, cfg.provider_config, cfg.after_market_close)
 
     def _load_ohlcv_cached(self, ticker: str) -> tuple[pd.DataFrame, str]:
         cfg = self.config
@@ -948,14 +994,22 @@ class RecommendationEngine:
         if key in self._ohlcv_error_cache:
             raise RuntimeError(self._ohlcv_error_cache[key])
         try:
+            provider_config_dict = _load_provider_config_for_policy(cfg.provider_config)
+            effective_provider = select_post_close_provider(
+                ticker=ticker,
+                requested_provider=cfg.data_provider,
+                after_market_close=cfg.after_market_close,
+                provider_config=provider_config_dict,
+            )
             provider_result = load_ohlcv_result(
                 ticker,
                 cfg.period,
                 synthetic=cfg.synthetic,
-                data_provider=cfg.data_provider,
+                data_provider=effective_provider,
                 provider_config=cfg.provider_config,
                 audit_logger=self.audit_logger,
                 command=cfg.audit_command,
+                after_market_close=cfg.after_market_close,
             )
         except Exception as exc:
             self._ohlcv_error_cache[key] = str(exc)
