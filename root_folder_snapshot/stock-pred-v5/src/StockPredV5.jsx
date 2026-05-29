@@ -136,26 +136,50 @@ async function fetchSymbol(symbol, period, dataProvider) {
   return { data: [], source: "ERROR", errorKind: lastErrorKind, error: lastError };
 }
 
+const MODEL_EVIDENCE_TIMEOUT_MS = 120000;
+const MODEL_EVIDENCE_RETRY_DELAYS_MS = [750, 2000];
+
+function modelEvidenceErrorMessage(error) {
+  const message = String(error?.message || error || "");
+  const name = String(error?.name || "");
+  if (/abort/i.test(name) || /abort/i.test(message)) {
+    return `model evidence request timed out after ${Math.round(MODEL_EVIDENCE_TIMEOUT_MS / 1000)}s`;
+  }
+  return message || "MODEL EVIDENCE UNAVAILABLE";
+}
+
 async function fetchModelEvidence(symbol, defaults) {
   const params = new URLSearchParams({
     symbol,
     ...defaults,
   });
-  const ctrl = new AbortController();
-  const tid = setTimeout(() => ctrl.abort(), 90000); // 90s — LogReg+GRU+XGB training needs time
-  try {
-    const res = await fetch(apiUrl(`/api/model-scores?${params.toString()}`), {
-      cache: "no-store",
-      signal: ctrl.signal,
-    });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok || payload.status !== "PASS") {
-      throw new Error(payload.error || `model evidence API ${res.status}`);
+  let lastError = null;
+  for (let attempt = 0; attempt <= MODEL_EVIDENCE_RETRY_DELAYS_MS.length; attempt++) {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => {
+      ctrl.abort(new DOMException("model evidence timeout", "TimeoutError"));
+    }, MODEL_EVIDENCE_TIMEOUT_MS);
+    try {
+      const res = await fetch(apiUrl(`/api/model-scores?${params.toString()}`), {
+        cache: "no-store",
+        signal: ctrl.signal,
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || payload.status !== "PASS") {
+        throw new Error(payload.error || `model evidence API ${res.status}`);
+      }
+      return payload;
+    } catch (e) {
+      lastError = e;
+      if (attempt < MODEL_EVIDENCE_RETRY_DELAYS_MS.length) {
+        await sleep(MODEL_EVIDENCE_RETRY_DELAYS_MS[attempt]);
+        continue;
+      }
+    } finally {
+      clearTimeout(tid);
     }
-    return payload;
-  } finally {
-    clearTimeout(tid);
   }
+  throw new Error(modelEvidenceErrorMessage(lastError));
 }
 
 async function fetchUniverse(market) {

@@ -456,9 +456,9 @@ export default function RecommendationPanel({ jsonPath, apiUrl, currency = "$", 
             No recommendations match this filter
           </div>
         ) : (
-          filtered.map((r) => (
+          filtered.map((r, index) => (
             <RecommendationCard
-              key={r.ticker}
+              key={`${r.ticker || "candidate"}-${r.track || r.verdict || "row"}-${index}`}
               result={r}
               currency={currency}
               accent={accent}
