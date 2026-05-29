@@ -19,6 +19,7 @@ import pandas as pd
 from sklearn.metrics import accuracy_score
 
 from .audit_log import AuditEvent, AuditLogger
+from .backtest.stat_tests import probability_of_backtest_overfitting
 from .backtest_honesty import evaluate_backtest_honesty, summarize_honesty
 from .backtester import BacktestConfig, Backtester
 from .data_providers import ProviderResult, load_ohlcv_with_provider
@@ -377,6 +378,17 @@ def _fit_walk_forward_model(feature_df: pd.DataFrame, horizon: int, cfg: Recomme
     neutral_probs = oof.fillna(0.5).to_numpy(dtype=float)
 
     embargo_samples = int(np.floor(len(X) * embargo_pct))
+
+    # Proxy PBO from fold AUC distribution: treat (auc - 0.5) as fold Sharpe proxy.
+    # A fold with AUC < 0.5 is a "losing" OOS path → high PBO = likely overfit.
+    _auc_proxy_sharpes = [float(a - 0.5) for a in aucs] if aucs else []
+    _proxy_pbo: float | None = None
+    if len(_auc_proxy_sharpes) >= 2:
+        try:
+            _proxy_pbo = float(probability_of_backtest_overfitting(_auc_proxy_sharpes))
+        except Exception:
+            _proxy_pbo = None
+
     return {
         "model": final_model,
         "feature_cols": cols,
@@ -387,6 +399,8 @@ def _fit_walk_forward_model(feature_df: pd.DataFrame, horizon: int, cfg: Recomme
         "backtest_probability_source": "OOF_ONLY_FILLED_0_5",
         "accuracy": float(np.mean(accs)) if accs else 0.0,
         "auc": float(np.mean(aucs)) if aucs else 0.5,
+        "fold_aucs": aucs,
+        "proxy_pbo": _proxy_pbo,                          # fold-AUC-based PBO proxy
         "oof_coverage": coverage,
         "gap": embargo_samples,                            # legacy key preserved
         "embargo_samples": embargo_samples,                # v5.1: explicit embargo count
@@ -941,6 +955,20 @@ class RecommendationEngine:
             score, reasons = _score_track_l(model_stats["latest_prob"], snap, backtest, plan, model_stats, cfg)
 
         checks = _validation_checks(track, df, snap, model_stats, backtest, plan, score, cfg)
+        # Build proxy cpcv_result from fold-AUC-based PBO (populated by _fit_walk_forward_model)
+        _proxy_pbo = model_stats.get("proxy_pbo")
+        _cpcv_result: dict | None = (
+            {
+                "pbo": _proxy_pbo,
+                "path_pass_rate": float(
+                    sum(1 for a in model_stats.get("fold_aucs", []) if a > 0.5)
+                    / max(len(model_stats.get("fold_aucs", [])), 1)
+                ),
+                "deflated_sharpe": float(backtest.get("sharpe_ratio", 0.0)),
+            }
+            if _proxy_pbo is not None
+            else None
+        )
         honesty = evaluate_backtest_honesty(
             oof_coverage=float(model_stats["oof_coverage"]),
             min_oof_coverage=cfg.min_oof_coverage,
@@ -952,6 +980,7 @@ class RecommendationEngine:
             transaction_cost_buffer_pct=cfg.transaction_cost_buffer_pct,
             cv_gap=int(model_stats["gap"]),
             horizon=horizon,
+            cpcv_result=_cpcv_result,
         )
         # Deterministic verdict — ALWAYS computed from the unblended score.
         # The LLM advisor is forbidden from upgrading this; it can only
@@ -1201,6 +1230,8 @@ def _error_result(ticker: str, track: Track, message: str) -> RecommendationResu
             "amber": 0,
             "failed": 1,
             "generated_at_utc": now,
+            "pbo": None,
+            "pbo_status": "NO_DATA",
         },
     )
 

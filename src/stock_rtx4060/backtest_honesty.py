@@ -83,6 +83,11 @@ def evaluate_backtest_honesty(
         }
     if cpcv_result is not None:
         result["cpcv"] = cpcv_result
+
+    # [E2] Expose pbo + pbo_status at top-level for dashboard_snapshot (additive)
+    raw_pbo = cpcv_result.get("pbo") if isinstance(cpcv_result, dict) else None
+    result["pbo"] = raw_pbo
+    result["pbo_status"] = _compute_pbo_status(raw_pbo)
     return result
 
 

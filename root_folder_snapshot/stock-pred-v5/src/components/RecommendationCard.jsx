@@ -2,6 +2,34 @@ import React from "react";
 import RiskGateBadge from "./RiskGateBadge";
 import KevpeBadge from "./KevpeBadge";
 
+// ---------------------------------------------------------------------------
+// PBO badge — [E2 Wave 3]
+// ---------------------------------------------------------------------------
+const PBO_CFG = {
+  PASS:    { bg: "#22c55e", color: "#fff", label: "PASS",  icon: "✓" },
+  AMBER:   { bg: "#f59e0b", color: "#000", label: "AMBER", icon: "⚠" },
+  RED:     { bg: "#ef4444", color: "#fff", label: "RED",   icon: "✕" },
+  NO_DATA: { bg: "#4b5563", color: "#fff", label: "N/A",   icon: "–" },
+};
+const PBO_TIP = "Probability of Backtest Overfitting (PBO). Lower = better. ≤20% PASS · ≤50% AMBER · >50% RED.";
+
+function PboBadge({ pbo, pboStatus }) {
+  const cfg = PBO_CFG[pboStatus] ?? PBO_CFG.NO_DATA;
+  const txt = pbo != null ? `${(Number(pbo) * 100).toFixed(1)}%` : "–";
+  return (
+    <div title={PBO_TIP} role="img" aria-label={`PBO ${txt} ${cfg.label}`}
+      style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
+      <span style={{ fontSize: "0.7rem", color: "#6B7E8E", letterSpacing: 1 }}>PBO</span>
+      <span style={{ fontSize: "0.7rem", color: "#D4E1EC" }}>{txt}</span>
+      <span style={{
+        background: cfg.bg, color: cfg.color,
+        borderRadius: 3, padding: "1px 5px",
+        fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.03em",
+      }}>{cfg.icon} {cfg.label}</span>
+    </div>
+  );
+}
+
 const C = {
   bg: "#050A0E",
   bgDeep: "#02060A",
@@ -124,6 +152,13 @@ export default function RecommendationCard({ result, currency = "$", accent = "#
           Validations: {result.confirmations_passed || 0}/{result.confirmations_total || Object.keys(result.validations).length} passed
         </div>
       )}
+
+      {/* [E2] PBO badge */}
+      {(() => {
+        const bhs = result.backtest_honesty_summary;
+        if (!bhs || bhs.pbo_status == null) return null;
+        return <PboBadge pbo={bhs.pbo} pboStatus={bhs.pbo_status} />;
+      })()}
 
       {/* LLM Advisor overlay */}
       {result.advisor_score != null && !isNaN(parseFloat(result.advisor_score)) && (() => {
