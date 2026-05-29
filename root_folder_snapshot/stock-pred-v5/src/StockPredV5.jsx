@@ -142,7 +142,7 @@ async function fetchModelEvidence(symbol, defaults) {
     ...defaults,
   });
   const ctrl = new AbortController();
-  const tid = setTimeout(() => ctrl.abort(), 15000);
+  const tid = setTimeout(() => ctrl.abort(), 90000); // 90s — LogReg+GRU+XGB training needs time
   try {
     const res = await fetch(apiUrl(`/api/model-scores?${params.toString()}`), {
       cache: "no-store",
