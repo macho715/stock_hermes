@@ -93,3 +93,60 @@ def test_groups_length_mismatch():
     X = pd.DataFrame(np.zeros((10, 2)))
     with pytest.raises(ValueError, match="groups length"):
         list(splitter.split(X, groups=np.arange(5)))
+
+
+# ---------------------------------------------------------------------------
+# P0 no-leakage property tests (v5.1 spec §8 Phase 1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("horizon", [0, 1, 5, 15])
+@pytest.mark.parametrize("seed", range(5))
+def test_no_label_window_overlaps_test_span(horizon: int, seed: int) -> None:
+    """No train row's label window [i, groups[i]] may overlap [test_start, test_end].
+
+    This is the full no-leakage property: overlap = (start <= test_end) & (end >= test_start).
+    Parametrised over 4 horizons × 5 seeds = 20 cases.
+    """
+    rng = np.random.default_rng(seed)
+    n = 200
+    X = pd.DataFrame(rng.standard_normal((n, 4)))
+    groups = np.arange(n) + horizon  # fixed horizon: end_times[i] = i + horizon
+
+    cv = PurgedKFold(n_splits=6, embargo_pct=0.02)
+
+    for train_idx, test_idx in cv.split(X, groups=groups):
+        if len(test_idx) == 0 or len(train_idx) == 0:
+            continue
+        test_start = int(test_idx.min())
+        test_end = int(groups[test_idx].max())
+
+        train_starts = train_idx
+        train_ends = groups[train_idx]
+
+        overlaps = (train_starts <= test_end) & (train_ends >= test_start)
+        assert not overlaps.any(), (
+            f"horizon={horizon} seed={seed}: "
+            f"{overlaps.sum()} train rows have label windows overlapping "
+            f"test span [{test_start}, {test_end}]"
+        )
+
+
+def test_embargo_pct_gte_one_rejected() -> None:
+    """embargo_pct >= 1.0 must raise ValueError (v5.1 spec §2 CV-02)."""
+    with pytest.raises(ValueError, match="embargo_pct"):
+        PurgedKFold(n_splits=5, embargo_pct=1.0)
+
+
+def test_embargo_pct_exactly_one_rejected() -> None:
+    with pytest.raises(ValueError, match="embargo_pct"):
+        PurgedKFold(n_splits=5, embargo_pct=1.001)
+
+
+def test_groups_ends_before_start_rejected() -> None:
+    """groups values < row position must be rejected (end cannot precede start)."""
+    splitter = PurgedKFold(n_splits=3)
+    X = pd.DataFrame(np.zeros((30, 2)))
+    bad_groups = np.arange(30) - 5  # end_times[i] = i - 5 < i → invalid
+    with pytest.raises(ValueError, match="groups must contain label end index"):
+        list(splitter.split(X, groups=bad_groups))
