@@ -57,6 +57,11 @@ except ImportError:
 # Disabled by default so the existing Anthropic/MiniMax path is unaffected.
 _USE_LITELLM: bool = os.environ.get("USE_LITELLM", "false").lower() in ("1", "true", "yes")
 
+# [E1-W3] MLflow LLM span tracing — set USE_MLFLOW_TRACING=true to record
+# every advisor call as an MLflow span.  LiteLLM-routed calls require manual
+# spans because mlflow.anthropic.autolog() does not intercept the Router path.
+_USE_MLFLOW_TRACING: bool = os.environ.get("USE_MLFLOW_TRACING", "false").lower() in ("1", "true", "yes")
+
 DEFAULT_MODEL = "claude-opus-4-7"
 DEFAULT_MINIMAX_MODEL = "MiniMax-M2.7"
 DEFAULT_MINIMAX_BASE_URL = "https://api.minimax.io/v1"
@@ -481,9 +486,11 @@ class ClaudeClient:
         Falls back to the native Anthropic/MiniMax path otherwise.
         """
         if _USE_LITELLM and _HAS_LITELLM:
-            return self._call_via_litellm(system=system, messages=messages, max_tokens=max_tokens)
+            result = self._call_via_litellm(system=system, messages=messages, max_tokens=max_tokens)
+            return self._wrap_with_mlflow_span(messages=messages, inner_result=result)
         if self._provider() == "minimax":
-            return self._call_minimax(system=system, messages=messages, max_tokens=max_tokens)
+            result = self._call_minimax(system=system, messages=messages, max_tokens=max_tokens)
+            return self._wrap_with_mlflow_span(messages=messages, inner_result=result)
         client = self._ensure_sync()
         sys_blocks = self._build_system_blocks(system)
         prompt_hash = self._hash_payload(system=sys_blocks, messages=messages, tools=tools)
@@ -502,7 +509,8 @@ class ClaudeClient:
         while True:
             try:
                 message = client.messages.create(**kwargs)
-                return self._build_call_result(message, prompt_hash)
+                result = self._build_call_result(message, prompt_hash)
+                return self._wrap_with_mlflow_span(messages=messages, inner_result=result)
             except retryable as exc:  # type: ignore[misc]
                 attempt += 1
                 if attempt > self.max_retries:
@@ -712,6 +720,42 @@ class ClaudeClient:
         return float(delay) + random.uniform(0.0, min(0.5, delay))
 
 
+    def _wrap_with_mlflow_span(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        inner_result: "CallResult",
+    ) -> "CallResult":
+        """[E1-W3] Record ``inner_result`` as an MLflow LLM span.
+
+        No-ops gracefully when mlflow is not installed or
+        ``USE_MLFLOW_TRACING=false`` (the default).
+        LiteLLM-routed calls require manual spans because
+        ``mlflow.anthropic.autolog()`` does not intercept the Router path.
+        """
+        if not _USE_MLFLOW_TRACING:
+            return inner_result
+        try:
+            import mlflow  # type: ignore[import-not-found]
+
+            with mlflow.start_span(
+                name="advisor_call",
+                span_type="LLM",
+                attributes={"model": inner_result.model},
+            ) as span:
+                span.set_inputs({"message_count": len(messages)})
+                span.set_outputs(
+                    {
+                        "tokens_in": inner_result.tokens_in,
+                        "tokens_out": inner_result.tokens_out,
+                        "cost_usd": round(inner_result.cost_usd, 6),
+                    }
+                )
+        except Exception:  # pragma: no cover — mlflow optional
+            logger.debug("mlflow_span failed (optional), continuing")
+        return inner_result
+
+
 __all__ = [
     "ClaudeClient",
     "CallResult",
@@ -722,4 +766,5 @@ __all__ = [
     "DEFAULT_MINIMAX_BASE_URL",
     "DEFAULT_MAX_INPUT_TOKENS",
     "DEFAULT_MAX_OUTPUT_TOKENS",
+    "_USE_MLFLOW_TRACING",
 ]
