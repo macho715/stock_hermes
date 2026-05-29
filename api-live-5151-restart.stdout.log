@@ -1,2 +1,13 @@
+Starting stock_rtx4060 unified API server on http://0.0.0.0:5151
+Dashboard: http://127.0.0.1:5151/
+Endpoints:
+  GET /                     -React dashboard (built static)
+  GET /api/health           -health check
+  GET /api/universe         -dashboard-selectable symbols
+  GET /api/symbol           -latest OHLCV for dashboard charts
+  GET /api/model-scores     -backend model evidence for one symbol
+  GET /api/paper-status     -latest paper-only virtual trading status
+  GET /api/recommend        -run recommendation + return snapshot
+  GET /api/snapshot?path=X  -serve existing recommendation JSON as snapshot
  * Serving Flask app 'api_server'
  * Debug mode: off
