@@ -366,7 +366,25 @@ def api_model_scores():
             except Exception:
                 logistic_score = None
 
-        # RNN (GRU) score -computed when PyTorch is available
+        # XGBoost secondary score — computed when primary backend is NOT xgb
+        xgboost_score: float | None
+        if backend_kind.startswith("xgb"):
+            xgboost_score = primary_score
+        else:
+            try:
+                _xgb = EnsemblePredictor(ModelConfig(
+                    horizon=horizon, n_splits=5, gap=horizon,
+                    model_kind="xgb", xgb_device="cpu", use_lstm=False, lite=True,
+                    cv_kind=cv_kind, embargo_pct=_embargo_pct,
+                ))
+                _xgb.fit(feature_df)
+                _xgb_latest = _xgb.predict_latest(feature_df)
+                xgboost_score = round(float(_xgb_latest["direction_prob"]) * 100.0, 2)
+            except Exception as _xgb_exc:
+                print(f"[XGBoost secondary] FAILED: {type(_xgb_exc).__name__}: {_xgb_exc}", flush=True)
+                xgboost_score = None
+
+        # RNN (GRU) score — computed when PyTorch is available
         rnn_score: float | None = None
         if _has_torch():
             try:
@@ -386,7 +404,7 @@ def api_model_scores():
 
         model_scores = {
             "main": main_score,
-            "xgboost": primary_score if backend_kind.startswith("xgb") else None,
+            "xgboost": xgboost_score,
             "logistic": logistic_score,
             "lstm": lstm_score,
             "rnn": rnn_score,
@@ -477,6 +495,9 @@ def api_recommend():
     output_dir = request.args.get("output_dir", "reports/api_recommend")
     advisor_run = request.args.get("advisor_run", "0") == "1"
     advisor_blend_weight = float(request.args.get("advisor_blend_weight", "0.3"))
+    # cv_gap=5 default activates CPCV so pbo_status is populated in the snapshot
+    cv_gap_raw = request.args.get("cv_gap")
+    cv_gap = int(cv_gap_raw) if cv_gap_raw is not None else 5
 
     # Silently disable advisor when no supported live LLM key is available.
     from stock_rtx4060.advisors.claude_client import has_live_advisor_key
@@ -500,6 +521,7 @@ def api_recommend():
             output_dir=output_dir,
             model_kind=model_kind,
             xgb_device="cpu",
+            cv_gap=cv_gap,
             advisor_run=advisor_run,
             advisor_blend_weight=advisor_blend_weight if advisor_run else 0.0,
         )

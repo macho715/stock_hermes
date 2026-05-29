@@ -1822,9 +1822,9 @@ function SignalTab({
         <>
           <ModelBar label="Backend Main" value={scores.main} color={accent} weight={700} />
           <ModelBar label="LogReg" value={scores.lr} color={C.lr} />
-          <ModelBar label="XGBoost" value={scores.xgb} color={C.xgb} />
-          <ModelBar label="LSTM" value={scores.lstm} color={C.lstm} />
-          <ModelBar label="RNN" value={scores.rnn} color={C.rnn} />
+          {scores.xgb != null && <ModelBar label="XGBoost" value={scores.xgb} color={C.xgb} />}
+          {scores.lstm != null && <ModelBar label="LSTM" value={scores.lstm} color={C.lstm} />}
+          {scores.rnn != null && <ModelBar label="RNN" value={scores.rnn} color={C.rnn} />}
         </>
       ) : (
         <ModelBar label="Backend Main" value={null} color={accent} weight={700} />
