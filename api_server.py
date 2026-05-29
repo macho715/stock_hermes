@@ -34,15 +34,23 @@ from stock_rtx4060.paper_trading import load_paper_status
 from stock_rtx4060.recommendation_engine import RecommendationConfig, RecommendationEngine, parse_universe
 
 app = Flask(__name__, static_folder=str(DIST), static_url_path="")
+LOCAL_CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:4173",
+    "http://localhost:5151",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "http://127.0.0.1:5175",
+    "http://127.0.0.1:4173",
+    "http://127.0.0.1:5151",
+]
 CORS(
     app,
     resources={
         r"/api/*": {
-            "origins": [
-                "http://localhost:5173",
-                "http://localhost:4173",
-                "http://localhost:5151",
-            ]
+            "origins": LOCAL_CORS_ORIGINS
         }
     },
 )
@@ -71,6 +79,31 @@ MARKET_UNIVERSES: dict[str, list[dict[str, str]]] = {
         {"symbol": "003670.KS", "name": "POSCO Future M"},
     ],
 }
+
+
+def _expanded_top_for_full_universe(universe: list[str], track: str, requested_top: int) -> int:
+    """Fetch enough BOTH-track rows so dashboard full-universe views can dedupe by ticker."""
+    if track.upper() == "BOTH" and universe and requested_top >= len(universe):
+        return min(len(universe) * 2, 60)
+    return requested_top
+
+
+def _dedupe_full_universe_results(results: list[Any], universe: list[str], track: str, requested_top: int) -> list[Any]:
+    """Keep the best sorted result per ticker for full-universe dashboard responses."""
+    if track.upper() != "BOTH" or not universe or requested_top < len(universe):
+        return results
+
+    seen: set[str] = set()
+    unique: list[Any] = []
+    for result in results:
+        ticker = str(getattr(result, "ticker", "")).upper()
+        if not ticker or ticker in seen:
+            continue
+        seen.add(ticker)
+        unique.append(result)
+        if len(unique) >= requested_top:
+            break
+    return unique
 
 
 def _frame_to_ohlcv_records(frame: Any) -> list[dict[str, Any]]:
@@ -511,11 +544,12 @@ def api_recommend():
 
     try:
         top = int(request.args.get("top", 5))
+        engine_top = _expanded_top_for_full_universe(_tickers, track, top)
         config = RecommendationConfig(
             universe=_tickers,
             track=track,
             period=period,
-            top_n=top,
+            top_n=engine_top,
             synthetic=synthetic,
             data_provider=data_provider,
             output_dir=output_dir,
@@ -527,6 +561,8 @@ def api_recommend():
         )
         engine = RecommendationEngine(config)
         results = engine.run()
+        results = _dedupe_full_universe_results(results, _tickers, track, top)
+        engine.config.top_n = top
         paths = engine.write_reports(results)
 
         # Build snapshot from the generated JSON

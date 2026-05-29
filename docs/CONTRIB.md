@@ -172,7 +172,7 @@ tests/
 | Setting | Value |
 |---------|-------|
 | Line length | 120 |
-| Target Python | 3.11 compatible syntax |
+| Target Python | 3.12 compatible syntax |
 | Formatter | black (`line-length = 120`) |
 | Linter | ruff (`E`, `F`, `I`, `UP`, `B`; `E501` ignored) |
 
@@ -187,7 +187,7 @@ tests/
 
 - **No broker execution** — `screening_output_only=True` must remain in all recommendation result objects
 - **No mutation** — use spread/copy patterns, do not mutate shared state
-- **Leak-safe CV** — use `TimeSeriesSplit(gap=horizon)` with OOF probabilities; never in-sample
+- **Leak-safe CV** — use PurgedKFold/embargo OOF probabilities; never in-sample probabilities
 - **Risk Gate is mandatory** — model probability alone cannot produce a GREEN verdict
 - **Manual approval required** before any external write, credential handling, or deployment
 
