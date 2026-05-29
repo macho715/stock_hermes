@@ -29,11 +29,14 @@ const C = {
   panel: "#0A1218",
   panel2: "#0E1822",
   panelHi: "#13202C",
-  border: "#1A2A38",
-  borderHi: "#243648",
+  // Upgraded: slightly warmer borders for visual separation
+  border: "#1E3040",
+  borderHi: "#2A4560",
+  borderSoft: "#162330",
   text: "#D4E1EC",
-  textDim: "#6B7E8E",
+  textDim: "#7A90A2",
   textMuted: "#3F5060",
+  textLabel: "#A0B4C4",  // NEW: section/label text (brighter than muted)
   us: "#00CCFF",
   krx: "#FF6B35",
   buy: "#00FF88",
@@ -47,10 +50,21 @@ const C = {
   red: "#FF3366",
   amber: "#FFB800",
   grid: "#152230",
+  // NEW: subtle card elevation
+  shadow: "0 2px 12px rgba(0,0,0,0.45), 0 1px 3px rgba(0,0,0,0.3)",
+  shadowSm: "0 1px 6px rgba(0,0,0,0.35)",
+  // NEW: loading/warning state softer
+  warnBg: "#1A1200",
+  warnBorder: "#3A2800",
+  warnText: "#D4A800",
 };
 
+// Primary: monospace for data values, prices, codes
 const FONT =
   '"JetBrains Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace';
+// Secondary: sans-serif for labels, section headers, non-numeric UI
+const FONT_SANS =
+  '"Inter", "Segoe UI", system-ui, -apple-system, sans-serif';
 
 const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 const apiUrl = (path) => `${API_BASE}${path}`;
@@ -1152,12 +1166,21 @@ ${backtest ? `## Backtest (\\$10,000 initial)
           >
             <div
               style={{
-                color: C.textMuted, fontSize: 9, letterSpacing: 2,
-                padding: "4px 6px 8px",
+                padding: "8px 10px 10px",
+                borderBottom: `1px solid ${C.borderSoft}`,
+                marginBottom: 4,
               }}
             >
-              ── SYMBOLS · {market} ──
-              <div style={{ marginTop: 4, color: universeIsFallback ? C.amber : C.green, fontSize: 8 }}>
+              <div style={{
+                fontFamily: FONT_SANS,
+                color: C.textLabel, fontSize: 10, fontWeight: 600,
+                letterSpacing: "0.08em", textTransform: "uppercase",
+                display: "flex", alignItems: "center", gap: 6,
+              }}>
+                <span style={{ width: 3, height: 10, background: C.us, borderRadius: 2, display: "inline-block" }} />
+                SYMBOLS · {market}
+              </div>
+              <div style={{ marginTop: 4, color: universeIsFallback ? C.amber : C.green, fontSize: 8, fontFamily: FONT, letterSpacing: 1 }}>
                 UNIVERSE: {universeLabel}
                 {universeError ? ` · ${universeError}` : ""}
               </div>
@@ -1289,13 +1312,15 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                   key={t}
                   onClick={() => setTab(t)}
                   style={{
-                    flex: 1, padding: "9px 0",
-                    background: tab === t ? C.panelHi : "transparent",
+                    flex: 1, padding: "10px 0",
+                    background: tab === t ? `${accent}12` : "transparent",
                     border: "none",
                     borderBottom: `2px solid ${tab === t ? accent : "transparent"}`,
                     color: tab === t ? accent : C.textDim,
-                    fontFamily: FONT, fontWeight: 600, letterSpacing: 1.5, fontSize: 10,
+                    fontFamily: FONT_SANS, fontWeight: tab === t ? 700 : 500,
+                    letterSpacing: "0.06em", fontSize: 10,
                     cursor: "pointer", transition: "all .15s",
+                    boxShadow: tab === t ? `inset 0 -1px 0 ${accent}` : "none",
                   }}
                 >
                   {t}
@@ -1591,24 +1616,39 @@ function CenterPanel({
       {/* TITLE STRIP */}
       <div
         style={{
-          display: "flex", alignItems: "baseline", gap: 14, marginBottom: 12,
-          paddingBottom: 10, borderBottom: `1px solid ${C.border}`,
+          display: "flex", alignItems: "center", gap: 10, marginBottom: 14,
+          paddingBottom: 12, borderBottom: `1px solid ${C.border}`,
           flexWrap: "wrap",
         }}
       >
-        <div style={{ fontSize: 22, fontWeight: 700, color: accent, letterSpacing: 2 }}>
-          {selected.replace(".KS", "")}
+        {/* Ticker + name */}
+        <div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: accent, letterSpacing: 3, lineHeight: 1 }}>
+            {selected.replace(".KS", "")}
+          </div>
+          <div style={{ color: C.textDim, fontSize: 10, fontFamily: FONT_SANS, marginTop: 2, letterSpacing: "0.05em" }}>
+            {symbolName}
+          </div>
         </div>
-        <div style={{ color: C.textDim, fontSize: 11 }}>{symbolName}</div>
-        <div style={{ fontSize: 22, fontWeight: 600 }}>{fmtMoney(last.close)}</div>
-        <div
-          style={{
-            color: change >= 0 ? C.green : C.red,
-            fontSize: 13, fontWeight: 600,
-          }}
-        >
-          {change >= 0 ? "▲" : "▼"} {Math.abs(change).toFixed(market === "US" ? 2 : 0)}{" "}
-          ({changePct >= 0 ? "+" : ""}{changePct.toFixed(2)}%)
+
+        {/* Divider */}
+        <div style={{ width: 1, height: 32, background: C.border, margin: "0 6px" }} />
+
+        {/* Price */}
+        <div>
+          <div style={{ fontSize: 30, fontWeight: 700, color: C.text, letterSpacing: 1, lineHeight: 1 }}>
+            {fmtMoney(last.close)}
+          </div>
+          <div
+            style={{
+              color: change >= 0 ? C.green : C.red,
+              fontSize: 11, fontWeight: 600, marginTop: 3,
+              fontFamily: FONT_SANS,
+            }}
+          >
+            {change >= 0 ? "▲" : "▼"} {Math.abs(change).toFixed(market === "US" ? 2 : 0)}{" "}
+            ({changePct >= 0 ? "+" : ""}{changePct.toFixed(2)}%)
+          </div>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           <Badge label="SRC" value={cur.source} color={cur.source === "YAHOO" || cur.source === "YFINANCE" ? C.green : C.amber} />
@@ -1761,21 +1801,27 @@ function EvidenceUnavailable({ loading, error }) {
   return (
     <div
       style={{
-        background: C.bgDeep,
-        border: `1px solid ${loading ? C.amber : C.red}`,
-        color: loading ? C.amber : C.red,
-        padding: 12,
+        background: loading ? C.warnBg : `${C.red}0D`,
+        border: `1px solid ${loading ? C.warnBorder : `${C.red}33`}`,
+        color: loading ? C.warnText : C.red,
+        padding: "10px 14px",
+        borderRadius: 6,
         marginBottom: 12,
-        fontSize: 10,
-        letterSpacing: 1.2,
-        lineHeight: 1.5,
+        fontSize: 9,
+        fontFamily: FONT_SANS,
+        letterSpacing: "0.04em",
+        lineHeight: 1.6,
+        display: "flex", alignItems: "flex-start", gap: 8,
       }}
     >
-      <div style={{ fontWeight: 700, marginBottom: 4 }}>
-        {loading ? "MODEL EVIDENCE LOADING" : "MODEL EVIDENCE UNAVAILABLE"}
-      </div>
-      <div style={{ color: C.textDim }}>
-        SIGNAL and MODELS are waiting for backend `/api/model-scores`; browser simulation is not used as the primary score.
+      <span style={{ fontSize: 12, lineHeight: 1, marginTop: 1 }}>{loading ? "..." : "!"}</span>
+      <div>
+        <div style={{ fontWeight: 600, marginBottom: 3, fontSize: 10 }}>
+          {loading ? "Model Evidence Loading..." : "Model Evidence Unavailable"}
+        </div>
+        <div style={{ color: loading ? `${C.warnText}99` : `${C.red}AA`, fontSize: 8 }}>
+          SIGNAL and MODELS are waiting for backend `/api/model-scores`; browser simulation is not used as the primary score.
+        </div>
       </div>
       {error && <div style={{ marginTop: 6 }}>{error}</div>}
     </div>
@@ -1887,12 +1933,21 @@ function SectionLabel({ children, style }) {
   return (
     <div
       style={{
-        fontSize: 9, letterSpacing: 2, color: C.textMuted, fontWeight: 600,
-        margin: "8px 0 6px", paddingBottom: 4,
-        borderBottom: `1px dashed ${C.border}`, ...style,
+        fontFamily: FONT_SANS,
+        fontSize: 9.5, letterSpacing: "0.10em", color: C.textLabel,
+        fontWeight: 600, textTransform: "uppercase",
+        margin: "10px 0 6px", paddingBottom: 5,
+        borderBottom: `1px solid ${C.borderSoft}`,
+        display: "flex", alignItems: "center", gap: 7,
+        ...style,
       }}
     >
-      ── {children} ──
+      <span style={{
+        display: "inline-block", width: 14, height: 1,
+        background: `linear-gradient(to right, ${C.borderHi}, transparent)`,
+        flexShrink: 0,
+      }} />
+      {children}
     </div>
   );
 }
