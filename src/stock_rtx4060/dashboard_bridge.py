@@ -794,6 +794,16 @@ def _normalize_result(result: Any, *, rank: int, provider_summary: Any = None) -
         "notebooklm_source_count": result.get("notebooklm_source_count"),
         "notebooklm_as_of": result.get("notebooklm_as_of"),
         # [Executive Dashboard v2.1] Additive — None when not available
+        # fundamentals: display-only company metadata from provider metadata.
+        "fundamentals": result.get("fundamentals"),
+        "market_cap": (result.get("fundamentals") or {}).get("market_cap") if isinstance(result.get("fundamentals"), dict) else None,
+        "pe_ttm": (result.get("fundamentals") or {}).get("pe_ttm") if isinstance(result.get("fundamentals"), dict) else None,
+        "eps_ttm": (result.get("fundamentals") or {}).get("eps_ttm") if isinstance(result.get("fundamentals"), dict) else None,
+        "dividend_yield": (result.get("fundamentals") or {}).get("dividend_yield") if isinstance(result.get("fundamentals"), dict) else None,
+        "sector": (result.get("fundamentals") or {}).get("sector") if isinstance(result.get("fundamentals"), dict) else None,
+        "industry": (result.get("fundamentals") or {}).get("industry") if isinstance(result.get("fundamentals"), dict) else None,
+        # news_headlines: source-backed recent news rows when NotebookLM cache is enabled.
+        "news_headlines": result.get("news_headlines") or [],
         # notebook_analysis: full NotebookLM analysis dict (passthrough from result)
         "notebook_analysis": result.get("notebook_analysis"),
         # scenario_outlook: bull/base/bear scenarios — generated from existing fields if absent

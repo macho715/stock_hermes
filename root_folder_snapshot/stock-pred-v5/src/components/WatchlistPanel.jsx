@@ -1,28 +1,43 @@
 import React from "react";
 import DashboardCard, { THEME } from "./DashboardCard";
 export default function WatchlistPanel({ symbols=[], selected, onSelect }) {
+  const rows = Array.isArray(symbols) ? symbols : [];
   return (
-    <DashboardCard title="Watchlist">
-      {symbols.length===0&&<div style={{color:THEME.textMuted,fontSize:10,textAlign:"center",padding:8}}>No symbols</div>}
-      <div style={{overflowY:"auto",maxHeight:140}}>
-        {symbols.map(s=>{
+    <DashboardCard title="Watchlist" right={<span style={{fontSize:11,color:THEME.textMuted}}>View All</span>} style={{height:"100%"}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 0.7fr 0.9fr 0.8fr",fontSize:10,color:THEME.textMuted,borderBottom:`1px solid ${THEME.border}`,paddingBottom:6}}>
+        <span>Ticker</span><span>Price</span><span>Chg %</span><span>AI Rec</span><span>Confidence</span>
+      </div>
+      <div style={{overflowY:"auto",maxHeight:150}}>
+        {rows.length===0&&(
+          <div style={{fontSize:11,color:THEME.textMuted,padding:"42px 0",textAlign:"center",border:`1px dashed ${THEME.border}`,borderRadius:6}}>
+            No watchlist symbols returned by the current universe source.
+          </div>
+        )}
+        {rows.map(s=>{
           const isSelected = s.symbol===selected;
-          const up = s.change>=0;
+          const hasChange = s.changePct != null && Number.isFinite(Number(s.changePct));
+          const up = hasChange ? Number(s.changePct) >= 0 : true;
+          const rec = s.rec || "—";
+          const recColor = rec==="SELL"?THEME.red:rec==="HOLD"?THEME.amber:rec==="BUY"?THEME.greenBright:THEME.textMuted;
+          const confidence = s.confidence!=null ? Number(s.confidence) : null;
+          const confidencePct = confidence!=null && Number.isFinite(confidence)
+            ? Math.round(confidence > 1 ? confidence : confidence * 100)
+            : null;
+          const analysisSource = s.notebookAnalysis?.analysis_source || "";
+          const rowTitle = analysisSource
+            ? `${s.symbol} ${analysisSource} · news ${s.newsCount || 0} · ${s.priceProvider || "price source unavailable"} ${s.priceAsOf || ""}`
+            : `${s.symbol} · ${s.priceProvider || "price source unavailable"} ${s.priceAsOf || ""}`;
           return (
             <div key={s.symbol} onClick={()=>onSelect?.(s.symbol)}
-              style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-                padding:"5px 0",cursor:"pointer",borderBottom:`1px solid rgba(26,42,56,0.4)`,
-                background:isSelected?"rgba(32,214,210,0.06)":"transparent"}}>
-              <div>
-                <div style={{fontSize:11,fontWeight:700,color:isSelected?THEME.cyan:THEME.text}}>{s.symbol}</div>
-                <div style={{fontSize:9,color:THEME.textMuted}}>{s.name}</div>
-              </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontSize:11,fontWeight:700,color:THEME.text}}>{s.price||"—"}</div>
-                {s.change!=null&&<div style={{fontSize:9,color:up?THEME.green:THEME.red}}>
-                  {up?"▲":"▼"}{Math.abs(s.changePct||0).toFixed(2)}%
-                </div>}
-              </div>
+              title={rowTitle}
+              style={{display:"grid",gridTemplateColumns:"1fr 1fr 0.7fr 0.9fr 0.8fr",alignItems:"center",
+                minHeight:28,cursor:"pointer",borderBottom:`1px solid ${THEME.border}`,
+                background:isSelected?THEME.purpleSoft:"transparent",boxShadow:isSelected?`inset 3px 0 0 ${THEME.purple}`:"none"}}>
+              <span style={{fontSize:12,fontWeight:800,color:isSelected?THEME.text:THEME.textDim,paddingLeft:8}}>{s.symbol}</span>
+              <span style={{fontSize:12,color:THEME.text}}>{typeof s.price==="number"?s.price.toFixed(2):s.price||"—"}</span>
+              <span style={{fontSize:12,color:hasChange?(up?THEME.greenBright:THEME.red):THEME.textMuted}}>{hasChange?`${up?"+":""}${Number(s.changePct).toFixed(2)}%`:"—"}</span>
+              <span style={{fontSize:12,fontWeight:900,color:recColor}}>{rec}</span>
+              <span style={{fontSize:12,color:confidencePct!=null?THEME.purple:THEME.textMuted}}>{confidencePct!=null?`${confidencePct}%`:"—"}</span>
             </div>
           );
         })}

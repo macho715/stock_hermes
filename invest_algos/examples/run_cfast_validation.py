@@ -29,11 +29,16 @@ C_PASS = "CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE"
 C_FAIL = "VALIDATION_FAILED_REVIEW_REQUIRED"
 CASH = "__CASH__"
 PAPER_TRADING_ONLY = "PAPER_TRADING_DRY_RUN_ONLY"
+PROMOTION_BLOCKED_VALIDATION = "BLOCKED_BY_VALIDATION_FAILED"
 PROMOTION_BLOCKED_COST = "BLOCKED_BY_X5_COST_FRAGILITY"
+PROMOTION_BLOCKED_TARGET_RETURN = "BLOCKED_BY_TARGET_RETURN_SHORTFALL"
 PROMOTION_REVIEW_READY = "READY_FOR_PAPER_TRADING_REVIEW"
 PROMOTION_NOT_APPLICABLE = "NOT_APPLICABLE_VALIDATION_FAILED"
 
-THRESHOLDS = {
+DEFAULT_TARGET_RETURN_MIN = 0.10
+DEFAULT_THRESHOLDS = {
+    "base_min_ann_return": DEFAULT_TARGET_RETURN_MIN,
+    "x2_min_ann_return": DEFAULT_TARGET_RETURN_MIN,
     "base_min_sharpe": 1.0,
     "x2_min_sharpe": 1.0,
     "base_min_max_drawdown": -0.10,
@@ -42,6 +47,16 @@ THRESHOLDS = {
     "x2_min_optimizer_success_rate": 0.90,
     "x5_min_sharpe_warning": 1.0,
 }
+
+
+def build_thresholds(target_return_min: float) -> Dict[str, float]:
+    """Build validation thresholds for annualized net-return target gating."""
+    if target_return_min < 0:
+        raise ValueError("--target-return-min must be non-negative")
+    thresholds = dict(DEFAULT_THRESHOLDS)
+    thresholds["base_min_ann_return"] = float(target_return_min)
+    thresholds["x2_min_ann_return"] = float(target_return_min)
+    return thresholds
 
 
 def resolve_path(path: str | Path) -> Path:
@@ -213,52 +228,91 @@ def cost_label(position: int, cost_bps: float) -> str:
     return f"cost_{cost_bps:g}bps"
 
 
-def evaluate_policy(stress: Dict[str, Dict[str, object]]) -> tuple[str, List[str]]:
+def _append_target_return_warnings(
+    metrics: Dict[str, float],
+    label: str,
+    thresholds: Dict[str, float],
+    warnings: List[str],
+) -> None:
+    key = f"{label}_min_ann_return"
+    if key in thresholds and metrics["ann_return"] < thresholds[key]:
+        warnings.append(f"target_return_shortfall_{label}")
+
+
+def evaluate_policy(
+    stress: Dict[str, Dict[str, object]],
+    thresholds: Optional[Dict[str, float]] = None,
+) -> tuple[str, List[str]]:
+    thresholds = thresholds or build_thresholds(DEFAULT_TARGET_RETURN_MIN)
     warnings: List[str] = []
     base = stress["base"]["metrics"]
     x2 = stress["x2"]["metrics"]
     x5 = stress.get("x5", {}).get("metrics")
+
+    _append_target_return_warnings(base, "base", thresholds, warnings)
+    _append_target_return_warnings(x2, "x2", thresholds, warnings)
+
     passes = (
-        base["sharpe"] >= THRESHOLDS["base_min_sharpe"]
-        and x2["sharpe"] >= THRESHOLDS["x2_min_sharpe"]
-        and base["max_drawdown"] >= THRESHOLDS["base_min_max_drawdown"]
-        and x2["max_drawdown"] >= THRESHOLDS["x2_min_max_drawdown"]
-        and base["optimizer_success_rate"] >= THRESHOLDS["base_min_optimizer_success_rate"]
-        and x2["optimizer_success_rate"] >= THRESHOLDS["x2_min_optimizer_success_rate"]
+        base["ann_return"] >= thresholds["base_min_ann_return"]
+        and x2["ann_return"] >= thresholds["x2_min_ann_return"]
+        and base["sharpe"] >= thresholds["base_min_sharpe"]
+        and x2["sharpe"] >= thresholds["x2_min_sharpe"]
+        and base["max_drawdown"] >= thresholds["base_min_max_drawdown"]
+        and x2["max_drawdown"] >= thresholds["x2_min_max_drawdown"]
+        and base["optimizer_success_rate"] >= thresholds["base_min_optimizer_success_rate"]
+        and x2["optimizer_success_rate"] >= thresholds["x2_min_optimizer_success_rate"]
     )
-    if x5 and x5["sharpe"] < THRESHOLDS["x5_min_sharpe_warning"]:
+    if x5 and x5["sharpe"] < thresholds["x5_min_sharpe_warning"]:
         warnings.append("cost_fragile")
     return (C_PASS if passes else C_FAIL), warnings
 
 
 def build_execution_controls(c_verdict: str, warnings: List[str]) -> Dict[str, object]:
     """Separate paper-trading permission from live/promotion eligibility."""
+    blockers: List[str] = []
+    if any(w.startswith("target_return_shortfall") for w in warnings):
+        blockers.append(PROMOTION_BLOCKED_TARGET_RETURN)
+    if "cost_fragile" in warnings:
+        blockers.append(PROMOTION_BLOCKED_COST)
+
     if c_verdict != C_PASS:
         return {
             "execution_mode": "VALIDATION_FAILED_NO_TRADING",
-            "promotion_status": PROMOTION_NOT_APPLICABLE,
-            "promotion_blockers": ["validation_failed"],
+            "promotion_status": (
+                PROMOTION_BLOCKED_TARGET_RETURN
+                if PROMOTION_BLOCKED_TARGET_RETURN in blockers
+                else PROMOTION_NOT_APPLICABLE
+            ),
+            "promotion_blockers": [PROMOTION_BLOCKED_VALIDATION, *blockers],
             "live_trading_allowed": False,
             "broker_execution_allowed": False,
         }
-    blockers = [PROMOTION_BLOCKED_COST] if "cost_fragile" in warnings else []
     return {
         "execution_mode": PAPER_TRADING_ONLY,
-        "promotion_status": PROMOTION_BLOCKED_COST if blockers else PROMOTION_REVIEW_READY,
+        "promotion_status": (
+            PROMOTION_BLOCKED_TARGET_RETURN
+            if PROMOTION_BLOCKED_TARGET_RETURN in blockers
+            else (PROMOTION_BLOCKED_COST if blockers else PROMOTION_REVIEW_READY)
+        ),
         "promotion_blockers": blockers,
         "live_trading_allowed": False,
         "broker_execution_allowed": False,
     }
 
 
-def build_cost_stress_frame(stress: Dict[str, Dict[str, object]]) -> pd.DataFrame:
+def build_cost_stress_frame(stress: Dict[str, Dict[str, object]], thresholds: Dict[str, float]) -> pd.DataFrame:
     rows = []
     for label, summary in stress.items():
         metrics = summary["metrics"]
+        target_key = f"{label}_min_ann_return"
+        target_min = thresholds.get(target_key)
+        target_pass = None if target_min is None else metrics["ann_return"] >= target_min
         rows.append({
             "label": label,
             "cost_bps": summary["cost_bps"],
             "ann_return": metrics["ann_return"],
+            "target_return_min": target_min,
+            "target_return_pass": target_pass,
             "ann_vol": metrics["ann_vol"],
             "sharpe": metrics["sharpe"],
             "max_drawdown": metrics["max_drawdown"],
@@ -272,12 +326,23 @@ def build_cost_stress_frame(stress: Dict[str, Dict[str, object]]) -> pd.DataFram
     return pd.DataFrame(rows)
 
 
+def frame_records(frame: pd.DataFrame) -> List[Dict[str, object]]:
+    """Convert pandas records without leaking NaN into JSON outputs."""
+    clean = frame.astype(object).where(pd.notna(frame), None)
+    return clean.to_dict(orient="records")
+
+
 def build_report(summary: Dict[str, object]) -> str:
     rows = []
     for item in summary["c_fast_cost_stress"]:
+        target_min = item.get("target_return_min")
+        target_pass = item.get("target_return_pass")
+        target_min_text = "info" if target_min is None else f"{target_min:.2%}"
+        target_pass_text = "info" if target_pass is None else str(bool(target_pass))
         rows.append(
             f"| {item['label']} | {item['cost_bps']:.2f} | {item['sharpe']:.2f} | "
-            f"{item['ann_return']:.2%} | {item['max_drawdown']:.2%} | "
+            f"{item['ann_return']:.2%} | {target_min_text} | {target_pass_text} | "
+            f"{item['max_drawdown']:.2%} | "
             f"{item['optimizer_success_rate']:.2%} | {item.get('fallback_rate', 0.0):.2%} |"
         )
     warnings = ", ".join(summary["warnings"]) if summary["warnings"] else "none"
@@ -293,6 +358,8 @@ def build_report(summary: Dict[str, object]) -> str:
         f"- A: `{summary['policy_verdicts']['A']}`",
         f"- B: `{summary['policy_verdicts']['B']}`",
         f"- C fast: `{summary['policy_verdicts']['C_fast']}`",
+        f"- target_return_metric: `{summary['return_policy']['target_return_metric']}`",
+        f"- target_return_min: `{summary['return_policy']['target_return_min']:.2%}`",
         f"- warnings: `{warnings}`",
         f"- execution_mode: `{controls['execution_mode']}`",
         f"- promotion_status: `{controls['promotion_status']}`",
@@ -300,8 +367,8 @@ def build_report(summary: Dict[str, object]) -> str:
         "",
         "## Cost Stress",
         "",
-        "| Label | Cost bps | Sharpe | Ann Return | MDD | Optimizer Success | Fallback Rate |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| Label | Cost bps | Sharpe | Ann Return | Target Return Min | Target Return Pass | MDD | Optimizer Success | Fallback Rate |",
+        "|---|---:|---:|---:|---:|---|---:|---:|---:|",
         *rows,
         "",
         "## Data",
@@ -329,6 +396,7 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--max-weight", type=float, default=0.25)
     p.add_argument("--turnover-budget", type=float, default=0.20)
     p.add_argument("--cvar-lambda", type=float, default=0.0)
+    p.add_argument("--target-return-min", type=float, default=DEFAULT_TARGET_RETURN_MIN)
     p.add_argument("--optimizer-maxiter", type=int, default=1000)
     p.add_argument("--gamma", type=float, default=0.97)
     p.add_argument("--forecast-decay", type=float, default=0.90)
@@ -344,6 +412,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     args.prices = resolve_path(args.prices)
     outdir = ensure_outdir(resolve_path(args.outdir))
     cost_bps_values = parse_cost_bps_list(args.cost_bps_list)
+    thresholds = build_thresholds(args.target_return_min)
     min_rows = max(args.lookback + args.test_size + args.gap + 2, args.splits * args.test_size + args.gap + 1)
     prices = load_validated_prices(args.prices, min_rows=min_rows)
 
@@ -354,14 +423,14 @@ def main(argv: Optional[List[str]] = None) -> None:
     if "base" not in stress or "x2" not in stress:
         raise ValueError("cost stress must produce at least base and x2 runs")
 
-    c_verdict, warnings = evaluate_policy(stress)
+    c_verdict, warnings = evaluate_policy(stress, thresholds)
     execution_controls = build_execution_controls(c_verdict, warnings)
     if "base" in stress:
         walk_forward = run_walk_forward(prices, args, cost_bps=float(stress["base"]["cost_bps"]))
     else:
         walk_forward = []
 
-    cost_stress = build_cost_stress_frame(stress)
+    cost_stress = build_cost_stress_frame(stress, thresholds)
     cost_stress.to_csv(outdir / "cost_stress_summary.csv", index=False)
 
     latest_weights = pd.read_csv(Path(stress["base"]["output_dir"]) / "latest_weights.csv")
@@ -381,10 +450,15 @@ def main(argv: Optional[List[str]] = None) -> None:
             "B": B_VERDICT,
             "C_fast": c_verdict,
         },
+        "return_policy": {
+            "target_return_metric": "annualized_net_return",
+            "target_return_min": float(args.target_return_min),
+            "note": "This is a validation gate, not an assured outcome claim.",
+        },
         "execution_controls": execution_controls,
-        "thresholds": THRESHOLDS,
-        "c_fast_cost_stress": cost_stress.to_dict(orient="records"),
-        "latest_weights": latest_weights.to_dict(orient="records"),
+        "thresholds": thresholds,
+        "c_fast_cost_stress": frame_records(cost_stress),
+        "latest_weights": frame_records(latest_weights),
         "walk_forward": walk_forward,
         "warnings": warnings,
     }

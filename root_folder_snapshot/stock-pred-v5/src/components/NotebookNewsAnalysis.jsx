@@ -1,12 +1,32 @@
 import React from "react";
 import { THEME } from "./DashboardCard";
-function Chip({label,color}){return <span style={{fontSize:9,fontWeight:700,color:"#000",background:color,borderRadius:3,padding:"1px 5px",marginRight:3,letterSpacing:"0.03em"}}>{label}</span>;}
-export default function NotebookNewsAnalysis({ analysis, compact=false }) {
+function displayText(value) {
+  return String(value || "").replace(/\u2014/g, "-");
+}
+function Row({dot,title,source,time,color}){return <div style={{display:"grid",gridTemplateColumns:"14px 1fr 96px 92px",alignItems:"center",minHeight:24,borderBottom:`1px solid ${THEME.border}`}}>
+  <span style={{width:8,height:8,borderRadius:"50%",background:color,display:"inline-block"}}/>
+  <span style={{fontSize:11,color:THEME.textDim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{displayText(title)}</span>
+  <span style={{fontSize:10,color:THEME.textMuted,textAlign:"right"}}>{source}</span>
+  <span style={{fontSize:10,color:THEME.textMuted,textAlign:"right"}}>{time}</span>
+</div>;}
+export default function NotebookNewsAnalysis({ analysis, headlines=[], compact=false }) {
+  const headlineRows = Array.isArray(headlines) ? headlines.slice(0,5) : [];
+  const sourceLabel = analysis?.analysis_source === "openai_api"
+    ? `OpenAI${analysis?.openai_model ? ` ${analysis.openai_model}` : ""}`
+    : analysis?.analysis_source === "notelm_fallback" ? "Notelm Fallback" : "NotebookLM";
   if(!analysis) return (
-    <div style={{textAlign:"center",color:THEME.textMuted,fontSize:10,padding:compact?"8px 0":"16px"}}>
-      <div style={{fontSize:16,marginBottom:4}}>📰</div>
-      NotebookLM analysis unavailable<br/>
-      <span style={{fontSize:9}}>뉴스 분석 데이터가 없습니다.</span>
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+        <span style={{fontSize:13,color:THEME.text,fontWeight:900,textTransform:"uppercase"}}>NotebookLM News Analysis <span style={{fontSize:11,color:THEME.textMuted,fontWeight:600}}>(Past 72h)</span></span>
+        <span style={{fontSize:11,color:headlineRows.length?THEME.greenBright:THEME.textMuted}}>{headlineRows.length ? `YFinance ${headlineRows.length}` : "Unavailable"}</span>
+      </div>
+      {headlineRows.length ? (
+        headlineRows.map((h,i)=><Row key={`${h.title}-${i}`} title={h.title} source={h.source || "YFinance"} time={(h.published_at || "").slice(0,10)} color={i < 3 ? THEME.green : THEME.textMuted}/>)
+      ) : (
+        <div style={{fontSize:11,color:THEME.textMuted,padding:"18px 0",textAlign:"center",border:`1px dashed ${THEME.border}`,borderRadius:6}}>
+          No news data returned by the current snapshot.
+        </div>
+      )}
     </div>
   );
   const bulls = analysis.bullish_factors||[];
@@ -17,22 +37,17 @@ export default function NotebookNewsAnalysis({ analysis, compact=false }) {
   return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-        <span style={{fontSize:10,color:THEME.textMuted,textTransform:"uppercase",letterSpacing:"0.06em"}}>NotebookLM News</span>
+        <span style={{fontSize:13,color:THEME.text,fontWeight:900,textTransform:"uppercase"}}>{sourceLabel} News Analysis <span style={{fontSize:11,color:THEME.textMuted,fontWeight:600}}>(Past 72h)</span></span>
         {sc!=null&&<span style={{fontSize:10,fontWeight:700,color:sentColor}}>
           {typeof analysis.sentiment==="string"?analysis.sentiment:`${sc>=0?"+":""}${(sc*100).toFixed(0)}%`}
         </span>}
       </div>
-      {bulls.length>0&&<div style={{marginBottom:4}}>
-        <div style={{fontSize:9,color:THEME.green,fontWeight:700,marginBottom:2}}>▲ BULLISH</div>
-        {bulls.slice(0,compact?2:3).map((f,i)=><div key={i} style={{fontSize:9,color:THEME.textDim,paddingLeft:8,lineHeight:1.4}}>• {f}</div>)}
-      </div>}
-      {bears.length>0&&<div>
-        <div style={{fontSize:9,color:THEME.red,fontWeight:700,marginBottom:2}}>▼ BEARISH</div>
-        {bears.slice(0,compact?2:3).map((f,i)=><div key={i} style={{fontSize:9,color:THEME.textDim,paddingLeft:8,lineHeight:1.4}}>• {f}</div>)}
-      </div>}
-      {analysis.source_labels&&<div style={{marginTop:6,display:"flex",flexWrap:"wrap",gap:3}}>
-        {analysis.source_labels.slice(0,4).map((l,i)=><Chip key={i} label={l} color={THEME.blue}/>)}
-      </div>}
+      {[...bulls.slice(0,3),...bears.slice(0,2)].slice(0,5).map((f,i)=><Row key={i} title={f} source={analysis.source_labels?.[i]||sourceLabel} time={analysis.as_of||analysis.generated_at||""} color={i<3?THEME.green:THEME.red}/>)}
+      {bulls.length===0&&bears.length===0&&(
+        <div style={{fontSize:11,color:THEME.textMuted,padding:"18px 0",textAlign:"center",border:`1px dashed ${THEME.border}`,borderRadius:6}}>
+          NotebookLM analysis contains no bullish or bearish factor rows.
+        </div>
+      )}
     </div>
   );
 }

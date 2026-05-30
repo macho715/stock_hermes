@@ -8,6 +8,30 @@ All notable changes for `stock_1901` are documented here.
 
 오늘 세션에서 추가된 주요 기능: NotebookLM 뉴스 인텔리전스 레이어 (iran-war-notelm API 연동), Executive Decision Dashboard v2.1 (17개 신규 컴포넌트 + feature flag), dashboard_bridge.py 데이터 계약 확장. 테스트 116 passed.
 
+### Session consolidation update
+
+이번 문서 갱신은 2026-05-30 세션 전체를 반영한다.
+Kraken 목업 기반 UI 변경, backend 실제 데이터 필드 연결, Watchlist 종목별 Notelm fallback, 파일 캐시, root-docs 설정을 같은 릴리스 묶음으로 기록했다.
+
+```mermaid
+flowchart TD
+    UI[Kraken Executive Dashboard UI] --> Bridge[dashboard_bridge actual fields]
+    Bridge --> API[api_server /api/watchlist-notelm]
+    API --> Adapter[notebooklm_news Notelm fallback]
+    Adapter --> Cache[reports/notelm_fallback_cache]
+    Cache --> Docs[root docs updated]
+```
+
+| 세션 항목 | 상태 |
+|---|---|
+| 목업 이미지 기준 dashboard CSS/components 적용 | 완료 |
+| README 또는 guide의 구현 기록 링크 추가 | 완료 |
+| `fundamentals`, `news_headlines`, `scenario_outlook` 실제 데이터 연결 | 완료 |
+| NotebookLM 서버 down 시 Notelm fallback 분석 | 완료 |
+| Watchlist 전체 종목별 Notelm fallback 매핑 | 완료 |
+| Notelm fallback 파일 캐시로 warm load 단축 | 완료 |
+| root-docs repo-local config 추가 | 완료 |
+
 ### Added
 
 - **`src/stock_rtx4060/advisors/notebooklm_news.py`** — NotebookLM 뉴스 어댑터 전면 재작성 (2026-05-30)
@@ -16,6 +40,17 @@ All notable changes for `stock_1901` are documented here.
   - `NOTEBOOKLM_NEWS_MODE=cache|on|1|true|off` 환경변수 제어
   - `NOTEBOOKLM_NEWS_API_BASE=http://127.0.0.1:8088` (기본값)
   - `schema_version=notebook_stock_analysis.v1` 응답 계약 검증
+  - `NOTEBOOKLM_NEWS_LOCAL_CACHE_DIR=reports/notelm_fallback_cache` — Notelm fallback 파일 캐시 경로
+  - `NOTEBOOKLM_NEWS_LOCAL_FALLBACK_TTL_SEC=900` — Watchlist 재로딩용 로컬 fallback 캐시 TTL
+  - `LOCAL_FALLBACK` 결과를 `<cache_dir>/<MARKET>/<TICKER>.json`에 atomic write로 저장
+  - `LOCAL_CACHE_HIT` 시 yfinance 재조회 없이 저장된 Notelm 분석을 재사용
+  - `LLM_ADVISOR_PROVIDER=openai` 설정 시 OpenAI Responses API Structured Outputs로 `notebook_analysis`를 보강
+  - OpenAI API 실패 또는 API key 누락 시 기존 NotebookLM/Notelm 분석을 보존하고 `openai_error`만 기록
+- **`src/stock_rtx4060/advisors/openai_client.py`** — OpenAI 뉴스 분석 클라이언트 실제 연결 (2026-05-31)
+  - `client.responses.parse(..., text_format=NotebookAnalysis)` 기반 Pydantic Structured Outputs 사용
+  - `OPENAI_ADVISOR_MODEL` 기본값 `gpt-4o`
+  - 성공 결과에 `analysis_source=openai_api`, `provider=openai`, `model`, `error=None` 메타데이터 추가
+  - live 테스트는 `RUN_OPENAI_LIVE_TESTS=1`일 때만 실행되도록 변경
 - **`root_folder_snapshot/stock-pred-v5/src/components/`** — Executive Dashboard v2.1 신규 컴포넌트 17개 (2026-05-30)
   - `DashboardCard.jsx` — 공통 glass card wrapper + THEME 토큰
   - `HeaderBar.jsx` — 브랜드·종목·시장 선택 바 (aria-label 접근성)
@@ -37,6 +72,7 @@ All notable changes for `stock_1901` are documented here.
 - **`root_folder_snapshot/stock-pred-v5/src/StockPredV5.jsx`** — Executive 레이아웃 추가 (2026-05-30)
   - `VITE_DASHBOARD_LAYOUT=executive` feature flag
   - `execSnap` state + `useEffect` — selected 종목 변경 시 `/api/recommend` 자동 재호출
+  - `watchlistNotelmByTicker` state + `/api/watchlist-notelm` fetch — 전체 Watchlist 종목별 Notelm 분석 매핑
   - 로딩 배너, HeaderBar·TopKpiGrid·MainDecisionGrid·BottomInsightGrid 레이아웃
   - 기존 classic 레이아웃 100% 보존 (flag 미설정 시)
 - **`.env`** — NotebookLM 연동 환경변수 기본값 (2026-05-30)
@@ -53,6 +89,9 @@ All notable changes for `stock_1901` are documented here.
 ### Changed
 
 - **`api_server.py`** — `.env` 자동 로드 추가 (python-dotenv / fallback 파서)
+  - `/api/watchlist-notelm` 추가 — 최대 30개 종목의 Notelm/NotebookLM 분석을 lightweight report-only payload로 반환
+  - `/api/watchlist-notelm` rows now include real OHLCV-derived `price`, `previous_close`, `change`, `change_pct`, `volume`, `price_as_of`, and provider/source fields.
+  - `_watchlist_rec_from_notelm()` 추가 — sentiment/score 기반 BUY/HOLD/SELL 표시값 생성
 - **`src/stock_rtx4060/advisors/orchestrator.py`** — ThompsonWeights MAB 통합 (2026-05-30)
   - `ThompsonWeights` import + `_ADVISOR_NAMES`, `_WEIGHTS_MODE` 상수 추가
   - `OrchestratorResult.weights` — 기본값 `ThompsonWeights(_ADVISOR_NAMES)` (MAB 모드)
@@ -65,6 +104,8 @@ All notable changes for `stock_1901` are documented here.
 - **`src/stock_rtx4060/dashboard_bridge.py`** — `_normalize_result()` 확장 (2026-05-30)
   - `notebook_analysis` — NotebookLM 분석 전체 dict passthrough
   - `scenario_outlook` — passthrough 또는 `_build_scenario_fallback()` 자동 생성
+  - `fundamentals`, `market_cap`, `pe_ttm`, `eps_ttm`, `dividend_yield`, `sector`, `industry` display-only 필드 전달
+  - `news_headlines` 전달 — 대시보드 뉴스 타임라인과 AI Decision Panel에서 사용
   - `_build_scenario_fallback()` — entry/tp2/stop/direction_prob 기반 bull/base/bear 계산
   - `notebooklm_impact`, `notebooklm_confidence`, `notebooklm_source_count`, `notebooklm_as_of` 필드 (이전 커밋)
 - **`src/stock_rtx4060/recommendation_engine.py`** — `_apply_advisor_blend()` 확장
@@ -72,6 +113,7 @@ All notable changes for `stock_1901` are documented here.
   - `enrich_context_with_notebooklm()` 훅 — optional import, silent fallback
   - `notebook_meta` 추출 → 5-tuple 반환
   - `RecommendationResult` +4 필드: `notebooklm_impact/confidence/source_count/as_of`
+  - `_error_result()` display-data overlay 추가 — `RED_DATA_OR_MODEL_ERROR` 행도 화면 표시용 `latest_close`, `fundamentals`, `news_headlines`, `notebook_analysis`, `scenario_outlook`를 실제 데이터 소스로 보강
 - **`src/stock_rtx4060/advisors/news_sentiment.py`** — `notebook_analysis` prompt 전달
 - **`src/stock_rtx4060/advisors/prompts/news_user.md`** — NotebookLM 분석 블록 + proposition/citations JSON schema
 - **`tests/test_dashboard_bridge.py`** — 4개 신규 테스트 (116/116 passed)
@@ -79,6 +121,9 @@ All notable changes for `stock_1901` are documented here.
   - `test_normalize_result_notebook_analysis_defaults_none`
   - `test_scenario_fallback_generated`
   - `test_scenario_passthrough`
+- **`tests/test_api_recommend.py`** — Watchlist Notelm API real-price regression
+  - `test_watchlist_notelm_endpoint_returns_real_price_fields`
+  - `test_recommendation_error_result_keeps_display_data`
 
 ### Environment Variables (신규)
 
@@ -87,10 +132,33 @@ All notable changes for `stock_1901` are documented here.
 | `NOTEBOOKLM_NEWS_MODE` | `off` | `cache/on/1/true/off` — NotebookLM 뉴스 연동 모드 |
 | `NOTEBOOKLM_NEWS_API_BASE` | `http://127.0.0.1:8088` | iran-war-notelm API 서버 주소 |
 | `NOTEBOOKLM_NEWS_TIMEOUT_SEC` | `3.0` | API 타임아웃 |
+| `NOTEBOOKLM_NEWS_LOCAL_FALLBACK` | `true` | NotebookLM API 실패 시 Notelm fallback 사용 |
+| `NOTEBOOKLM_NEWS_LOCAL_CACHE_DIR` | `reports/notelm_fallback_cache` | Notelm fallback 파일 캐시 위치 |
+| `NOTEBOOKLM_NEWS_LOCAL_FALLBACK_TTL_SEC` | `900` | 파일 캐시 유효 시간 |
+| `LLM_ADVISOR_PROVIDER` | `anthropic` | `openai` 설정 시 OpenAI API 뉴스 분석 보강 |
+| `OPENAI_API_KEY` | unset | OpenAI API 호출 키. 없거나 invalid이면 기존 분석 유지 |
+| `OPENAI_ADVISOR_MODEL` | `gpt-4o` | OpenAI Structured Outputs 분석 모델 |
+| `RUN_OPENAI_LIVE_TESTS` | unset | `1`일 때만 실제 OpenAI API 통합 테스트 실행 |
 | `VITE_DASHBOARD_LAYOUT` | `""` | `executive` 설정 시 Executive v2.1 레이아웃 활성화 |
 | `ADVISOR_WEIGHTS_MODE` | `mab` | `mab` = Thompson Sampling, `fixed` = 고정 가중치 |
 | `ADVISOR_RUN` | `true` | LLM Advisor 자동 실행 활성화 |
 | `ADVISOR_BLEND_WEIGHT` | `0.10` | LLM Advisor 블렌딩 가중치 (0.0–1.0) |
+
+### Notelm fallback cache validation
+
+```mermaid
+timeline
+  title Notelm fallback cache validation
+  Cold request : yfinance news collected and LOCAL_FALLBACK files written
+  Warm request : LOCAL_CACHE_HIT returned from reports/notelm_fallback_cache
+  Regression : 37 NotebookLM/dashboard bridge tests passed
+```
+
+- Live Watchlist benchmark: `AAPL,MSFT,NVDA,TSLA,AMZN,GOOGL,META,SPY,QQQ`
+- Cache files written: `reports/notelm_fallback_cache/US/*.json`
+- Cold load: `24.75s`
+- Warm load: `6.41s`
+- Status transition: `LOCAL_FALLBACK` → `LOCAL_CACHE_HIT`
 
 ### Activation
 
@@ -1736,3 +1804,100 @@ timeline
 - Append-only update generated by `root-docs-batch-update`.
 - Code/config/doc/agent inventory counts: code=2417, docs=1446, config=1053, agent_profiles=1.
 - Follow-up verification should confirm that newly added text matches actual implementation paths listed above.
+
+
+## Codex Documentation Update — 2026-05-30T21:17:53.115243+00:00
+
+**Update policy:** existing content above this section is preserved. This section was appended after scanning code, documentation, config, and agent profile files.
+
+**Purpose:** This section records the documentation refresh event without altering earlier changelog entries.
+
+### Evidence inventory
+
+**Source/code files sampled:**
+- `.cursor\skills\rd-agent-cursor-mine\references\factor_template.py`
+- `.cursor\skills\rd-agent-cursor-mine\scripts\cursor_mine_runner.py`
+- `.cursor\skills\rd-agent-cursor-mine\scripts\run_cursor_mine.ps1`
+- `.cursor\skills\rd-agent-cursor-mine\scripts\run_weekly.ps1`
+- `api_server.py`
+- `dashboard\stock_pred_v5.jsx`
+- `docs\purged_kfold_embargo.py`
+- `docs\test_purged_kfold_embargo.py`
+- `flows\__init__.py`
+- `flows\daily_krx.py`
+- `flows\daily_us.py`
+- `flows\research_weekly.py`
+
+**Documentation files sampled:**
+- `.codex\design_upgrade_latest_artifact.txt`
+- `.codex\goals\dashboard-report-bridge.goal.md`
+- `.codex\goals\mcp-openbb-audit-phase1.goal.md`
+- `.codex\root-docs-strict\docs\001-README.md`
+- `.codex\root-docs-strict\docs\002-SYSTEM_ARCHITECTURE.md`
+- `.codex\root-docs-strict\docs\003-LAYOUT.md`
+- `.codex\root-docs-strict\docs\004-CHANGELOG.md`
+- `.codex\root-docs-strict\docs\005-plan.md`
+- `.codex\root-docs-strict\docs\006-codex-default-doc-agent.md`
+- `.continue\checks\01-financial-safety-boundary.md`
+- `.continue\checks\02-backtest-integrity.md`
+- `.continue\checks\03-recommendation-contract.md`
+
+**Config/build files sampled:**
+- `.claude\launch.json`
+- `.codex\agents\design-patcher.toml`
+- `.codex\agents\reference-hunter.toml`
+- `.codex\agents\visual-verifier.toml`
+- `.codex\config.toml`
+- `.codex\root-docs-current-verify.json`
+- `.codex\root-docs-dry-run-latest.json`
+- `.codex\root-docs-dry-run.json`
+- `.codex\root-docs-notelm-cache-update.json`
+- `.codex\root-docs-scan-20260531-loading.json`
+- `.codex\root-docs-scan-current.json`
+- `.codex\root-docs-scan-latest.json`
+
+**Agent profile files sampled:**
+- `.codex\agents\design-patcher.toml` (`design_patcher`)
+- `.codex\agents\reference-hunter.toml` (`reference_hunter`)
+- `.codex\agents\visual-verifier.toml` (`visual_verifier`)
+- `docs\agents\codex-default-doc-agent.md` (`codex-default-doc-agent`)
+
+### Mermaid graph
+
+```mermaid
+timeline
+  title Documentation Update Timeline
+  Scan : Code/docs/agent inventory captured
+  Update : Append-only sections generated
+  Verify : Mermaid and code-reflection checks completed
+```
+
+### Verification notes
+
+- Append-only update generated by `root-docs-batch-update`.
+- Code/config/doc/agent inventory counts: code=2459, docs=606, config=317, agent_profiles=4.
+- Follow-up verification should confirm that newly added text matches actual implementation paths listed above.
+
+## 2026-05-31 - Executive Dashboard loading and visible dash cleanup
+
+### Changed
+
+- `root_folder_snapshot/stock-pred-v5/src/StockPredV5.jsx` now treats `execSnap` as displayable only when its ticker matches the currently selected ticker.
+- `AiDecisionPanel.jsx` now renders a dedicated `PENDING` loading panel while the selected ticker analysis is in flight.
+- `ConfidenceKpi.jsx`, `RiskRewardKpi.jsx`, and `MarketSnapshotPanel.jsx` now render `Loading` or `No data` instead of the single dash placeholder.
+- `NewsTimelinePanel.jsx` and `NotebookNewsAnalysis.jsx` normalize displayed em dash punctuation in headlines to a plain hyphen.
+
+```mermaid
+timeline
+  title Dashboard loading cleanup
+  TickerChange : clear stale visible analysis
+  LoadingState : show explicit Loading or No data
+  BrowserQA : verify zero visible dash characters
+```
+
+### Verification
+
+- `git diff --check` passed for the edited dashboard files.
+- `npm run build` passed for `root_folder_snapshot/stock-pred-v5`.
+- Browser QA clicked AAPL, MSFT, NVDA, TSLA, AMZN, GOOGL, META, SPY, and QQQ.
+- Visible dash count was `0` during ticker loading and `0` after QQQ OpenAI analysis completed.

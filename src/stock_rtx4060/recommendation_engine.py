@@ -11,8 +11,9 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -267,6 +268,10 @@ class RecommendationResult:
     notebooklm_confidence: float | None = None
     notebooklm_source_count: int | None = None
     notebooklm_as_of: str | None = None
+    fundamentals: dict[str, Any] | None = None
+    news_headlines: list[dict[str, Any]] = field(default_factory=list)
+    notebook_analysis: dict[str, Any] | None = None
+    scenario_outlook: dict[str, Any] | None = None
 
     def to_dict(self) -> dict:
         data = asdict(self)
@@ -585,6 +590,249 @@ def _market_snapshot(df: pd.DataFrame) -> dict:
         "return_252d": ret252,
         "drawdown_252d": dd252,
         "market_regime_score": round(regime_score, 2),
+    }
+
+
+def _none_if_nan(value: Any) -> Any:
+    try:
+        if value is None or pd.isna(value):
+            return None
+    except Exception:
+        pass
+    return value
+
+
+def _safe_float_or_none(value: Any) -> float | None:
+    value = _none_if_nan(value)
+    if value is None:
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if np.isfinite(result) else None
+
+
+@lru_cache(maxsize=128)
+def _fetch_fundamentals(ticker: str) -> dict[str, Any] | None:
+    """Fetch display-only fundamentals from yfinance metadata when available."""
+    clean = str(ticker or "").strip().upper()
+    if not clean:
+        return None
+    try:
+        import yfinance as yf
+
+        info = yf.Ticker(clean).get_info() or {}
+    except Exception:
+        return None
+
+    fundamentals = {
+        "market_cap": _safe_float_or_none(info.get("marketCap")),
+        "pe_ttm": _safe_float_or_none(info.get("trailingPE")),
+        "eps_ttm": _safe_float_or_none(info.get("trailingEps")),
+        "dividend_yield": _safe_float_or_none(info.get("dividendYield")),
+        "sector": _none_if_nan(info.get("sector")),
+        "industry": _none_if_nan(info.get("industry")),
+        "source": "yfinance.info",
+        "as_of": datetime.now(UTC).isoformat(timespec="seconds"),
+    }
+    if not any(v is not None for k, v in fundamentals.items() if k not in {"source", "as_of"}):
+        return None
+    return fundamentals
+
+
+@lru_cache(maxsize=128)
+def _fetch_yfinance_news(ticker: str, limit: int = 8) -> list[dict[str, Any]]:
+    """Fetch recent source-backed headlines from yfinance when NotebookLM is unavailable."""
+    clean = str(ticker or "").strip().upper()
+    if not clean:
+        return []
+    try:
+        import yfinance as yf
+
+        raw_items = yf.Ticker(clean).news or []
+    except Exception:
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for item in raw_items[:limit]:
+        content = item.get("content") if isinstance(item, dict) else {}
+        if not isinstance(content, dict):
+            content = {}
+        provider = content.get("provider") if isinstance(content.get("provider"), dict) else {}
+        canonical = content.get("canonicalUrl") if isinstance(content.get("canonicalUrl"), dict) else {}
+        click = content.get("clickThroughUrl") if isinstance(content.get("clickThroughUrl"), dict) else {}
+        title = content.get("title") or item.get("title") if isinstance(item, dict) else None
+        if not title:
+            continue
+        rows.append(
+            {
+                "title": title,
+                "source": provider.get("displayName") or item.get("publisher") or "Yahoo Finance",
+                "published_at": content.get("pubDate") or content.get("displayTime") or item.get("providerPublishTime"),
+                "url": canonical.get("url") or click.get("url") or item.get("link"),
+                "summary": content.get("summary") or content.get("description"),
+                "source_type": "yfinance.news",
+            }
+        )
+    return rows
+
+
+def _notebook_context_for_snapshot(ticker: str) -> dict[str, Any]:
+    """Fetch cached NotebookLM context for dashboard snapshot fields only."""
+    try:
+        from .advisors.notebooklm_news import enrich_context_with_notebooklm
+
+        market = "KRX" if _is_krx_ticker(ticker) else "US"
+        return enrich_context_with_notebooklm(ticker, {"market": market})
+    except Exception:
+        return {"notebooklm_enriched": False, "notebooklm_count": 0}
+
+
+def _scenario_outlook_from_plan(ticker: str, plan: RiskPlan, probability: float, reasons: list[str]) -> dict[str, Any]:
+    currency = "₩" if _is_krx_ticker(ticker) else "$"
+
+    def fmt(value: float) -> str:
+        if currency == "₩":
+            return f"₩{round(value):,}"
+        return f"${value:,.2f}"
+
+    entry = float(plan.entry or 0.0)
+    bull_return = ((plan.tp2 - entry) / entry * 100.0) if entry else 0.0
+    base_price = entry + (plan.tp1 - entry) * 0.5 if entry else 0.0
+    base_return = ((base_price - entry) / entry * 100.0) if entry else 0.0
+    bear_return = ((plan.stop - entry) / entry * 100.0) if entry else 0.0
+    bull_prob = round(max(0.10, min(0.55, float(probability) * 0.55)), 2)
+    bear_prob = round(max(0.10, min(0.45, (1.0 - float(probability)) * 0.65)), 2)
+    base_prob = round(max(0.10, 1.0 - bull_prob - bear_prob), 2)
+    drivers = [str(reason) for reason in reasons if reason][:6]
+    bull_drivers = drivers[:3] or ["risk plan target derived from current recommendation"]
+    base_drivers = drivers[1:4] or ["base case derived from entry and TP1 plan"]
+    bear_drivers = drivers[-3:] or ["downside case derived from stop-loss plan"]
+    return {
+        "bull": {
+            "range": fmt(plan.tp2),
+            "return": f"+{bull_return:.1f}%",
+            "probability": bull_prob,
+            "drivers": bull_drivers,
+        },
+        "base": {
+            "range": fmt(base_price),
+            "return": f"{base_return:+.1f}%",
+            "probability": base_prob,
+            "drivers": base_drivers,
+        },
+        "bear": {
+            "range": fmt(plan.stop),
+            "return": f"{bear_return:.1f}%",
+            "probability": bear_prob,
+            "drivers": bear_drivers,
+        },
+    }
+
+
+def _latest_price_context(ticker: str) -> dict[str, Any]:
+    """Fetch latest real OHLCV price fields for display-only error rows."""
+    data_provider = "pykrx" if _is_krx_ticker(ticker) else "yfinance"
+    try:
+        provider_result = load_ohlcv_with_provider(
+            ticker,
+            "6mo",
+            synthetic=False,
+            data_provider=data_provider,
+            audit_logger=None,
+            command="recommend_error_display",
+        )
+        frame = provider_result.frame
+    except Exception:
+        return {}
+
+    if frame is None or frame.empty:
+        return {}
+    close_column = "Close" if "Close" in frame.columns else "close" if "close" in frame.columns else None
+    volume_column = "Volume" if "Volume" in frame.columns else "volume" if "volume" in frame.columns else None
+    if close_column is None:
+        return {}
+    close_series = pd.to_numeric(frame[close_column], errors="coerce").dropna()
+    if close_series.empty:
+        return {}
+    latest = _safe_float_or_none(close_series.iloc[-1])
+    if latest is None or latest <= 0:
+        return {}
+    previous = _safe_float_or_none(close_series.iloc[-2]) if len(close_series) > 1 else None
+    change = latest - previous if previous not in (None, 0) else None
+    change_pct = (change / previous * 100.0) if change is not None and previous else None
+    as_of = None
+    try:
+        as_of = pd.Timestamp(close_series.index[-1]).isoformat()
+    except Exception:
+        as_of = str(close_series.index[-1])
+    volume = None
+    if volume_column is not None:
+        volume_series = pd.to_numeric(frame[volume_column], errors="coerce").dropna()
+        if not volume_series.empty:
+            volume = _safe_float_or_none(volume_series.iloc[-1])
+    return {
+        "latest_close": latest,
+        "previous_close": previous,
+        "change": change,
+        "change_pct": change_pct,
+        "volume": volume,
+        "price_as_of": as_of,
+        "price_provider": getattr(provider_result, "provider_used", data_provider),
+        "price_source": getattr(provider_result, "source", None),
+    }
+
+
+def _scenario_outlook_from_latest_price(ticker: str, latest: float, reasons: list[str]) -> dict[str, Any] | None:
+    latest = _safe_float_or_none(latest)
+    if latest is None or latest <= 0:
+        return None
+    plan = RiskPlan(
+        entry=latest,
+        stop=latest * 0.92,
+        tp1=latest * 1.04,
+        tp2=latest * 1.08,
+        stop_pct=0.08,
+        tp2_pct=0.08,
+        risk_reward=1.0,
+        risk_budget_pct=0.0,
+        max_position_pct=0.0,
+        suggested_quantity=0.0,
+        suggested_position_value=0.0,
+    )
+    return _scenario_outlook_from_plan(ticker, plan, 0.5, reasons)
+
+
+def _error_display_context(ticker: str, message: str) -> dict[str, Any]:
+    """Best-effort real display data for recommendation rows excluded by errors."""
+    fundamentals = _fetch_fundamentals(ticker)
+    notebook_context = _notebook_context_for_snapshot(ticker)
+    notebook_analysis = notebook_context.get("notebook_analysis")
+    if not isinstance(notebook_analysis, dict):
+        notebook_analysis = None
+    news_headlines = list(notebook_context.get("headlines") or [])
+    if not news_headlines:
+        news_headlines = _fetch_yfinance_news(ticker)
+    price_context = _latest_price_context(ticker)
+    latest_close = _safe_float_or_none(price_context.get("latest_close")) or 0.0
+    scenario_outlook = _scenario_outlook_from_latest_price(ticker, latest_close, [message])
+    notebook_meta: dict[str, Any] | None = None
+    if notebook_analysis:
+        notebook_meta = {
+            "impact": notebook_analysis.get("market_impact"),
+            "confidence": notebook_analysis.get("confidence"),
+            "source_count": (notebook_analysis.get("notebook") or {}).get("source_count")
+            or notebook_context.get("notebooklm_count"),
+            "as_of": notebook_analysis.get("as_of"),
+        }
+    return {
+        "fundamentals": fundamentals,
+        "news_headlines": news_headlines,
+        "notebook_analysis": notebook_analysis,
+        "notebook_meta": notebook_meta,
+        "price_context": price_context,
+        "scenario_outlook": scenario_outlook,
     }
 
 
@@ -1257,6 +1505,21 @@ class RecommendationEngine:
         # ── KEVPE risk overlay (supplementary only — never overrides Risk Gate) ──
         kevpe_result = get_kevpe_adapter().get_signal_for_ticker(df, self._events_for_ticker(ticker), as_of=pd.Timestamp.now().normalize())
         kevpe_supp = kevpe_signal_to_supplement(kevpe_result)
+        fundamentals = _fetch_fundamentals(ticker)
+        notebook_context = _notebook_context_for_snapshot(ticker)
+        notebook_analysis = notebook_context.get("notebook_analysis")
+        news_headlines = list(notebook_context.get("headlines") or [])
+        if not news_headlines:
+            news_headlines = _fetch_yfinance_news(ticker)
+        if notebook_analysis and notebook_meta is None:
+            notebook_meta = {
+                "impact": notebook_analysis.get("market_impact"),
+                "confidence": notebook_analysis.get("confidence"),
+                "source_count": (notebook_analysis.get("notebook") or {}).get("source_count")
+                                or notebook_context.get("notebooklm_count"),
+                "as_of": notebook_analysis.get("as_of"),
+            }
+        scenario_outlook = _scenario_outlook_from_plan(ticker, plan, model_stats["latest_prob"], reasons)
 
         return RecommendationResult(
             ticker=ticker,
@@ -1324,6 +1587,10 @@ class RecommendationEngine:
             notebooklm_confidence=notebook_meta.get("confidence") if notebook_meta else None,
             notebooklm_source_count=notebook_meta.get("source_count") if notebook_meta else None,
             notebooklm_as_of=notebook_meta.get("as_of") if notebook_meta else None,
+            fundamentals=fundamentals,
+            news_headlines=news_headlines,
+            notebook_analysis=notebook_analysis,
+            scenario_outlook=scenario_outlook,
         )
 
     def _events_for_ticker(self, ticker: str) -> list[dict]:
@@ -1416,6 +1683,15 @@ class RecommendationEngine:
 def _error_result(ticker: str, track: Track, message: str) -> RecommendationResult:
     now = datetime.now(UTC).isoformat(timespec="seconds")
     fail = ValidationCheck("ERROR", "FAIL", message)
+    display_context = _error_display_context(ticker, message)
+    price_context = display_context.get("price_context") or {}
+    latest_close = _safe_float_or_none(price_context.get("latest_close")) or 0.0
+    entry = latest_close
+    stop = latest_close * 0.92 if latest_close else 0.0
+    tp1 = latest_close * 1.04 if latest_close else 0.0
+    tp2 = latest_close * 1.08 if latest_close else 0.0
+    risk_reward = ((tp1 - entry) / (entry - stop)) if entry and entry > stop else 0.0
+    notebook_meta = display_context.get("notebook_meta") or {}
     return RecommendationResult(
         ticker=ticker,
         track=track,
@@ -1423,14 +1699,14 @@ def _error_result(ticker: str, track: Track, message: str) -> RecommendationResu
         recommendation_rank_score=0.0,
         candidate_label="데이터/모델 오류로 추천 제외",
         screening_output_only=True,
-        latest_close=0.0,
-        entry=0.0,
-        stop=0.0,
-        tp1=0.0,
-        tp2=0.0,
-        stop_pct=0.0,
-        tp2_pct=0.0,
-        risk_reward=0.0,
+        latest_close=latest_close,
+        entry=entry,
+        stop=stop,
+        tp1=tp1,
+        tp2=tp2,
+        stop_pct=0.08 if latest_close else 0.0,
+        tp2_pct=0.08 if latest_close else 0.0,
+        risk_reward=risk_reward,
         risk_budget_pct=0.0,
         max_position_pct=0.0,
         suggested_quantity=0.0,
@@ -1466,6 +1742,14 @@ def _error_result(ticker: str, track: Track, message: str) -> RecommendationResu
             "pbo": None,
             "pbo_status": "NO_DATA",
         },
+        notebooklm_impact=notebook_meta.get("impact"),
+        notebooklm_confidence=notebook_meta.get("confidence"),
+        notebooklm_source_count=notebook_meta.get("source_count"),
+        notebooklm_as_of=notebook_meta.get("as_of"),
+        fundamentals=display_context.get("fundamentals"),
+        news_headlines=display_context.get("news_headlines") or [],
+        notebook_analysis=display_context.get("notebook_analysis"),
+        scenario_outlook=display_context.get("scenario_outlook"),
     )
 
 

@@ -18,18 +18,27 @@
   "policy_verdicts": {
     "A": "HOLD_DIAGNOSTIC_ONLY",
     "B": "REJECT_RETRAIN",
-    "C_fast": "CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE"
+    "C_fast": "VALIDATION_FAILED_REVIEW_REQUIRED"
+  },
+  "return_policy": {
+    "target_return_metric": "annualized_net_return",
+    "target_return_min": 0.1,
+    "note": "This is a validation gate, not an assured outcome claim."
   },
   "execution_controls": {
-    "execution_mode": "PAPER_TRADING_DRY_RUN_ONLY",
-    "promotion_status": "BLOCKED_BY_X5_COST_FRAGILITY",
+    "execution_mode": "VALIDATION_FAILED_NO_TRADING",
+    "promotion_status": "BLOCKED_BY_TARGET_RETURN_SHORTFALL",
     "promotion_blockers": [
+      "BLOCKED_BY_VALIDATION_FAILED",
+      "BLOCKED_BY_TARGET_RETURN_SHORTFALL",
       "BLOCKED_BY_X5_COST_FRAGILITY"
     ],
     "live_trading_allowed": false,
     "broker_execution_allowed": false
   },
   "thresholds": {
+    "base_min_ann_return": 0.1,
+    "x2_min_ann_return": 0.1,
     "base_min_sharpe": 1.0,
     "x2_min_sharpe": 1.0,
     "base_min_max_drawdown": -0.1,
@@ -43,6 +52,8 @@
       "label": "base",
       "cost_bps": 5.0,
       "ann_return": 0.11198605890947613,
+      "target_return_min": 0.1,
+      "target_return_pass": true,
       "ann_vol": 0.07924031466183037,
       "sharpe": 1.4132460148270864,
       "max_drawdown": -0.08185169186457264,
@@ -57,6 +68,8 @@
       "label": "x2",
       "cost_bps": 10.0,
       "ann_return": 0.08776340593999632,
+      "target_return_min": 0.1,
+      "target_return_pass": false,
       "ann_vol": 0.05409927874489231,
       "sharpe": 1.6222657302669188,
       "max_drawdown": -0.0564964125417321,
@@ -71,6 +84,8 @@
       "label": "x5",
       "cost_bps": 25.0,
       "ann_return": 0.013240403969249939,
+      "target_return_min": null,
+      "target_return_pass": null,
       "ann_vol": 0.019291692874214048,
       "sharpe": 0.6863267031867134,
       "max_drawdown": -0.027126122171559075,
@@ -171,6 +186,7 @@
     }
   ],
   "warnings": [
+    "target_return_shortfall_x2",
     "cost_fragile"
   ]
 }

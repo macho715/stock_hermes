@@ -8,8 +8,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from algos.common import make_demo_prices  # noqa: E402
 from examples.run_cfast_validation import (  # noqa: E402
+    C_FAIL,
     PROMOTION_BLOCKED_COST,
+    PROMOTION_BLOCKED_TARGET_RETURN,
     build_execution_controls,
+    build_thresholds,
+    evaluate_policy,
     main,
 )
 
@@ -56,6 +60,11 @@ def test_cfast_validation_runner_writes_required_outputs(tmp_path):
     assert summary["execution_controls"]["broker_execution_allowed"] is False
     assert summary["execution_controls"]["live_trading_allowed"] is False
     assert "fallback_rate" in summary["c_fast_cost_stress"][0]
+    assert summary["return_policy"]["target_return_metric"] == "annualized_net_return"
+    assert summary["thresholds"]["base_min_ann_return"] == 0.10
+    assert "target_return_pass" in summary["c_fast_cost_stress"][0]
+    if len(summary["c_fast_cost_stress"]) > 2:
+        assert summary["c_fast_cost_stress"][2]["target_return_min"] is None
 
     diagnostics = pd.read_csv(outdir / "runs" / "base_5bps" / "optimizer_diagnostics.csv")
     assert {"fallback_used", "fallback_reason", "optimizer_iterations"} <= set(diagnostics.columns)
@@ -70,5 +79,37 @@ def test_cost_fragile_blocks_promotion_but_keeps_paper_trading_mode():
     assert controls["execution_mode"] == "PAPER_TRADING_DRY_RUN_ONLY"
     assert controls["promotion_status"] == PROMOTION_BLOCKED_COST
     assert controls["promotion_blockers"] == [PROMOTION_BLOCKED_COST]
+    assert controls["broker_execution_allowed"] is False
+    assert controls["live_trading_allowed"] is False
+
+
+def test_target_return_shortfall_blocks_promotion():
+    def metrics(ann_return: float):
+        return {
+            "ann_return": ann_return,
+            "ann_vol": 0.05,
+            "sharpe": 1.25,
+            "max_drawdown": -0.05,
+            "calmar": 2.0,
+            "hit_rate": 0.55,
+            "avg_turnover": 0.01,
+            "ann_cost_drag": 0.001,
+            "optimizer_success_rate": 0.95,
+            "fallback_rate": 0.0,
+        }
+
+    stress = {
+        "base": {"metrics": metrics(0.101)},
+        "x2": {"metrics": metrics(0.062)},
+        "x5": {"metrics": metrics(0.030)},
+    }
+
+    verdict, warnings = evaluate_policy(stress, build_thresholds(0.10))
+    controls = build_execution_controls(verdict, warnings)
+
+    assert verdict == C_FAIL
+    assert "target_return_shortfall_x2" in warnings
+    assert controls["promotion_status"] == PROMOTION_BLOCKED_TARGET_RETURN
+    assert PROMOTION_BLOCKED_TARGET_RETURN in controls["promotion_blockers"]
     assert controls["broker_execution_allowed"] is False
     assert controls["live_trading_allowed"] is False

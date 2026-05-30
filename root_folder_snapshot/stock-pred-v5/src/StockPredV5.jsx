@@ -527,6 +527,10 @@ export default function StockPredV5() {
   // Executive layout — auto-fetched recommendation snap
   const [execSnap, setExecSnap] = useState(null);
   const [execSnapLoading, setExecSnapLoading] = useState(false);
+  const [execSnapError, setExecSnapError] = useState("");
+  const [watchlistNotelmByTicker, setWatchlistNotelmByTicker] = useState({});
+  const [watchlistNotelmLoading, setWatchlistNotelmLoading] = useState(false);
+  const [watchlistNotelmError, setWatchlistNotelmError] = useState("");
   const [paperStatus, setPaperStatus] = useState(null);
   const [paperStatusError, setPaperStatusError] = useState("");
   const [paperStatusLoading, setPaperStatusLoading] = useState(false);
@@ -629,13 +633,15 @@ export default function StockPredV5() {
     if (!EXEC_LAYOUT || !selected) return;
     let cancelled = false;
     setExecSnapLoading(true);
+    setExecSnapError("");
     const mkt = selected.endsWith(".KS") || selected.endsWith(".KQ") ? "KRX" : "US";
     const params = new URLSearchParams({
       universe: selected,
       market: mkt,
       top: "1",
-      period: "1y",
-      data_provider: mkt === "KRX" ? "pykrx" : "yfinance",
+      period: mkt === "KRX" ? (recApiDefaults.period || "5y") : (recApiDefaults.period || "3y"),
+      data_provider: mkt === "KRX" ? (recApiDefaults.data_provider || "pykrx") : (recApiDefaults.data_provider || "yfinance"),
+      model_kind: recApiDefaults.model_kind || "auto",
       output_dir: `reports/exec_rec_${mkt.toLowerCase()}`,
     });
     fetch(`${API_BASE}/api/recommend?${params}`)
@@ -645,10 +651,43 @@ export default function StockPredV5() {
         const result = data?.results?.[0] ?? null;
         setExecSnap(result);
       })
-      .catch(() => { if (!cancelled) setExecSnap(null); })
+      .catch((error) => {
+        if (!cancelled) {
+          setExecSnap(null);
+          setExecSnapError(error?.message || "executive recommendation fetch failed");
+        }
+      })
       .finally(() => { if (!cancelled) setExecSnapLoading(false); });
     return () => { cancelled = true; };
-  }, [selected, EXEC_LAYOUT]);
+  }, [selected, EXEC_LAYOUT, recApiDefaults]);
+
+  /* Executive layout — lightweight per-symbol Notelm mapping for Watchlist rows */
+  useEffect(() => {
+    if (!EXEC_LAYOUT || !recUniverse) return;
+    let cancelled = false;
+    setWatchlistNotelmLoading(true);
+    setWatchlistNotelmError("");
+    const params = new URLSearchParams({ universe: recUniverse, market });
+    fetch(`${API_BASE}/api/watchlist-notelm?${params}`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return;
+        const rows = Array.isArray(data?.results) ? data.results : [];
+        const byTicker = {};
+        rows.forEach((row) => {
+          if (row?.ticker) byTicker[String(row.ticker).toUpperCase()] = row;
+        });
+        setWatchlistNotelmByTicker(byTicker);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setWatchlistNotelmByTicker({});
+          setWatchlistNotelmError(error?.message || "watchlist Notelm fetch failed");
+        }
+      })
+      .finally(() => { if (!cancelled) setWatchlistNotelmLoading(false); });
+    return () => { cancelled = true; };
+  }, [EXEC_LAYOUT, market, recUniverse]);
 
   /* font + clock */
   useEffect(() => {
@@ -1109,55 +1148,111 @@ ${backtest ? `## Backtest (\\$10,000 initial)
 
   // ── Executive Decision Dashboard v2.1 ───────────────────────────────
   if (EXEC_LAYOUT) {
-    const execSymbols = symbols.map(s => ({
-      symbol: s.symbol, name: s.name || s.symbol,
-      price: cache[s.symbol]?.data?.slice(-1)[0]?.close,
-      change: null, changePct: null,
-    }));
+    const rawSnap = execSnap;
+    const selectedTicker = String(selected || "").toUpperCase();
+    const snapTicker = String(rawSnap?.ticker || rawSnap?.symbol || "").toUpperCase();
+    const snapMatchesSelected = Boolean(rawSnap && selectedTicker && snapTicker === selectedTicker);
+    const snap = snapMatchesSelected ? rawSnap : null;
+    const aiPanelLoading = execSnapLoading || Boolean(rawSnap && !snapMatchesSelected);
+    const recFromVerdict = (verdict) => {
+      if (!verdict) return null;
+      if (String(verdict).includes("RED")) return "SELL";
+      if (String(verdict).includes("AMBER")) return "HOLD";
+      return "BUY";
+    };
+    const execSymbols = symbols.map(s => {
+      const series = cache[s.symbol]?.data || [];
+      const lastRow = series.slice(-1)[0];
+      const prevRow = series.slice(-2)[0];
+      const ch = lastRow && prevRow ? lastRow.close - prevRow.close : null;
+      const rowSnap = s.symbol===selected ? snap : null;
+      const rowNotelm = watchlistNotelmByTicker[String(s.symbol).toUpperCase()];
+      const price = lastRow?.close ?? rowNotelm?.price ?? null;
+      const change = ch ?? rowNotelm?.change ?? null;
+      const changePct = prevRow?.close ? ch / prevRow.close * 100 : rowNotelm?.change_pct ?? null;
+      const rowRec = recFromVerdict(rowSnap?.verdict || rowSnap?.dashboard_status);
+      const rowConfidence = rowSnap?.notebooklm_confidence ?? rowNotelm?.confidence ?? rowSnap?.probability ?? rowSnap?.direction_prob ?? null;
+      return {
+        symbol: s.symbol,
+        name: s.name || s.symbol,
+        price,
+        change,
+        changePct,
+        priceAsOf: lastRow?.date || rowNotelm?.price_as_of || null,
+        priceProvider: cache[s.symbol]?.source || rowNotelm?.price_provider || rowNotelm?.price_source || null,
+        rec: rowRec || rowNotelm?.rec || null,
+        confidence: rowConfidence,
+        notebookAnalysis: rowSnap?.notebook_analysis || rowNotelm?.notebook_analysis || null,
+        newsCount: Array.isArray(rowSnap?.news_headlines)
+          ? rowSnap.news_headlines.length
+          : Array.isArray(rowNotelm?.news_headlines) ? rowNotelm.news_headlines.length : 0,
+      };
+    });
     // execSnap is auto-fetched via useEffect above; null until first load
-    const snap = execSnap;
-    const last = cache[selected]?.data?.slice(-1)[0];
-    const prev = cache[selected]?.data?.slice(-2)[0];
+    const currentSeries = cache[selected]?.data || [];
+    const last = currentSeries.slice(-1)[0];
+    const prev = currentSeries.slice(-2)[0];
     const chg = last && prev ? last.close - prev.close : null;
     const chgPct = prev && prev.close ? chg / prev.close * 100 : null;
     const scenario = snap?.scenario_outlook ?? null;
-    const headlines = snap?.notebook_analysis
-      ? (snap?.notebooklm_source_count ? [{ title: snap.notebook_analysis.summary || "NotebookLM analysis loaded", source: "NotebookLM", published_at: snap?.notebooklm_as_of }] : [])
-      : [];
+    const headlines = Array.isArray(snap?.news_headlines) && snap.news_headlines.length
+      ? snap.news_headlines
+      : snap?.notebook_analysis?.summary
+        ? [{ title: snap.notebook_analysis.summary, source: "NotebookLM", published_at: snap?.notebooklm_as_of || snap?.generated_at_utc }]
+        : [];
+    const dataAsOf = last?.date || last?.timestamp || snap?.notebooklm_as_of || snap?.generated_at_utc || "unavailable";
+    const sourceLabel = currentSeries.length ? (cache[selected]?.source || "API") : "unavailable";
 
     return (
-      <div style={{minHeight:"100vh",padding:22,background:"#020916",color:"#d4e1ec",fontFamily:`"Inter","JetBrains Mono",sans-serif`,boxSizing:"border-box"}}>
+      <div style={{minHeight:"100vh",padding:8,background:"radial-gradient(circle at 18% -10%, rgba(113,50,245,0.18), transparent 28%), linear-gradient(180deg,#05090d,#030609)",color:"#f4f7fb",fontFamily:`"IBM Plex Sans","Inter","Segoe UI",sans-serif`,boxSizing:"border-box"}}>
         <HeaderBar market={market} onMarketChange={setMarket} ticker={selected} onTickerChange={setSelected} symbols={execSymbols} accent={accent}/>
         {/* Loading banner */}
         {execSnapLoading && (
-          <div style={{padding:"6px 12px",marginBottom:10,background:"rgba(32,214,210,0.07)",border:"1px solid rgba(32,214,210,0.2)",borderRadius:4,fontSize:10,color:"#20d6d2",letterSpacing:"0.05em"}}>
-            ⟳ Loading AI analysis for {selected}…
+          <div style={{padding:"6px 12px",marginBottom:10,background:"rgba(113,50,245,0.11)",border:"1px solid rgba(113,50,245,0.35)",borderRadius:6,fontSize:10,color:"#b995ff",letterSpacing:"0.05em"}}>
+            Loading AI analysis for {selectedTicker || "selected ticker"}...
+          </div>
+        )}
+        {execSnapError && (
+          <div style={{padding:"6px 12px",marginBottom:10,background:"rgba(246,76,76,0.11)",border:"1px solid rgba(246,76,76,0.35)",borderRadius:6,fontSize:10,color:"#ff7b7b",letterSpacing:"0.05em"}}>
+            {execSnapError}
+          </div>
+        )}
+        {watchlistNotelmLoading && (
+          <div style={{padding:"6px 12px",marginBottom:10,background:"rgba(113,50,245,0.08)",border:"1px solid rgba(113,50,245,0.24)",borderRadius:6,fontSize:10,color:"#b995ff",letterSpacing:"0.05em"}}>
+            Loading Notelm fallback analysis for watchlist...
+          </div>
+        )}
+        {watchlistNotelmError && (
+          <div style={{padding:"6px 12px",marginBottom:10,background:"rgba(246,76,76,0.11)",border:"1px solid rgba(246,76,76,0.35)",borderRadius:6,fontSize:10,color:"#ff7b7b",letterSpacing:"0.05em"}}>
+            {watchlistNotelmError}
           </div>
         )}
         {/* Top KPI row */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 0.95fr 1.45fr",gap:16,marginBottom:14}}>
-          <CurrentPriceCard price={last?.close} change={chg} changePct={chgPct} volume={last?.volume} currency={currency}/>
+        <div style={{display:"grid",gridTemplateColumns:"1.05fr 0.97fr 0.98fr 1.1fr",gap:8,marginBottom:8}}>
+          <CurrentPriceCard price={last?.close} change={chg} changePct={chgPct} volume={last?.volume} currency={currency} ohlcvRecords={currentSeries} asOf={dataAsOf}/>
           <RecommendationKpi verdict={snap?.verdict} advisorScore={snap?.advisor_score}/>
-          <ConfidenceKpi confidence={snap?.notebooklm_confidence ?? snap?.probability}/>
-          <RiskRewardKpi riskReward={snap?.risk_reward}/>
+          <ConfidenceKpi confidence={snap?.notebooklm_confidence ?? snap?.probability} loading={aiPanelLoading}/>
+          <RiskRewardKpi riskReward={snap?.risk_reward} loading={aiPanelLoading}/>
         </div>
         {/* Main decision grid */}
-        <div style={{display:"grid",gridTemplateColumns:"0.95fr 1.9fr 2.85fr",gap:14,marginBottom:14,minHeight:448}}>
-          <MarketSnapshotPanel result={snap}/>
-          <div style={{display:"grid",gridTemplateRows:"1fr 160px",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:"0.9fr 1.14fr 1.52fr",gap:8,marginBottom:8,minHeight:410}}>
+          <MarketSnapshotPanel result={snap} ohlcvRecords={currentSeries} loading={aiPanelLoading}/>
+          <div style={{display:"grid",gridTemplateRows:"270px 150px",gap:8}}>
             <CompactPriceChart ohlcvRecords={cache[selected]?.data||[]} currency={currency}/>
             <ModelScoresPanel modelEvidence={modelEvidenceCache[modelEvidenceCacheKey]}/>
           </div>
-          <AiDecisionPanel result={snap}/>
+          <AiDecisionPanel result={snap} headlines={headlines} loading={aiPanelLoading} ticker={selected}/>
         </div>
         {/* Bottom insight grid */}
-        <div style={{display:"grid",gridTemplateColumns:"1.35fr 1.45fr 2.2fr",gap:14,minHeight:220}}>
+        <div style={{display:"grid",gridTemplateColumns:"0.9fr 1.14fr 1.52fr",gap:8,minHeight:230}}>
           <WatchlistPanel symbols={execSymbols} selected={selected} onSelect={setSelected}/>
           <NewsTimelinePanel headlines={headlines}/>
           <ScenarioOutlookPanel scenario={scenario}/>
         </div>
-        <div style={{marginTop:10,fontSize:9,color:"#536476",textAlign:"center"}}>
-          dashboard_snapshot.v1 · screening_output_only · Report-only · Manual review required · No broker execution
+        <div style={{marginTop:12,height:48,border:"1px solid rgba(104,107,130,0.28)",borderRadius:10,background:"rgba(10,18,24,0.96)",display:"grid",gridTemplateColumns:"1fr 1.5fr 1.25fr",alignItems:"center",padding:"0 14px",fontSize:12,color:"#7e8896"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{width:24,height:24,borderRadius:8,background:"#7132f5",display:"grid",placeItems:"center",color:"#071018",fontWeight:900}}>m</span><b style={{color:"#b6bfca"}}>STOCKPRED</b> v2.1</div>
+          <div style={{textAlign:"center"}}>dashboard_snapshot.v1 · screening_output_only · Report-only · No broker execution.</div>
+          <div style={{textAlign:"right"}}>Data as of {dataAsOf}&nbsp;&nbsp;&nbsp; Source: {sourceLabel}</div>
         </div>
       </div>
     );

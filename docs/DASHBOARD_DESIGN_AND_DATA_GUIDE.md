@@ -26,6 +26,50 @@
 
 ---
 
+## 구현 기록 링크
+
+Kraken dark fintech 목업 적용 구현 기록은 별도 문서에 보존한다.
+
+- 구현 기록: [`KRAKEN_DASHBOARD_REDESIGN_IMPLEMENTATION_20260530.md`](KRAKEN_DASHBOARD_REDESIGN_IMPLEMENTATION_20260530.md)
+- actual-data 계획: [`../plan_20260530_actual_dashboard_data.md`](../plan_20260530_actual_dashboard_data.md)
+- 최신 검증 캡처: [`../artifacts/dashboard-redesign/stockpred-actual-data-dashboard-20260530.png`](../artifacts/dashboard-redesign/stockpred-actual-data-dashboard-20260530.png)
+- 최초 목업 검증 캡처: [`../artifacts/dashboard-redesign/stockpred-kraken-dashboard-20260530.png`](../artifacts/dashboard-redesign/stockpred-kraken-dashboard-20260530.png)
+
+최신 backend field pass:
+
+- `fundamentals`, `news_headlines`, `scenario_outlook`는 backend snapshot 결과에서 온다.
+- NotebookLM 서버가 없으면 `news_headlines`는 yfinance news로 보강하고, `notebook_analysis`는 Notelm rule-based fallback으로 채운다.
+- Notelm fallback은 `iran-war-notelm`의 Phase 2 원칙과 동일하게 NotebookLM query 실패 시 keyword score 기반 분석을 생성한다.
+- Executive 자동 추천 요청은 `dashboard_config.json`의 recommendation 기본값을 따른다.
+
+### 2026-05-30 세션 전체 구현 매트릭스
+
+| 요청 | 반영 위치 | 현재 상태 |
+|---|---|---|
+| 목업 이미지와 동일한 Kraken dark fintech dashboard | `root_folder_snapshot/stock-pred-v5/src/components/*`, `StockPredV5.jsx` | 구현 및 build 검증 |
+| 구현 기록 문서화와 링크 추가 | `docs/KRAKEN_DASHBOARD_REDESIGN_IMPLEMENTATION_20260530.md`, `README.md`, 이 가이드 | 반영 |
+| backend snapshot의 `fundamentals/news/scenario` 실제 데이터화 | `src/stock_rtx4060/dashboard_bridge.py`, `recommendation_engine.py` | additive field pass |
+| 추천 오류 행의 표시 데이터 실제 데이터화 | `src/stock_rtx4060/recommendation_engine.py` | `RED_DATA_OR_MODEL_ERROR`에서도 latest price/fundamentals/news/scenario overlay |
+| NotebookLM 서버 down 시 Notelm fallback | `src/stock_rtx4060/advisors/notebooklm_news.py` | `analysis_source=notelm_fallback` |
+| Watchlist 전체 종목별 Notelm fallback 매핑 | `api_server.py`, `StockPredV5.jsx`, `WatchlistPanel.jsx` | `/api/watchlist-notelm` |
+| Watchlist 전체 종목 가격 실제 데이터화 | `api_server.py`, `StockPredV5.jsx`, `WatchlistPanel.jsx` | `/api/watchlist-notelm` OHLCV latest fields |
+| 첫 Watchlist 로딩 개선용 파일 캐시 | `reports/notelm_fallback_cache/<MARKET>/<TICKER>.json` | `LOCAL_FALLBACK` → `LOCAL_CACHE_HIT` |
+| root docs 일괄 갱신 설정 | `.root-docs-batch-update.toml` | repo-local target mapping 생성 |
+
+```mermaid
+flowchart LR
+    Request[Session requests] --> UI[Kraken dashboard UI]
+    Request --> Data[Actual backend data]
+    Request --> NLM[NotebookLM or Notelm fallback]
+    NLM --> WL[Watchlist per-symbol analysis]
+    WL --> Cache[File cache]
+    UI --> Docs[Root docs]
+    Data --> Docs
+    Cache --> Docs
+```
+
+---
+
 ## 1. 레이아웃 변경 개요
 
 ### 기존 (Classic Layout)
@@ -652,6 +696,9 @@ curl "http://127.0.0.1:8088/api/stock-news/notebook-analysis?symbol=AAPL&market=
 NOTEBOOKLM_NEWS_MODE=cache          # cache|on|off
 NOTEBOOKLM_NEWS_API_BASE=http://127.0.0.1:8088
 NOTEBOOKLM_NEWS_TIMEOUT_SEC=3
+NOTEBOOKLM_NEWS_LOCAL_FALLBACK=true # 8088 down -> notelm_fallback analysis
+NOTEBOOKLM_NEWS_LOCAL_CACHE_DIR=reports/notelm_fallback_cache
+NOTEBOOKLM_NEWS_LOCAL_FALLBACK_TTL_SEC=900
 ADVISOR_RUN=true
 ADVISOR_BLEND_WEIGHT=0.10
 ```
@@ -705,6 +752,39 @@ data["as_of"] = datetime.now(timezone.utc).isoformat()
 cache.write_text(json.dumps(data, indent=2), encoding="utf-8")
 ```
 
+### 8.3-A Notelm fallback 파일 캐시
+
+NotebookLM API 서버가 꺼져 있거나 `:8088` 호출이 실패하면 `advisors/notebooklm_news.py`는 Notelm-style local fallback 분석을 만든다.
+이 fallback 결과는 첫 생성 후 파일 캐시에 저장되며, Watchlist 재요청은 TTL 안에서 파일 캐시를 먼저 읽는다.
+
+```mermaid
+flowchart TD
+    Req[/api/watchlist-notelm/] --> Adapter[notebooklm_news.py]
+    Adapter --> TryNLM{NotebookLM API available?}
+    TryNLM -->|yes| NLM[notebook_stock_analysis.v1]
+    TryNLM -->|no| ReadCache{reports/notelm_fallback_cache hit?}
+    ReadCache -->|yes| Hit[LOCAL_CACHE_HIT]
+    ReadCache -->|no| Build[Build Notelm local fallback from news]
+    Build --> Write[Atomic write MARKET/TICKER.json]
+    Write --> Fallback[LOCAL_FALLBACK]
+    NLM --> Out[notebook_analysis]
+    Hit --> Out
+    Fallback --> Out
+```
+
+| 항목 | 계약 |
+|---|---|
+| 저장 경로 | `reports/notelm_fallback_cache/<MARKET>/<TICKER>.json` |
+| 기본 TTL | `900`초 |
+| 경로 환경변수 | `NOTEBOOKLM_NEWS_LOCAL_CACHE_DIR` |
+| TTL 환경변수 | `NOTEBOOKLM_NEWS_LOCAL_FALLBACK_TTL_SEC` |
+| cold 상태값 | `LOCAL_FALLBACK` |
+| warm 상태값 | `LOCAL_CACHE_HIT` |
+| Watchlist 검증 | 9개 종목 cold `24.75s` → warm `6.41s` |
+
+캐시 파일은 `symbol`, `market`, `schema_version`, `cache.generated_at`을 확인한 뒤 사용한다.
+만료되었거나 스키마가 맞지 않으면 파일을 무시하고 fallback 분석을 다시 생성한다.
+
 ### 8.4 데이터가 dashboard에 표시되는 경로
 
 ```
@@ -732,6 +812,33 @@ AiDecisionPanel result={execSnap}
         → bearish_factors 표시
         → sentiment/sentiment_score 표시
 ```
+
+### 8.5 Watchlist 전체 종목 Notelm 경로
+
+```
+StockPredV5 recUniverse
+    ↓
+GET /api/watchlist-notelm?universe=AAPL,MSFT,...&market=US
+    ↓
+api_server.api_watchlist_notelm()
+    ↓
+ThreadPoolExecutor(max_workers<=6)
+    ↓
+enrich_context_with_notebooklm(symbol, {"market": market})
+    ↓
+NotebookLM API 성공: notebooklm analysis
+NotebookLM API 실패: Notelm fallback or LOCAL_CACHE_HIT
+    ↓
+WatchlistPanel rows
+    → AI Rec
+    → Confidence
+    → title: analysis_source + news count
+```
+
+`/api/watchlist-notelm`은 full recommendation engine을 종목 수만큼 실행하지 않는다.
+대시보드 Watchlist 표시에 필요한 뉴스 분석 payload만 반환한다.
+가격과 등락도 같은 endpoint에서 `load_ohlcv_with_provider(..., synthetic=False)`로 가져온 최신 OHLCV에서 계산한다.
+따라서 non-selected Watchlist 종목도 프론트 차트 캐시가 없다는 이유로 가격이 `—`로 남지 않는다.
 
 ---
 
@@ -836,6 +943,9 @@ def _build_scenario_fallback(result: dict) -> dict:
 | `NOTEBOOKLM_NEWS_MODE` | `off` | `cache\|on\|1\|true\|off` |
 | `NOTEBOOKLM_NEWS_API_BASE` | `http://127.0.0.1:8088` | iran-war-notelm 주소 |
 | `NOTEBOOKLM_NEWS_TIMEOUT_SEC` | `3.0` | HTTP 타임아웃 |
+| `NOTEBOOKLM_NEWS_LOCAL_FALLBACK` | `true` | NotebookLM 실패 시 Notelm fallback 생성 |
+| `NOTEBOOKLM_NEWS_LOCAL_CACHE_DIR` | `reports/notelm_fallback_cache` | Notelm fallback 파일 캐시 경로 |
+| `NOTEBOOKLM_NEWS_LOCAL_FALLBACK_TTL_SEC` | `900` | 파일 캐시 TTL |
 | `ADVISOR_RUN` | `true` (`.env`) | LLM Advisor 자동 실행 |
 | `ADVISOR_BLEND_WEIGHT` | `0.10` | score 블렌딩 가중치 |
 | `ADVISOR_WEIGHTS_MODE` | `mab` | `mab`=Thompson Sampling, `fixed`=고정 |
@@ -1025,3 +1135,100 @@ const EXEC_LAYOUT = import.meta.env.VITE_DASHBOARD_LAYOUT === "executive";
 ---
 
 *작성: 2026-05-30 | 브랜치: `claude/upgrade-investment-system-2Mc7x` | 버전: v2.1.0*
+
+
+## Codex Documentation Update — 2026-05-30T21:17:53.115243+00:00
+
+**Update policy:** existing content above this section is preserved. This section was appended after scanning code, documentation, config, and agent profile files.
+
+**Purpose:** This section maps the detected repository layout and documentation surface.
+
+### Evidence inventory
+
+**Source/code files sampled:**
+- `.cursor\skills\rd-agent-cursor-mine\references\factor_template.py`
+- `.cursor\skills\rd-agent-cursor-mine\scripts\cursor_mine_runner.py`
+- `.cursor\skills\rd-agent-cursor-mine\scripts\run_cursor_mine.ps1`
+- `.cursor\skills\rd-agent-cursor-mine\scripts\run_weekly.ps1`
+- `api_server.py`
+- `dashboard\stock_pred_v5.jsx`
+- `docs\purged_kfold_embargo.py`
+- `docs\test_purged_kfold_embargo.py`
+- `flows\__init__.py`
+- `flows\daily_krx.py`
+- `flows\daily_us.py`
+- `flows\research_weekly.py`
+
+**Documentation files sampled:**
+- `.codex\design_upgrade_latest_artifact.txt`
+- `.codex\goals\dashboard-report-bridge.goal.md`
+- `.codex\goals\mcp-openbb-audit-phase1.goal.md`
+- `.codex\root-docs-strict\docs\001-README.md`
+- `.codex\root-docs-strict\docs\002-SYSTEM_ARCHITECTURE.md`
+- `.codex\root-docs-strict\docs\003-LAYOUT.md`
+- `.codex\root-docs-strict\docs\004-CHANGELOG.md`
+- `.codex\root-docs-strict\docs\005-plan.md`
+- `.codex\root-docs-strict\docs\006-codex-default-doc-agent.md`
+- `.continue\checks\01-financial-safety-boundary.md`
+- `.continue\checks\02-backtest-integrity.md`
+- `.continue\checks\03-recommendation-contract.md`
+
+**Config/build files sampled:**
+- `.claude\launch.json`
+- `.codex\agents\design-patcher.toml`
+- `.codex\agents\reference-hunter.toml`
+- `.codex\agents\visual-verifier.toml`
+- `.codex\config.toml`
+- `.codex\root-docs-current-verify.json`
+- `.codex\root-docs-dry-run-latest.json`
+- `.codex\root-docs-dry-run.json`
+- `.codex\root-docs-notelm-cache-update.json`
+- `.codex\root-docs-scan-20260531-loading.json`
+- `.codex\root-docs-scan-current.json`
+- `.codex\root-docs-scan-latest.json`
+
+**Agent profile files sampled:**
+- `.codex\agents\design-patcher.toml` (`design_patcher`)
+- `.codex\agents\reference-hunter.toml` (`reference_hunter`)
+- `.codex\agents\visual-verifier.toml` (`visual_verifier`)
+- `docs\agents\codex-default-doc-agent.md` (`codex-default-doc-agent`)
+
+### Mermaid graph
+
+```mermaid
+flowchart TD
+  ROOT[Repository root] --> SRC[src / app code]
+  ROOT --> DOCS[docs / markdown]
+  ROOT --> AGENTS[agent profiles]
+  ROOT --> CONFIG[config/build files]
+```
+
+### Verification notes
+
+- Append-only update generated by `root-docs-batch-update`.
+- Code/config/doc/agent inventory counts: code=2459, docs=606, config=317, agent_profiles=4.
+- Follow-up verification should confirm that newly added text matches actual implementation paths listed above.
+
+## Dashboard Runtime Note - 2026-05-31 Ticker Loading and Placeholder Policy
+
+When a user changes the selected ticker in Executive Dashboard v2.1, the UI must not show the previous ticker's LLM or OpenAI analysis while the new `/api/recommend` request is pending.
+
+The current implementation follows this policy:
+
+- Show `Loading AI analysis for <ticker>` at the dashboard level while the selected ticker request is pending.
+- Show the AI Decision Panel `PENDING` loading state until the new snapshot ticker matches the selected ticker.
+- Show `Loading` for transient KPI and Market Snapshot values.
+- Show `No data` only when loading has finished and the current snapshot lacks the value.
+- Do not use a single `—` glyph as a missing-data placeholder in the visible executive dashboard.
+
+```mermaid
+stateDiagram-v2
+  [*] --> SelectedTicker
+  SelectedTicker --> FetchingSnapshot
+  FetchingSnapshot --> LoadingUI
+  LoadingUI --> CurrentSnapshot: ticker matches
+  CurrentSnapshot --> NoData: value absent
+  CurrentSnapshot --> RenderValue: value present
+```
+
+Verified browser behavior: AAPL, MSFT, NVDA, TSLA, AMZN, GOOGL, META, SPY, and QQQ were selected in the running dashboard. The visible `—` count stayed at `0` during loading, and it stayed at `0` after QQQ OpenAI analysis completed.

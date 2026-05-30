@@ -85,6 +85,40 @@ def test_krx_final_provider_marks_authoritative_eod_final(monkeypatch):
     assert result.metadata["final_bar_lock"]["readiness_status"] == "PASS"
 
 
+def test_krx_final_missing_bar_blocks_inference(monkeypatch):
+    """When KRX final provider returns empty frame, inference must be blocked."""
+    calls = {}
+
+    def get_market_ohlcv_by_date(start_date, end_date, symbol, freq="d", adjusted=True):
+        calls.update(
+            {
+                "start_date": start_date,
+                "end_date": end_date,
+                "symbol": symbol,
+                "freq": freq,
+                "adjusted": adjusted,
+            }
+        )
+        return pd.DataFrame()  # empty = no final bar available
+
+    fake_stock = SimpleNamespace(get_market_ohlcv_by_date=get_market_ohlcv_by_date)
+    monkeypatch.setitem(sys.modules, "pykrx", SimpleNamespace(stock=fake_stock))
+    monkeypatch.setattr(data_providers, "_cache", SimpleNamespace(get=lambda *args: None, set=lambda *args: None))
+
+    result = load_ohlcv_with_provider(
+        "005930.KS",
+        "5y",
+        data_provider="krx_final",
+        after_market_close=True,
+        data_lake_first=False,
+    )
+
+    assert result.metadata["eod_confirmed"] is False
+    assert result.metadata["source_evidence_lock"] is False
+    assert result.metadata["final_bar_lock"]["inference_allowed"] is False
+    assert result.metadata["final_bar_lock"]["readiness_status"] == "AMBER_DATA_LAG_EVENT_CONFLICT"
+
+
 def test_broker_final_provider_marks_authoritative_eod_final_from_configured_export(tmp_path, monkeypatch):
     export_path = tmp_path / "005930_broker_final.csv"
     export_path.write_text(

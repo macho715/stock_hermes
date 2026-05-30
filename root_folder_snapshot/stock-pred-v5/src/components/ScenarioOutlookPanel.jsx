@@ -4,30 +4,35 @@ function ScenarioCard({label,data,color}){
   if(!data) return null;
   const prob = data.probability!=null?Math.round(data.probability*100):null;
   return (
-    <div style={{background:"rgba(255,255,255,0.025)",border:`1px solid ${color}33`,borderRadius:6,padding:"8px 10px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-        <span style={{fontSize:10,fontWeight:800,color,letterSpacing:"0.05em",textTransform:"uppercase"}}>{label}</span>
-        {prob!=null&&<span style={{fontSize:9,color:THEME.textMuted}}>{prob}%</span>}
+    <div style={{background:`linear-gradient(180deg,${color}18,rgba(255,255,255,0.015))`,border:`1px solid ${color}88`,borderRadius:10,padding:"14px 18px",minHeight:132}}>
+      <div style={{textAlign:"center",marginBottom:8}}>
+        <div style={{fontSize:12,fontWeight:900,color,letterSpacing:"0.04em",textTransform:"uppercase"}}>{label} Case</div>
+        <div style={{fontSize:24,fontWeight:900,color:THEME.text}}>{data.range||"—"}</div>
+        <div style={{fontSize:14,color,fontWeight:800}}>{data.return||"—"}</div>
+        {prob!=null&&<div style={{fontSize:12,color:THEME.textDim,marginTop:5}}>Probability <span style={{color,fontWeight:900}}>{prob}%</span></div>}
       </div>
-      <div style={{fontSize:11,fontWeight:700,color:THEME.text}}>{data.range||"—"}</div>
-      <div style={{fontSize:10,color,fontWeight:600}}>{data.return||"—"}</div>
-      {prob!=null&&<div style={{marginTop:6,height:3,background:"rgba(255,255,255,0.07)",borderRadius:2}}>
-        <div style={{height:"100%",width:`${prob}%`,background:color,borderRadius:2}}/>
-      </div>}
+      {(data.drivers||[]).slice(0,3).map((d,i)=><div key={i} style={{fontSize:11,color:THEME.textDim,lineHeight:1.5}}>• {d}</div>)}
+      {(!data.drivers||data.drivers.length===0)&&<div style={{fontSize:11,color:THEME.textMuted,lineHeight:1.5}}>No scenario drivers supplied.</div>}
     </div>
   );
 }
 export default function ScenarioOutlookPanel({ scenario }) {
-  if(!scenario) return <DashboardCard title="Scenario Outlook"><div style={{color:THEME.textMuted,fontSize:10,textAlign:"center",padding:8}}>Scenario data unavailable</div></DashboardCard>;
+  const data = scenario || null;
   return (
-    <DashboardCard title="Scenario Outlook">
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-        <ScenarioCard label="Bull" data={scenario.bull} color={THEME.green}/>
-        <ScenarioCard label="Base" data={scenario.base} color={THEME.amber}/>
-        <ScenarioCard label="Bear" data={scenario.bear} color={THEME.red}/>
-      </div>
-      <div style={{fontSize:8,color:THEME.textMuted,marginTop:6,textAlign:"center"}}>
-        Report-only · Manual review required · No broker execution
+    <DashboardCard title="Scenario Outlook" subtitle="Next 4 Weeks" style={{height:"100%"}}>
+      {!data?(
+        <div style={{fontSize:11,color:THEME.textMuted,padding:"58px 0",textAlign:"center",border:`1px dashed ${THEME.border}`,borderRadius:6}}>
+          Scenario data unavailable in the current recommendation snapshot.
+        </div>
+      ):(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+          <ScenarioCard label="Bull" data={data.bull} color={THEME.greenBright}/>
+          <ScenarioCard label="Base" data={data.base} color={THEME.textDim}/>
+          <ScenarioCard label="Bear" data={data.bear} color={THEME.red}/>
+        </div>
+      )}
+      <div style={{fontSize:10,color:THEME.textMuted,marginTop:8}}>
+        All scenarios are model estimates and for reference only.
       </div>
     </DashboardCard>
   );

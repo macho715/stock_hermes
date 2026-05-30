@@ -142,6 +142,36 @@ def test_build_dashboard_snapshot_exports_sizing_fields_additively():
     assert row["sizing_coverage_status"] == "PASS"
 
 
+def test_dashboard_snapshot_passes_actual_data_fields_additively():
+    payload = _recommendation_payload()
+    payload["results"][0]["fundamentals"] = {
+        "market_cap": 123_000_000_000,
+        "pe_ttm": 24.5,
+        "eps_ttm": 6.7,
+        "dividend_yield": 0.012,
+        "sector": "Technology",
+        "industry": "Software",
+        "source": "yfinance.info",
+    }
+    payload["results"][0]["news_headlines"] = [
+        {"title": "Source-backed headline", "source": "NotebookLM", "published_at": "2026-05-30"}
+    ]
+    payload["results"][0]["scenario_outlook"] = {
+        "bull": {"range": "$111.10", "return": "+10.0%", "probability": 0.35, "drivers": ["tp2 plan"]},
+        "base": {"range": "$103.50", "return": "+2.5%", "probability": 0.45, "drivers": ["entry plan"]},
+        "bear": {"range": "$96.96", "return": "-4.0%", "probability": 0.20, "drivers": ["stop plan"]},
+    }
+
+    row = build_dashboard_snapshot(payload)["results"][0]
+
+    assert row["fundamentals"]["source"] == "yfinance.info"
+    assert row["market_cap"] == 123_000_000_000
+    assert row["pe_ttm"] == 24.5
+    assert row["sector"] == "Technology"
+    assert row["news_headlines"][0]["title"] == "Source-backed headline"
+    assert row["scenario_outlook"]["bull"]["drivers"] == ["tp2 plan"]
+
+
 def test_write_dashboard_snapshot_creates_file(tmp_path):
     source = tmp_path / "recommendations_algo_v2_20260503_000000.json"
     output = tmp_path / "dashboard_snapshot.json"

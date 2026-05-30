@@ -375,7 +375,41 @@ def _load_krx_final(
         end_date = pd.Timestamp.now("UTC").strftime("%Y%m%d")
         frame = pykrx_stock.get_market_ohlcv_by_date(start_date, end_date, symbol, freq="d", adjusted=True)
         if frame.empty:
-            raise RuntimeError("empty OHLCV frame from KRX final provider")
+            final_bar_metadata = provider_final_bar_metadata(
+                source="KRX_FINAL",
+                bar_type="EOD_FINAL_UNAVAILABLE",
+                eod_confirmed=False,
+                source_evidence_lock=False,
+                after_market_close=after_market_close,
+            )
+            metadata = {
+                "ticker_type": "KRX",
+                **final_bar_metadata,
+                "source_timestamp": datetime.now(UTC).isoformat(timespec="seconds"),
+            }
+            _write_audit(
+                audit_logger,
+                AuditEvent(
+                    event_type="provider_attempt",
+                    status="FAIL",
+                    command=command,
+                    ticker=ticker,
+                    period=period,
+                    provider_requested=requested,
+                    provider_used="krx_final",
+                    source="KRX_FINAL",
+                    message="empty OHLCV frame from KRX final provider",
+                    error_type="EmptyFrame",
+                    duration_ms=_elapsed_ms(started),
+                ),
+            )
+            return ProviderResult(
+                frame=pd.DataFrame(columns=["Date", "Open", "High", "Low", "Close", "Volume"]),
+                provider_requested=requested,
+                provider_used="krx_final",
+                source="KRX_FINAL",
+                metadata=metadata,
+            )
         normalized = normalize_ohlcv(_normalize_pykrx_columns(frame))
         validation = validate_provider_frame(normalized, provider_used="krx_final", ticker=ticker, period=period)
         final_bar_metadata = provider_final_bar_metadata(

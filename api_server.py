@@ -604,6 +604,120 @@ def api_recommend():
         return jsonify({"error": str(exc), "type": type(exc).__name__}), 500
 
 
+def _watchlist_rec_from_notelm(analysis: dict[str, Any] | None) -> str | None:
+    if not analysis:
+        return None
+    sentiment = str(analysis.get("sentiment") or "").lower()
+    score = analysis.get("sentiment_score")
+    try:
+        numeric_score = float(score)
+    except (TypeError, ValueError):
+        numeric_score = None
+    if sentiment == "bullish" or (numeric_score is not None and numeric_score >= 0.2):
+        return "BUY"
+    if sentiment == "bearish" or (numeric_score is not None and numeric_score <= -0.2):
+        return "SELL"
+    return "HOLD"
+
+
+def _watchlist_price_snapshot(ticker: str, market: str) -> dict[str, Any]:
+    """Return latest real OHLCV-derived price fields for Watchlist display."""
+    data_provider = "pykrx" if market == "KRX" or ticker.endswith((".KS", ".KQ")) else "yfinance"
+    try:
+        provider_result = load_ohlcv_with_provider(
+            ticker,
+            "6mo",
+            synthetic=False,
+            data_provider=data_provider,
+            audit_logger=None,
+            command="watchlist_notelm_price",
+        )
+        records = _frame_to_ohlcv_records(provider_result.frame)
+    except Exception as exc:
+        return {
+            "price": None,
+            "previous_close": None,
+            "change": None,
+            "change_pct": None,
+            "volume": None,
+            "price_as_of": None,
+            "price_provider": None,
+            "price_source": None,
+            "price_error": str(exc),
+        }
+
+    last = records[-1] if records else {}
+    prev = records[-2] if len(records) > 1 else {}
+    close = last.get("close")
+    prev_close = prev.get("close")
+    change = None
+    change_pct = None
+    if close is not None and prev_close not in (None, 0):
+        change = float(close) - float(prev_close)
+        change_pct = change / float(prev_close) * 100.0
+    return {
+        "price": close,
+        "previous_close": prev_close,
+        "change": change,
+        "change_pct": change_pct,
+        "volume": last.get("volume"),
+        "price_as_of": last.get("date"),
+        "price_provider": getattr(provider_result, "provider_used", data_provider),
+        "price_source": getattr(provider_result, "source", None),
+        "price_error": None,
+    }
+
+
+@app.route("/api/watchlist-notelm", methods=["GET"])
+def api_watchlist_notelm():
+    """Return lightweight per-symbol Notelm analysis for Watchlist rows.
+
+    This endpoint intentionally avoids running the full recommendation engine
+    for every ticker. It uses the same NotebookLM/Notelm fallback adapter as
+    the advisor path and remains report-only.
+    """
+    universe = parse_universe(request.args.get("universe"))
+    market = request.args.get("market", "US").upper()
+    if len(universe) > 30:
+        return jsonify({"error": f"universe too large: {len(universe)} tickers (max 30)"}), 400
+    try:
+        from concurrent.futures import ThreadPoolExecutor
+
+        from stock_rtx4060.advisors.notebooklm_news import enrich_context_with_notebooklm
+
+        def _row_for_ticker(ticker: str) -> dict[str, Any]:
+            ctx = enrich_context_with_notebooklm(ticker, {"market": market})
+            analysis = ctx.get("notebook_analysis") if isinstance(ctx.get("notebook_analysis"), dict) else None
+            headlines = ctx.get("headlines") if isinstance(ctx.get("headlines"), list) else []
+            confidence = analysis.get("confidence") if analysis else None
+            price_snapshot = _watchlist_price_snapshot(ticker, market)
+            return {
+                "ticker": ticker,
+                "market": market,
+                **price_snapshot,
+                "rec": _watchlist_rec_from_notelm(analysis),
+                "confidence": confidence,
+                "notebook_analysis": analysis,
+                "news_headlines": headlines,
+                "notebooklm_source_count": ctx.get("notebooklm_count", 0),
+                "notebooklm_enriched": bool(ctx.get("notebooklm_enriched")),
+                "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
+            }
+
+        worker_count = min(6, max(1, len(universe)))
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            rows = list(executor.map(_row_for_ticker, universe))
+        return jsonify({
+            "schema_version": "watchlist_notelm.v1",
+            "mode": "report_only",
+            "market": market,
+            "result_count": len(rows),
+            "results": rows,
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc), "type": type(exc).__name__}), 500
+
+
 @app.route("/api/snapshot", methods=["GET"])
 def api_snapshot():
     """Serve an existing recommendation JSON as dashboard snapshot."""

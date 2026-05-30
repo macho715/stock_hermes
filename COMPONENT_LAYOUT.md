@@ -28,6 +28,7 @@
 | Recommendation card | `stock-pred-v5/src/components/RecommendationCard.jsx` | 개별 추천 후보 카드 렌더링; LLM Advisor 점수 게이지 포함 (Updated: 2026-05-10) |
 | **AI Decision Panel** | `stock-pred-v5/src/components/AiDecisionPanel.jsx` | **LLM Advisor + NotebookLM 뉴스 + Action Plan 통합 패널 (Added 2026-05-30)** |
 | **NotebookLM News** | `stock-pred-v5/src/components/NotebookNewsAnalysis.jsx` | **bullish/bearish factors + sentiment + sources (null-safe) (Added 2026-05-30)** |
+| **Watchlist Notelm cache** | `advisors/notebooklm_news.py` + `reports/notelm_fallback_cache/` | **NotebookLM down 상태에서도 종목별 fallback 분석 파일 캐시 재사용 (Added 2026-05-30)** |
 | **Scenario Panel** | `stock-pred-v5/src/components/ScenarioOutlookPanel.jsx` | **Bull/Base/Bear 시나리오 확률 표시 (Added 2026-05-30)** |
 | Risk badge | `stock-pred-v5/src/components/RiskGateBadge.jsx` | 추천 verdict 시각 표시 |
 | KEVPE badge | `stock-pred-v5/src/components/KevpeBadge.jsx` | KEVPE 이벤트가 있을 때 regime/score 표시 |
@@ -71,6 +72,7 @@ flowchart LR
         Reports[reports/*.md<br/>reports/*.json]
         Advisor[advisors/orchestrator.py<br/>+ThompsonWeights MAB]
         NLMAdapt[advisors/notebooklm_news.py]
+        NotelmCache[(reports/notelm_fallback_cache)]
         MAB[advisors/thompson_weights.py<br/>Beta dist MAB]
     end
 
@@ -106,6 +108,7 @@ flowchart LR
     Advisor --> MAB
     Advisor --> NLMAdapt
     NLMAdapt -->|NOTEBOOKLM_NEWS_MODE=cache| NLMApi
+    NLMAdapt -->|NotebookLM down| NotelmCache
 ```
 
 ## 2-A. Executive Decision Dashboard v2.1 (Added: 2026-05-30)
@@ -160,6 +163,90 @@ Executive 레이아웃도 동일 안전 경계 적용:
 - 브로커 실행 버튼 없음
 - ActionPlanPanel: "Reference only · Manual review required" 라벨
 - ScenarioOutlookPanel: "Report-only · No broker execution" 라벨
+
+## 2-B. Watchlist Notelm fallback file cache (Added: 2026-05-30)
+
+Watchlist는 `/api/watchlist-notelm`에서 종목별 Notelm 분석을 가져온다.
+NotebookLM API `:8088`이 꺼져 있으면 `advisors/notebooklm_news.py`가 yfinance news 기반 rule fallback을 만들고, 같은 결과를 파일 캐시에 저장한다.
+
+```mermaid
+sequenceDiagram
+    participant UI as WatchlistPanel
+    participant API as /api/watchlist-notelm
+    participant Adapter as notebooklm_news.py
+    participant NLM as NotebookLM :8088
+    participant Cache as reports/notelm_fallback_cache
+
+    UI->>API: universe symbols
+    API->>Adapter: enrich_context_with_notebooklm(symbol)
+    Adapter->>NLM: notebook-analysis
+    NLM--xAdapter: unavailable
+    Adapter->>Cache: read MARKET/TICKER.json
+    alt cache hit
+        Cache-->>Adapter: LOCAL_CACHE_HIT
+    else cache miss
+        Adapter->>Adapter: build Notelm local fallback
+        Adapter->>Cache: atomic write LOCAL_FALLBACK
+    end
+    Adapter-->>API: analysis + cache_status
+    API-->>UI: per-symbol rec/confidence/news_count
+```
+
+| 항목 | 값 |
+|---|---|
+| 캐시 경로 | `reports/notelm_fallback_cache/<MARKET>/<TICKER>.json` |
+| 기본 TTL | `900`초 |
+| cold 상태값 | `LOCAL_FALLBACK` |
+| warm 상태값 | `LOCAL_CACHE_HIT` |
+| 환경변수 | `NOTEBOOKLM_NEWS_LOCAL_CACHE_DIR`, `NOTEBOOKLM_NEWS_LOCAL_FALLBACK_TTL_SEC` |
+| 검증 | 9개 US Watchlist 종목 cold `24.75s` → warm `6.41s` |
+
+---
+
+## 2-C. 2026-05-30 session-wide component update
+
+이번 세션의 dashboard 변경은 단일 패널 수정이 아니라 UI, backend snapshot, Notelm fallback, 파일 캐시가 연결된 변경이다.
+
+```mermaid
+flowchart LR
+    subgraph Frontend["stock-pred-v5"]
+        StockPred[StockPredV5.jsx]
+        Watchlist[WatchlistPanel.jsx]
+        Decision[AiDecisionPanel.jsx]
+        News[NewsTimelinePanel.jsx]
+        Scenario[ScenarioOutlookPanel.jsx]
+    end
+
+    subgraph Backend["stock_1901 API"]
+        Recommend[/api/recommend]
+        WatchAPI[/api/watchlist-notelm]
+        Bridge[dashboard_bridge.py]
+        Adapter[notebooklm_news.py]
+    end
+
+    subgraph Storage["Runtime cache"]
+        Cache[(reports/notelm_fallback_cache)]
+    end
+
+    StockPred --> Recommend
+    StockPred --> WatchAPI
+    Recommend --> Bridge
+    WatchAPI --> Adapter
+    Adapter --> Cache
+    Bridge --> Decision
+    Bridge --> News
+    Bridge --> Scenario
+    WatchAPI --> Watchlist
+```
+
+| Component | Session update |
+|---|---|
+| `StockPredV5.jsx` | Executive layout에서 selected ticker 추천 fetch와 Watchlist Notelm fetch를 분리 |
+| `WatchlistPanel.jsx` | 종목별 `AI Rec`, `Confidence`, Notelm source title을 표시 |
+| `api_server.py` | `/api/watchlist-notelm` report-only endpoint 추가 |
+| `dashboard_bridge.py` | fundamentals/news/scenario fields를 snapshot에 additive passthrough |
+| `notebooklm_news.py` | NotebookLM API 실패 시 Notelm local fallback + file cache |
+| `.root-docs-batch-update.toml` | README/COMPONENT_LAYOUT/GUIDE/CHANGELOG/plan을 root-docs target으로 고정 |
 
 ---
 
@@ -1761,3 +1848,100 @@ Latest browser evidence:
 | File | Meaning |
 |---|---|
 | `stock-pred-v5/test-results/dashboard-rec-investment-grade-20260507.png` | REC tab rendered `INVESTMENT GRADE`; `REAL DATA LOAD FAILED` and loading state were not present in the captured state. |
+
+
+## Codex Documentation Update — 2026-05-30T21:17:53.115243+00:00
+
+**Update policy:** existing content above this section is preserved. This section was appended after scanning code, documentation, config, and agent profile files.
+
+**Purpose:** This section reflects detected source, config, and agent components as an architecture inventory.
+
+### Evidence inventory
+
+**Source/code files sampled:**
+- `.cursor\skills\rd-agent-cursor-mine\references\factor_template.py`
+- `.cursor\skills\rd-agent-cursor-mine\scripts\cursor_mine_runner.py`
+- `.cursor\skills\rd-agent-cursor-mine\scripts\run_cursor_mine.ps1`
+- `.cursor\skills\rd-agent-cursor-mine\scripts\run_weekly.ps1`
+- `api_server.py`
+- `dashboard\stock_pred_v5.jsx`
+- `docs\purged_kfold_embargo.py`
+- `docs\test_purged_kfold_embargo.py`
+- `flows\__init__.py`
+- `flows\daily_krx.py`
+- `flows\daily_us.py`
+- `flows\research_weekly.py`
+
+**Documentation files sampled:**
+- `.codex\design_upgrade_latest_artifact.txt`
+- `.codex\goals\dashboard-report-bridge.goal.md`
+- `.codex\goals\mcp-openbb-audit-phase1.goal.md`
+- `.codex\root-docs-strict\docs\001-README.md`
+- `.codex\root-docs-strict\docs\002-SYSTEM_ARCHITECTURE.md`
+- `.codex\root-docs-strict\docs\003-LAYOUT.md`
+- `.codex\root-docs-strict\docs\004-CHANGELOG.md`
+- `.codex\root-docs-strict\docs\005-plan.md`
+- `.codex\root-docs-strict\docs\006-codex-default-doc-agent.md`
+- `.continue\checks\01-financial-safety-boundary.md`
+- `.continue\checks\02-backtest-integrity.md`
+- `.continue\checks\03-recommendation-contract.md`
+
+**Config/build files sampled:**
+- `.claude\launch.json`
+- `.codex\agents\design-patcher.toml`
+- `.codex\agents\reference-hunter.toml`
+- `.codex\agents\visual-verifier.toml`
+- `.codex\config.toml`
+- `.codex\root-docs-current-verify.json`
+- `.codex\root-docs-dry-run-latest.json`
+- `.codex\root-docs-dry-run.json`
+- `.codex\root-docs-notelm-cache-update.json`
+- `.codex\root-docs-scan-20260531-loading.json`
+- `.codex\root-docs-scan-current.json`
+- `.codex\root-docs-scan-latest.json`
+
+**Agent profile files sampled:**
+- `.codex\agents\design-patcher.toml` (`design_patcher`)
+- `.codex\agents\reference-hunter.toml` (`reference_hunter`)
+- `.codex\agents\visual-verifier.toml` (`visual_verifier`)
+- `docs\agents\codex-default-doc-agent.md` (`codex-default-doc-agent`)
+
+### Mermaid graph
+
+```mermaid
+flowchart TB
+  subgraph Repository
+    SRC[Source files] --> CFG[Config/build files]
+    CFG --> DOC[Root documentation]
+    AG[Agent profiles] --> DOC
+  end
+  DOC --> QA[Doc-code alignment verification]
+```
+
+### Verification notes
+
+- Append-only update generated by `root-docs-batch-update`.
+- Code/config/doc/agent inventory counts: code=2459, docs=606, config=317, agent_profiles=4.
+- Follow-up verification should confirm that newly added text matches actual implementation paths listed above.
+
+## Codex Component Layout Note - 2026-05-31 Loading State Cleanup
+
+The executive dashboard now separates selected ticker state from recommendation snapshot readiness.
+
+```mermaid
+flowchart TD
+  StockPredV5[StockPredV5.jsx selected ticker state] --> SnapGate[snapshot ticker match gate]
+  SnapGate --> AiDecisionPanel[AiDecisionPanel loading or current analysis]
+  SnapGate --> ConfidenceKpi[ConfidenceKpi Loading or percent]
+  SnapGate --> RiskRewardKpi[RiskRewardKpi Loading or ratio]
+  SnapGate --> MarketSnapshotPanel[MarketSnapshotPanel actual data or No data]
+  NewsData[news_headlines and notebook_analysis] --> NewsTimelinePanel[NewsTimelinePanel display normalization]
+  NewsData --> NotebookNewsAnalysis[NotebookNewsAnalysis display normalization]
+```
+
+Component behavior summary:
+
+- `StockPredV5.jsx` computes `snapMatchesSelected` and passes `snap=null` plus `loading=true` while a new ticker fetch is pending.
+- `AiDecisionPanel.jsx` prevents stale LLM, OpenAI, Notebook, and Action Plan content from remaining visible during ticker transitions.
+- `ConfidenceKpi.jsx`, `RiskRewardKpi.jsx`, and `MarketSnapshotPanel.jsx` use explicit text states instead of a visual dash placeholder.
+- `NewsTimelinePanel.jsx` and `NotebookNewsAnalysis.jsx` preserve headline content while normalizing the displayed em dash glyph.

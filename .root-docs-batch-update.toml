@@ -1,0 +1,38 @@
+[targets]
+README = "README.md"
+SYSTEM_ARCHITECTURE = "COMPONENT_LAYOUT.md"
+LAYOUT = "docs/DASHBOARD_DESIGN_AND_DATA_GUIDE.md"
+CHANGELOG = "CHANGELOG.md"
+PLAN = "plan.md"
+
+[scan]
+parallelism = 5
+ignore_dirs = [
+  ".codex-inspect",
+  ".git",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".venv",
+  "__pycache__",
+  "artifacts",
+  "mlartifacts",
+  "mlruns",
+  "node_modules",
+  "reports",
+  "root_folder_snapshot/continue-main",
+  "stock_rtx4060_unified"
+]
+
+[agents]
+placeholder_when_missing = false
+update_docs = false
+
+[strict]
+enabled_by_default = false
+missing_tool = "warn"
+markdownlint = true
+vale = false
+link_check = true
+mermaid_render = true
+secret_scan = true
+windows_case_collision = true
