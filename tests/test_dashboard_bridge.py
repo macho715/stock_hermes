@@ -399,3 +399,54 @@ def test_dashboard_candidate_backtest_honesty_key_preserved():
 
     assert "backtest_honesty" in candidate
     assert candidate["backtest_honesty"]["status"] == "PASS"
+
+
+def _minimal_result():
+    return {
+        "ticker": "AAPL", "track": "L", "verdict": "ELIGIBLE_RECOMMENDATION",
+        "recommendation_rank_score": 65.0, "direction_prob": 0.62,
+        "expected_value_pct": 1.5, "screening_output_only": True,
+        "entry": 185.0, "stop": 178.0, "tp1": 192.0, "tp2": 200.0,
+        "risk_reward": 2.5, "validations": [], "reasons": [],
+        "generated_at_utc": "2026-05-30T00:00:00+00:00",
+        "latest_close": 185.0,
+    }
+
+
+def test_normalize_result_has_notebook_analysis_field():
+    """notebook_analysis is passed through from result."""
+    from stock_rtx4060.dashboard_bridge import build_dashboard_snapshot
+    analysis = {"summary": "test", "bullish_factors": ["x"], "bearish_factors": [], "sentiment": "bullish"}
+    result = {**_minimal_result(), "notebook_analysis": analysis}
+    snap = build_dashboard_snapshot({"results": [result]})
+    cand = snap["results"][0]
+    assert cand["notebook_analysis"] == analysis
+
+
+def test_normalize_result_notebook_analysis_defaults_none():
+    """notebook_analysis is None when not in result."""
+    from stock_rtx4060.dashboard_bridge import build_dashboard_snapshot
+    snap = build_dashboard_snapshot({"results": [_minimal_result()]})
+    cand = snap["results"][0]
+    assert cand.get("notebook_analysis") is None
+
+
+def test_scenario_fallback_generated():
+    """scenario_outlook is generated when not provided."""
+    from stock_rtx4060.dashboard_bridge import build_dashboard_snapshot
+    snap = build_dashboard_snapshot({"results": [_minimal_result()]})
+    cand = snap["results"][0]
+    sc = cand.get("scenario_outlook")
+    assert sc is not None
+    assert "bull" in sc and "base" in sc and "bear" in sc
+
+
+def test_scenario_passthrough():
+    """scenario_outlook is passed through when provided."""
+    from stock_rtx4060.dashboard_bridge import build_dashboard_snapshot
+    scenario = {"bull": {"range": "$200", "return": "+10%", "probability": 0.3},
+                "base": {"range": "$190", "return": "+5%", "probability": 0.5},
+                "bear": {"range": "$170", "return": "-10%", "probability": 0.2}}
+    result = {**_minimal_result(), "scenario_outlook": scenario}
+    snap = build_dashboard_snapshot({"results": [result]})
+    assert snap["results"][0]["scenario_outlook"] == scenario

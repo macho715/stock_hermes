@@ -26,6 +26,20 @@ DIST = ROOT / "root_folder_snapshot" / "stock-pred-v5" / "dist"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+# Load .env for NotebookLM / advisor settings (python-dotenv optional)
+_env_file = ROOT / ".env"
+if _env_file.exists():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(_env_file, override=False)
+    except ImportError:
+        import os as _os
+        for _line in _env_file.read_text(encoding="utf-8").splitlines():
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _, _v = _line.partition("=")
+                _os.environ.setdefault(_k.strip(), _v.strip())
+
 from stock_rtx4060.dashboard_bridge import build_dashboard_snapshot
 from stock_rtx4060.data_providers import load_ohlcv_with_provider
 from stock_rtx4060.ensemble_model import EnsemblePredictor, GRUPredictor, ModelConfig, _has_torch

@@ -45,8 +45,11 @@
 | 추천 엔진 | OHLCV·팩터·모델점수·리스크룰·어드바이저 증거 기반 후보 추천 |
 | 투자 준비도 | backtest_honesty·PBO·3x 비용생존·엠바고 스트레스·어드바이저 감사 게이트 |
 | 대시보드 | REC탭 — 후보카드·PBO뱃지·어드바이저게이지·투자등급 |
+| **Executive Dashboard v2.1** | **`VITE_DASHBOARD_LAYOUT=executive` — HeaderBar·KPI·AI Decision Panel·Watchlist·Scenario** |
 | 모델 점수 | 앙상블·LogReg·XGBoost·GRU/RNN (LSTM 선택) |
 | 어드바이저 | LiteLLM 게이트웨이 · MLflow span tracing · AMH memory · OpenBB tool-use |
+| **Thompson Sampling MAB** | **`thompson_weights.py` — Beta 분포 기반 advisor 가중치 동적 결정 (`ADVISOR_WEIGHTS_MODE=mab`)** |
+| **NotebookLM 뉴스** | **iran-war-notelm API 연동 — 뉴스→분석→LLM Advisor 주입 (NOTEBOOKLM_NEWS_MODE=cache)** |
 | CMRS Sizing | Mondrian conformal sizing — `size_multiplier` 기반 downgrade-only score 감쇠 |
 | 자동화 | Prefect `daily_krx_flow` 9단계, `research_weekly_flow` RD-Agent + SPRT 보조 태스크 |
 | 검증 | Hypothesis PBT · Chaos 테스트 · CPCV/PBO 백테스트 |
@@ -197,6 +200,16 @@ classDiagram
 ---
 
 ## 4. 최신 반영 요약
+
+### 2026-05-30 — Executive Dashboard + NotebookLM 뉴스 연동
+
+| 영역 | 최신 상태 |
+|---|---|
+| **Executive Dashboard v2.1** | `VITE_DASHBOARD_LAYOUT=executive` — 17개 컴포넌트, 자동 `/api/recommend` fetch |
+| **NotebookLM 뉴스** | iran-war-notelm `:8088` API 연동 — `notebook_analysis`, `scenario_outlook` → AI Panel |
+| **dashboard_bridge.py** | `notebook_analysis` passthrough + `scenario_outlook` fallback 자동 생성 |
+| **advisors/notebooklm_news.py** | `fetch_notebooklm_analysis()` + `enrich_context_with_notebooklm()` 전면 재작성 |
+| **테스트** | 116/116 passed (test_dashboard_bridge + test_risk_rules + test_reports) |
 
 ### 2026-05-29 GitHub main 상태
 
@@ -397,10 +410,25 @@ PYTHONPATH=.:src python main.py <command> [options]
 
 | 파일 | 역할 |
 |---|---|
-| `stock-pred-v5/src/StockPredV5.jsx` | 탭·상태·차트 메인 |
+| `stock-pred-v5/src/StockPredV5.jsx` | 탭·상태·차트 메인 + Executive v2.1 레이아웃 (feature flag) |
 | `stock-pred-v5/src/components/RecommendationCard.jsx` | 후보 카드 (PBO Badge 포함) |
+| `stock-pred-v5/src/components/AiDecisionPanel.jsx` | AI 의사결정 패널 (LLM + NotebookLM + ActionPlan) |
+| `stock-pred-v5/src/components/ScenarioOutlookPanel.jsx` | Bull/Base/Bear 시나리오 |
+| `stock-pred-v5/src/components/` (17개) | Executive Dashboard v2.1 컴포넌트 전체 |
 | `stock-pred-v5/public/dashboard_snapshot.json` | FILE 모드 스냅샷 |
 | `stock-pred-v5/vite.config.js` | 포트 5173, `/api` → `:5151` 프록시 |
+
+### Executive Dashboard 실행
+
+```bash
+# feature flag 설정 후 dev 서버 실행
+VITE_DASHBOARD_LAYOUT=executive npx vite --port 5173
+
+# 또는 빌드
+VITE_DASHBOARD_LAYOUT=executive npm run build
+```
+
+종목 선택 시 `/api/recommend`가 자동 호출되어 AI Decision Panel이 실시간으로 채워집니다.
 
 ### 데이터 모드
 
@@ -595,6 +623,9 @@ PYTHONPATH=.:src python main.py paper --help
 
 | 날짜 | 커밋 | 내용 |
 |---|---|---|
+| 2026-05-30 | `c7af7fe` | docs: LAYOUT/COMPONENT_LAYOUT/SYSTEM_ARCHITECTURE 업데이트 |
+| 2026-05-30 | `5c68df3` | feat(dashboard): Executive Decision Dashboard v2.1 — 17 components + feature flag |
+| 2026-05-30 | `a212616` | feat(P6/NotebookLM): stock news intelligence layer + Thompson Sampling MAB + iran-war-notelm API |
 | 2026-05-29 | `58a8018` | RD-Agent 문서, `research_weekly_flow` 보조 태스크, `pyqlib` optional requirement 정리 |
 | 2026-05-29 | `e061b2a` | Advisor AMH memory와 OpenBB tool-use 추가 |
 | 2026-05-29 | `8f6b030` | RD-Agent Alpha Factory 코드와 테스트 추가 |

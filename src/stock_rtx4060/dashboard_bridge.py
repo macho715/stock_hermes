@@ -670,6 +670,46 @@ def _readiness_safety_flags(result: dict[str, Any], *, new_capital_allowed: bool
     }
 
 
+def _build_scenario_fallback(result: dict) -> dict:
+    """Generate bull/base/bear scenario from existing price plan fields."""
+    entry = result.get("entry") or result.get("latest_close") or 0.0
+    tp2 = result.get("tp2") or 0.0
+    stop = result.get("stop") or 0.0
+    rr = result.get("risk_reward") or 1.0
+    prob = result.get("direction_prob") or 0.5
+
+    bull_prob = round(max(0.10, min(0.50, prob * 0.65)), 2)
+    bear_prob = round(max(0.10, min(0.40, (1 - prob) * 0.60)), 2)
+    base_prob = round(max(0.10, 1.0 - bull_prob - bear_prob), 2)
+
+    if entry > 0 and tp2 > 0:
+        bull_ret = round((tp2 - entry) / entry * 100, 1)
+    else:
+        bull_ret = 10.0
+    if entry > 0 and stop > 0:
+        bear_ret = round((stop - entry) / entry * 100, 1)
+    else:
+        bear_ret = -8.0
+
+    return {
+        "bull": {
+            "range": f"${tp2:.0f}+" if entry > 0 else "—",
+            "return": f"+{bull_ret:.1f}%",
+            "probability": bull_prob,
+        },
+        "base": {
+            "range": f"${entry:.0f} - ${tp2 * 0.6 + entry * 0.4:.0f}" if entry > 0 else "—",
+            "return": f"+{bull_ret * 0.4:.1f}%",
+            "probability": base_prob,
+        },
+        "bear": {
+            "range": f"${stop:.0f}" if stop > 0 else "—",
+            "return": f"{bear_ret:.1f}%",
+            "probability": bear_prob,
+        },
+    }
+
+
 def _normalize_result(result: Any, *, rank: int, provider_summary: Any = None) -> dict[str, Any]:
     if not isinstance(result, dict):
         raise DashboardBridgeError(f"result #{rank} must be an object")
@@ -744,4 +784,18 @@ def _normalize_result(result: Any, *, rank: int, provider_summary: Any = None) -
         "tft_prob": result.get("tft_prob"),
         "advisor_regime": result.get("advisor_regime"),
         "model_kind_used": result.get("model_kind_used"),
+        # [NotebookLM News Intelligence] Additive fields — None when NLM not enriched.
+        # notebooklm_impact: market impact label from NotebookLM analysis (LOW/MEDIUM/MEDIUM_HIGH/HIGH)
+        # notebooklm_confidence: analysis confidence score 0.0-1.0
+        # notebooklm_source_count: number of news sources used
+        # notebooklm_as_of: ISO timestamp of the NotebookLM analysis
+        "notebooklm_impact": result.get("notebooklm_impact"),
+        "notebooklm_confidence": result.get("notebooklm_confidence"),
+        "notebooklm_source_count": result.get("notebooklm_source_count"),
+        "notebooklm_as_of": result.get("notebooklm_as_of"),
+        # [Executive Dashboard v2.1] Additive — None when not available
+        # notebook_analysis: full NotebookLM analysis dict (passthrough from result)
+        "notebook_analysis": result.get("notebook_analysis"),
+        # scenario_outlook: bull/base/bear scenarios — generated from existing fields if absent
+        "scenario_outlook": result.get("scenario_outlook") or _build_scenario_fallback(result),
     }

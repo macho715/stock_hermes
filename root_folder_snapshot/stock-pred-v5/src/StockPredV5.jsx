@@ -15,6 +15,21 @@ import {
   Legend,
 } from "recharts";
 import RecommendationPanel from "./components/RecommendationPanel";
+// Executive Dashboard v2.1 — feature-flagged imports
+const EXEC_LAYOUT = import.meta.env.VITE_DASHBOARD_LAYOUT === "executive";
+import HeaderBar from "./components/HeaderBar";
+import KpiCard from "./components/KpiCard";
+import CurrentPriceCard from "./components/CurrentPriceCard";
+import RecommendationKpi from "./components/RecommendationKpi";
+import ConfidenceKpi from "./components/ConfidenceKpi";
+import RiskRewardKpi from "./components/RiskRewardKpi";
+import MarketSnapshotPanel from "./components/MarketSnapshotPanel";
+import CompactPriceChart from "./components/CompactPriceChart";
+import ModelScoresPanel from "./components/ModelScoresPanel";
+import AiDecisionPanel from "./components/AiDecisionPanel";
+import WatchlistPanel from "./components/WatchlistPanel";
+import NewsTimelinePanel from "./components/NewsTimelinePanel";
+import ScenarioOutlookPanel from "./components/ScenarioOutlookPanel";
 
 /* ============================================================
  * STOCK·PRED v5.0  —  Dual-Market ML Dashboard
@@ -509,6 +524,9 @@ export default function StockPredV5() {
   const [modelEvidenceCache, setModelEvidenceCache] = useState({});
   const [modelEvidenceErrors, setModelEvidenceErrors] = useState({});
   const [modelEvidenceLoading, setModelEvidenceLoading] = useState(false);
+  // Executive layout — auto-fetched recommendation snap
+  const [execSnap, setExecSnap] = useState(null);
+  const [execSnapLoading, setExecSnapLoading] = useState(false);
   const [paperStatus, setPaperStatus] = useState(null);
   const [paperStatusError, setPaperStatusError] = useState("");
   const [paperStatusLoading, setPaperStatusLoading] = useState(false);
@@ -605,6 +623,32 @@ export default function StockPredV5() {
   const pickSymbol = useCallback((symbol) => {
     setSelected(symbol);
   }, []);
+
+  /* Executive layout — auto-fetch /api/recommend whenever selected ticker changes */
+  useEffect(() => {
+    if (!EXEC_LAYOUT || !selected) return;
+    let cancelled = false;
+    setExecSnapLoading(true);
+    const mkt = selected.endsWith(".KS") || selected.endsWith(".KQ") ? "KRX" : "US";
+    const params = new URLSearchParams({
+      universe: selected,
+      market: mkt,
+      top: "1",
+      period: "1y",
+      data_provider: mkt === "KRX" ? "pykrx" : "yfinance",
+      output_dir: `reports/exec_rec_${mkt.toLowerCase()}`,
+    });
+    fetch(`${API_BASE}/api/recommend?${params}`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return;
+        const result = data?.results?.[0] ?? null;
+        setExecSnap(result);
+      })
+      .catch(() => { if (!cancelled) setExecSnap(null); })
+      .finally(() => { if (!cancelled) setExecSnapLoading(false); });
+    return () => { cancelled = true; };
+  }, [selected, EXEC_LAYOUT]);
 
   /* font + clock */
   useEffect(() => {
@@ -1062,6 +1106,64 @@ ${backtest ? `## Backtest (\\$10,000 initial)
   ]);
 
   /* ======================== RENDER ======================== */
+
+  // ── Executive Decision Dashboard v2.1 ───────────────────────────────
+  if (EXEC_LAYOUT) {
+    const execSymbols = symbols.map(s => ({
+      symbol: s.symbol, name: s.name || s.symbol,
+      price: cache[s.symbol]?.data?.slice(-1)[0]?.close,
+      change: null, changePct: null,
+    }));
+    // execSnap is auto-fetched via useEffect above; null until first load
+    const snap = execSnap;
+    const last = cache[selected]?.data?.slice(-1)[0];
+    const prev = cache[selected]?.data?.slice(-2)[0];
+    const chg = last && prev ? last.close - prev.close : null;
+    const chgPct = prev && prev.close ? chg / prev.close * 100 : null;
+    const scenario = snap?.scenario_outlook ?? null;
+    const headlines = snap?.notebook_analysis
+      ? (snap?.notebooklm_source_count ? [{ title: snap.notebook_analysis.summary || "NotebookLM analysis loaded", source: "NotebookLM", published_at: snap?.notebooklm_as_of }] : [])
+      : [];
+
+    return (
+      <div style={{minHeight:"100vh",padding:22,background:"#020916",color:"#d4e1ec",fontFamily:`"Inter","JetBrains Mono",sans-serif`,boxSizing:"border-box"}}>
+        <HeaderBar market={market} onMarketChange={setMarket} ticker={selected} onTickerChange={setSelected} symbols={execSymbols} accent={accent}/>
+        {/* Loading banner */}
+        {execSnapLoading && (
+          <div style={{padding:"6px 12px",marginBottom:10,background:"rgba(32,214,210,0.07)",border:"1px solid rgba(32,214,210,0.2)",borderRadius:4,fontSize:10,color:"#20d6d2",letterSpacing:"0.05em"}}>
+            ⟳ Loading AI analysis for {selected}…
+          </div>
+        )}
+        {/* Top KPI row */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 0.95fr 1.45fr",gap:16,marginBottom:14}}>
+          <CurrentPriceCard price={last?.close} change={chg} changePct={chgPct} volume={last?.volume} currency={currency}/>
+          <RecommendationKpi verdict={snap?.verdict} advisorScore={snap?.advisor_score}/>
+          <ConfidenceKpi confidence={snap?.notebooklm_confidence ?? snap?.probability}/>
+          <RiskRewardKpi riskReward={snap?.risk_reward}/>
+        </div>
+        {/* Main decision grid */}
+        <div style={{display:"grid",gridTemplateColumns:"0.95fr 1.9fr 2.85fr",gap:14,marginBottom:14,minHeight:448}}>
+          <MarketSnapshotPanel result={snap}/>
+          <div style={{display:"grid",gridTemplateRows:"1fr 160px",gap:12}}>
+            <CompactPriceChart ohlcvRecords={cache[selected]?.data||[]} currency={currency}/>
+            <ModelScoresPanel modelEvidence={modelEvidenceCache[modelEvidenceCacheKey]}/>
+          </div>
+          <AiDecisionPanel result={snap}/>
+        </div>
+        {/* Bottom insight grid */}
+        <div style={{display:"grid",gridTemplateColumns:"1.35fr 1.45fr 2.2fr",gap:14,minHeight:220}}>
+          <WatchlistPanel symbols={execSymbols} selected={selected} onSelect={setSelected}/>
+          <NewsTimelinePanel headlines={headlines}/>
+          <ScenarioOutlookPanel scenario={scenario}/>
+        </div>
+        <div style={{marginTop:10,fontSize:9,color:"#536476",textAlign:"center"}}>
+          dashboard_snapshot.v1 · screening_output_only · Report-only · Manual review required · No broker execution
+        </div>
+      </div>
+    );
+  }
+  // ── End Executive Layout ──────────────────────────────────────────────
+
   return (
     <div
       style={{

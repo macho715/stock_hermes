@@ -2,6 +2,111 @@
 
 All notable changes for `stock_1901` are documented here.
 
+## 2026-05-30 — Executive Decision Dashboard v2.1 · NotebookLM News Intelligence · iran-war-notelm API 연동
+
+### Summary
+
+오늘 세션에서 추가된 주요 기능: NotebookLM 뉴스 인텔리전스 레이어 (iran-war-notelm API 연동), Executive Decision Dashboard v2.1 (17개 신규 컴포넌트 + feature flag), dashboard_bridge.py 데이터 계약 확장. 테스트 116 passed.
+
+### Added
+
+- **`src/stock_rtx4060/advisors/notebooklm_news.py`** — NotebookLM 뉴스 어댑터 전면 재작성 (2026-05-30)
+  - `fetch_notebooklm_analysis(ticker, market)` — iran-war-notelm `/api/stock-news/notebook-analysis` API pull
+  - `enrich_context_with_notebooklm(ticker, ctx)` — `context["notebook_analysis"]` + `context["headlines"]` 주입
+  - `NOTEBOOKLM_NEWS_MODE=cache|on|1|true|off` 환경변수 제어
+  - `NOTEBOOKLM_NEWS_API_BASE=http://127.0.0.1:8088` (기본값)
+  - `schema_version=notebook_stock_analysis.v1` 응답 계약 검증
+- **`root_folder_snapshot/stock-pred-v5/src/components/`** — Executive Dashboard v2.1 신규 컴포넌트 17개 (2026-05-30)
+  - `DashboardCard.jsx` — 공통 glass card wrapper + THEME 토큰
+  - `HeaderBar.jsx` — 브랜드·종목·시장 선택 바 (aria-label 접근성)
+  - `KpiCard.jsx` — 범용 KPI 카드
+  - `CurrentPriceCard.jsx` — 현재가·등락·볼륨
+  - `RecommendationKpi.jsx` — verdict + LLM score KPI
+  - `ConfidenceKpi.jsx` — 신뢰도 게이지 (aria-meter)
+  - `RiskRewardKpi.jsx` — 위험보상비 (Attractive/Neutral/Poor)
+  - `MarketSnapshotPanel.jsx` — 시장 상태 요약 (Regime·Score·Probability·Vol Ratio)
+  - `CompactPriceChart.jsx` — 가격 차트 ≤300px
+  - `ModelScoresPanel.jsx` — ML 모델 점수 비교
+  - `AiDecisionPanel.jsx` — LLM Advisor + NotebookLM + ActionPlan 통합 패널
+  - `NotebookNewsAnalysis.jsx` — 뉴스 분석 (null-safe, bullish/bearish factors)
+  - `KeyDriversPanel.jsx` — 핵심 드라이버 (validation 기반)
+  - `ActionPlanPanel.jsx` — Entry/Stop/TP1/TP2 (Reference only 라벨)
+  - `WatchlistPanel.jsx` — 종목 리스트 (클릭 선택)
+  - `NewsTimelinePanel.jsx` — 뉴스 타임라인
+  - `ScenarioOutlookPanel.jsx` — Bull/Base/Bear 시나리오 확률 표시
+- **`root_folder_snapshot/stock-pred-v5/src/StockPredV5.jsx`** — Executive 레이아웃 추가 (2026-05-30)
+  - `VITE_DASHBOARD_LAYOUT=executive` feature flag
+  - `execSnap` state + `useEffect` — selected 종목 변경 시 `/api/recommend` 자동 재호출
+  - 로딩 배너, HeaderBar·TopKpiGrid·MainDecisionGrid·BottomInsightGrid 레이아웃
+  - 기존 classic 레이아웃 100% 보존 (flag 미설정 시)
+- **`.env`** — NotebookLM 연동 환경변수 기본값 (2026-05-30)
+  - `NOTEBOOKLM_NEWS_MODE=cache`, `NOTEBOOKLM_NEWS_API_BASE`, `ADVISOR_RUN=true`
+- **`tests/test_advisor_notebooklm_news.py`** — 16개 테스트 (2026-05-30)
+  - fetch/enrich 성공·실패·스키마 검증·context 주입 커버리지 97%
+- **`src/stock_rtx4060/advisors/thompson_weights.py`** — Thompson Sampling Multi-Armed Bandit 어드바이저 가중치 (2026-05-30)
+  - `ThompsonWeights` 클래스 — Beta 분포 기반 posterior 샘플링으로 advisor별 가중치 동적 결정
+  - `update(advisor_id, reward)` — 실제 결과 피드백 반영
+  - `ADVISOR_WEIGHTS_MODE=fixed` 설정 시 고정 `DEFAULT_WEIGHTS` fallback
+- **`tests/test_thompson_weights.py`** — 148줄 ThompsonWeights 테스트 (2026-05-30)
+  - sample() 합계 1.0 검증, update() 수렴성, fixed 모드 fallback
+
+### Changed
+
+- **`api_server.py`** — `.env` 자동 로드 추가 (python-dotenv / fallback 파서)
+- **`src/stock_rtx4060/advisors/orchestrator.py`** — ThompsonWeights MAB 통합 (2026-05-30)
+  - `ThompsonWeights` import + `_ADVISOR_NAMES`, `_WEIGHTS_MODE` 상수 추가
+  - `OrchestratorResult.weights` — 기본값 `ThompsonWeights(_ADVISOR_NAMES)` (MAB 모드)
+  - `_ensure_weights()` — `ThompsonWeights.sample()` 또는 dict fallback
+  - `update_advisor_reward(advisor_id, reward)` — MAB 업데이트 API 추가
+  - `ADVISOR_WEIGHTS_MODE=fixed` 시 기존 `DEFAULT_WEIGHTS` 동작 보존
+- **`dashboard/stock_pred_v5.jsx`** *(legacy single-file copy)* — AdvisorOverlay NotebookLM 표시 (2026-05-30)
+  - `notebooklmImpact`, `notebooklmConfidence`, `notebooklmSourceCount` props 추가
+  - LLM ADVISOR 블록 하단에 `NotebookLM: MEDIUM_HIGH · Conf 0.80 · Sources 1` 표시
+- **`src/stock_rtx4060/dashboard_bridge.py`** — `_normalize_result()` 확장 (2026-05-30)
+  - `notebook_analysis` — NotebookLM 분석 전체 dict passthrough
+  - `scenario_outlook` — passthrough 또는 `_build_scenario_fallback()` 자동 생성
+  - `_build_scenario_fallback()` — entry/tp2/stop/direction_prob 기반 bull/base/bear 계산
+  - `notebooklm_impact`, `notebooklm_confidence`, `notebooklm_source_count`, `notebooklm_as_of` 필드 (이전 커밋)
+- **`src/stock_rtx4060/recommendation_engine.py`** — `_apply_advisor_blend()` 확장
+  - `market` 컨텍스트 추가 (KRX/.KS/.KQ 감지)
+  - `enrich_context_with_notebooklm()` 훅 — optional import, silent fallback
+  - `notebook_meta` 추출 → 5-tuple 반환
+  - `RecommendationResult` +4 필드: `notebooklm_impact/confidence/source_count/as_of`
+- **`src/stock_rtx4060/advisors/news_sentiment.py`** — `notebook_analysis` prompt 전달
+- **`src/stock_rtx4060/advisors/prompts/news_user.md`** — NotebookLM 분석 블록 + proposition/citations JSON schema
+- **`tests/test_dashboard_bridge.py`** — 4개 신규 테스트 (116/116 passed)
+  - `test_normalize_result_has_notebook_analysis_field`
+  - `test_normalize_result_notebook_analysis_defaults_none`
+  - `test_scenario_fallback_generated`
+  - `test_scenario_passthrough`
+
+### Environment Variables (신규)
+
+| 변수 | 기본값 | 설명 |
+|---|---|---|
+| `NOTEBOOKLM_NEWS_MODE` | `off` | `cache/on/1/true/off` — NotebookLM 뉴스 연동 모드 |
+| `NOTEBOOKLM_NEWS_API_BASE` | `http://127.0.0.1:8088` | iran-war-notelm API 서버 주소 |
+| `NOTEBOOKLM_NEWS_TIMEOUT_SEC` | `3.0` | API 타임아웃 |
+| `VITE_DASHBOARD_LAYOUT` | `""` | `executive` 설정 시 Executive v2.1 레이아웃 활성화 |
+| `ADVISOR_WEIGHTS_MODE` | `mab` | `mab` = Thompson Sampling, `fixed` = 고정 가중치 |
+| `ADVISOR_RUN` | `true` | LLM Advisor 자동 실행 활성화 |
+| `ADVISOR_BLEND_WEIGHT` | `0.10` | LLM Advisor 블렌딩 가중치 (0.0–1.0) |
+
+### Activation
+
+```bash
+# iran-war-notelm API 서버 시작
+cd iran-war-uae-monitor && PYTHONPATH=src uvicorn iran_monitor.health:app --port 8088
+
+# stock_1901 backend (NotebookLM 연동)
+NOTEBOOKLM_NEWS_MODE=cache NOTEBOOKLM_NEWS_API_BASE=http://127.0.0.1:8088 python api_server.py
+
+# Executive Dashboard 실행
+VITE_DASHBOARD_LAYOUT=executive npx vite --port 5173
+```
+
+---
+
 ## 2026-05-29 — CMRS Sizing · Wave 4 Dashboard UI · SPRT Gate · TFT Stub
 
 ### Summary

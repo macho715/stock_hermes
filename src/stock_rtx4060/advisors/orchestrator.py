@@ -24,6 +24,7 @@ from .base import Advisor, AdvisoryOutput
 from .devils_advocate import DevilsAdvocateAgent
 from .macro_regime import MacroRegimeAgent
 from .news_sentiment import NewsSentimentAgent
+from .thompson_weights import ThompsonWeights
 
 # [NotebookLM bridge] feature-flagged via NOTEBOOKLM_NEWS_MODE env var
 try:
@@ -39,11 +40,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_WEIGHTS = {
+DEFAULT_WEIGHTS: dict[str, float] = {
     "news_sentiment": 0.40,
     "devils_advocate": 0.30,
     "macro_regime": 0.30,
 }
+
+_ADVISOR_NAMES = ["news_sentiment", "devils_advocate", "macro_regime"]
+
+_WEIGHTS_MODE = os.getenv("ADVISOR_WEIGHTS_MODE", "mab").lower()
 
 
 @dataclass
@@ -61,7 +66,9 @@ class Orchestrator:
     news: Advisor = field(default_factory=NewsSentimentAgent)
     devils: Advisor = field(default_factory=DevilsAdvocateAgent)
     macro: Advisor = field(default_factory=MacroRegimeAgent)
-    weights: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
+    weights: dict[str, float] | object = field(
+        default_factory=lambda: ThompsonWeights(_ADVISOR_NAMES)
+    )
     use_langgraph: bool = False
     use_debate: bool = False
     memory_layer: MemoryLayer | None = field(default=None)  # [AMH Memory — W4 FR-6]
@@ -184,26 +191,44 @@ class Orchestrator:
         final_state: dict[str, Any] = await graph.ainvoke({})
         return [final_state["news"], final_state["devils"], final_state["macro"]]
 
+    def _ensure_weights(self) -> dict[str, float]:
+        """Return current weights dict, sampling ThompsonWeights once per call."""
+        w = self.weights
+        if hasattr(w, "sample"):
+            return w.sample()
+        if isinstance(w, dict):
+            return dict(w)
+        return dict(DEFAULT_WEIGHTS)
+
     def _blend(self, outputs: list[AdvisoryOutput]) -> tuple[float, float]:
+        weights = self._ensure_weights()
         weighted_score = 0.0
         weighted_conf = 0.0
         total_weight = 0.0
         total_conf_weight = 0.0
         for out in outputs:
-            w = float(self.weights.get(out.agent, 0.0))
+            w = float(weights.get(out.agent, 0.0))
             if w <= 0.0:
                 continue
             weighted_score += out.score * out.confidence * w
             total_weight += out.confidence * w
             weighted_conf += out.confidence * w
             total_conf_weight += w
-        # Score normalises by confidence-weighted weight so abstaining
-        # advisors don't drag the verdict toward zero.
         score = weighted_score / total_weight if total_weight > 0 else 0.0
         confidence = weighted_conf / total_conf_weight if total_conf_weight > 0 else 0.0
         score = max(-1.0, min(1.0, score))
         confidence = max(0.0, min(1.0, confidence))
         return float(score), float(confidence)
+
+    def update_advisor_reward(self, advisor_id: str, reward: float) -> None:
+        """Record a reward outcome for the given advisor (ThompsonWeights MAB update).
+
+        Call this after measuring the advisor's output against actual outcome.
+        No-op when ADVISOR_WEIGHTS_MODE=fixed.
+        """
+        w = self.weights
+        if hasattr(w, "update"):
+            w.update(advisor_id, reward)
 
     def _debate_enabled(self) -> bool:
         if self.use_debate:

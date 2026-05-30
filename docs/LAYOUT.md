@@ -10,6 +10,7 @@ stock_1901/                          # Updated 2026-05-29 (formerly stock_rtx406
 ├── main.py                          # CLI entry point
 ├── api_server.py                    # Flask API :5151 (CORS: localhost/127.0.0.1 dev ports 5173/5174/5175/4173/5151)
 ├── run.ps1
+├── .env                             # NotebookLM 연동 환경변수 (git-ignored; Added 2026-05-30)
 ├── pyproject.toml                   # Project metadata + ruff config
 ├── requirements.txt                 # Core runtime dependencies
 ├── requirements.in                  # Dependency input / optional dependency declarations
@@ -88,7 +89,9 @@ stock_1901/                          # Updated 2026-05-29 (formerly stock_rtx406
 │   │   ├── news_sentiment.py        # NewsSentiment advisor
 │   │   ├── devils_advocate.py       # DevilsAdvocate advisor
 │   │   ├── macro_regime.py          # MacroRegime advisor
-│   │   ├── orchestrator.py          # Advisor orchestration + memory hook
+│   │   ├── orchestrator.py          # Advisor orchestration; ThompsonWeights MAB + update_advisor_reward() (Updated 2026-05-30)
+│   │   ├── thompson_weights.py      # Thompson Sampling MAB — Beta분포 advisor 가중치 동적 결정 (Added 2026-05-30)
+│   │   ├── news_snapshot_cache.py   # News snapshot cache helper
 │   │   ├── memory/                  # R-Mem hierarchical memory layer
 │   │   │   ├── cwrm_router.py       # Conflict-weighted shallow/deep routing
 │   │   │   ├── hierarchical_store.py
@@ -100,6 +103,8 @@ stock_1901/                          # Updated 2026-05-29 (formerly stock_rtx406
 │   │   │   ├── tool_executor.py
 │   │   │   └── tool_schemas.py
 │   │   └── prompts/                 # Advisor system/user prompt templates
+│   │       ├── news_system.md       # NewsSentiment system prompt
+│   │       └── news_user.md         # +NotebookLM analysis block + proposition/citations (Updated 2026-05-30)
 │   ├── readiness/                   # Readiness snapshots and live-review gates
 │   │   ├── classifier.py
 │   │   └── snapshots.py
@@ -119,13 +124,31 @@ stock_1901/                          # Updated 2026-05-29 (formerly stock_rtx406
 ├── root_folder_snapshot/
 │   └── stock-pred-v5/               # Full Vite/React dashboard workspace
 │       ├── src/
-│       │   ├── StockPredV5.jsx       # Main dashboard shell, market tabs, model evidence, chart panels
+│       │   ├── StockPredV5.jsx       # Main dashboard shell; EXEC_LAYOUT flag (VITE_DASHBOARD_LAYOUT=executive)
 │       │   ├── main.jsx              # Vite React entry point
 │       │   └── components/
 │           ├── RecommendationPanel.jsx
 │           ├── RecommendationCard.jsx
 │           ├── KevpeBadge.jsx
-│           └── RiskGateBadge.jsx
+│           ├── RiskGateBadge.jsx
+│           │── [Executive Dashboard v2.1 — 2026-05-30]
+│           ├── DashboardCard.jsx         # Glass card wrapper + THEME tokens
+│           ├── HeaderBar.jsx             # Brand/market/ticker header
+│           ├── KpiCard.jsx               # Generic KPI card
+│           ├── CurrentPriceCard.jsx      # Live price + change
+│           ├── RecommendationKpi.jsx     # Verdict + LLM score KPI
+│           ├── ConfidenceKpi.jsx         # Confidence gauge (aria-meter)
+│           ├── RiskRewardKpi.jsx         # R/R ratio (Attractive/Neutral/Poor)
+│           ├── MarketSnapshotPanel.jsx   # Market state summary
+│           ├── CompactPriceChart.jsx     # Price chart ≤300px
+│           ├── ModelScoresPanel.jsx      # ML model score comparison
+│           ├── AiDecisionPanel.jsx       # LLM Advisor + NotebookLM + Action Plan
+│           ├── NotebookNewsAnalysis.jsx  # News analysis (null-safe)
+│           ├── KeyDriversPanel.jsx       # Key drivers (validation-based)
+│           ├── ActionPlanPanel.jsx       # Entry/Stop/TP (Reference only)
+│           ├── WatchlistPanel.jsx        # Symbol watchlist
+│           ├── NewsTimelinePanel.jsx     # News timeline
+│           └── ScenarioOutlookPanel.jsx  # Bull/Base/Bear scenarios
 ├── tests/                           # pytest suite; see CI/current test reports for counts
 │   ├── test_core.py                 # Ops v1 workflow regression tests
 │   ├── test_backtest_honesty.py     # Phase B backtest honesty tests
@@ -134,7 +157,9 @@ stock_1901/                          # Updated 2026-05-29 (formerly stock_rtx406
 │   ├── test_provider_validation.py  # Provider validation tests
 │   ├── test_audit_log.py            # Audit masking tests
 │   ├── test_mcp_adapter.py          # MCP boundary tests
-│   ├── test_dashboard_bridge.py     # Dashboard bridge tests
+│   ├── test_dashboard_bridge.py     # Dashboard bridge tests (+4 notebook_analysis/scenario_outlook, 2026-05-30)
+│   ├── test_advisor_notebooklm_news.py  # NotebookLM 어댑터 16개 테스트, 97% coverage (Added 2026-05-30)
+│   ├── test_thompson_weights.py     # ThompsonWeights MAB 148줄 테스트 (Added 2026-05-30)
 │   ├── test_live_review_readiness.py
 │   ├── test_auto_forward_recorder.py
 │   ├── test_reports.py              # reports.py coverage (100%)
@@ -213,6 +238,9 @@ stock_1901/                          # Updated 2026-05-29 (formerly stock_rtx406
 | `mcp_adapter.py` | Phase 1 read/report-only MCP adapter contract. Does not start an MCP server. |
 | `reports.py` | Shared Markdown, JSON, CSV report helpers. |
 | `factors/rd_agent/` | Optional RD-Agent Alpha Factory integration: staged factor mining, Qlib export, provenance, validation, and registry hooks. |
+| `advisors/notebooklm_news.py` | NotebookLM 뉴스 어댑터 — iran-war-notelm `/api/stock-news/notebook-analysis` API pull. `fetch_notebooklm_analysis()` + `enrich_context_with_notebooklm()`. `NOTEBOOKLM_NEWS_MODE=cache\|on\|off`. *(Added 2026-05-30)* |
+| `advisors/thompson_weights.py` | Thompson Sampling Multi-Armed Bandit 어드바이저 가중치. `ThompsonWeights.sample()` — Beta 분포 posterior 샘플링. `update(advisor_id, reward)` — 피드백 반영. `ADVISOR_WEIGHTS_MODE=fixed` 시 `DEFAULT_WEIGHTS` fallback. *(Added 2026-05-30)* |
+| `advisors/orchestrator.py` | Advisor 오케스트레이션. ThompsonWeights MAB 통합 (`_ensure_weights()`), `update_advisor_reward()` API 추가. NotebookLM 컨텍스트 enrich 훅. *(Updated 2026-05-30)* |
 | `advisors/memory/` | FinThink AMH-grounded hierarchical memory layer with DuckDB regime memory, CWRM routing, and STL propositions. |
 | `advisors/openbb_tools/` | Agentic OpenBB tool schema/executor loop for advisor evidence gathering. |
 | `readiness/` | Investment readiness snapshots and live-review classifier gates. |

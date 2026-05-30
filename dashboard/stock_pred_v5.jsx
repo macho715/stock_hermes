@@ -1342,6 +1342,9 @@ function BackendTab({ snapshot, currentResult, backendError, accent }) {
             advisorScore={selected.advisor_score}
             advisorRationale={selected.advisor_rationale}
             verdict={selected.verdict}
+            notebooklmImpact={selected.notebooklm_impact}
+            notebooklmConfidence={selected.notebooklm_confidence}
+            notebooklmSourceCount={selected.notebooklm_source_count}
           />
         </Panel>
       )}
@@ -1540,7 +1543,7 @@ function ReadinessWarning({ message, reasons, status }) {
 }
 
 /* ----------  ADVISOR OVERLAY  ---------- */
-function AdvisorOverlay({ advisorScore, advisorRationale, verdict }) {
+function AdvisorOverlay({ advisorScore, advisorRationale, verdict, notebooklmImpact, notebooklmConfidence, notebooklmSourceCount }) {
   if (advisorScore === null || advisorScore === undefined) return null;
   const score = parseFloat(advisorScore);
   if (isNaN(score)) return null;
@@ -1587,6 +1590,17 @@ function AdvisorOverlay({ advisorScore, advisorRationale, verdict }) {
           overflow: "hidden",
         }}>
           {advisorRationale}
+        </div>
+      )}
+      {notebooklmImpact && (
+        <div style={{ marginTop: 6, fontSize: 8, color: C.textDim }}>
+          NotebookLM: <b style={{ color: C.text }}>{notebooklmImpact}</b>
+          {notebooklmConfidence != null && (
+            <> · Conf {Number(notebooklmConfidence).toFixed(2)}</>
+          )}
+          {notebooklmSourceCount != null && (
+            <> · Sources {notebooklmSourceCount}</>
+          )}
         </div>
       )}
     </div>

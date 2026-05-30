@@ -78,7 +78,13 @@ class NewsSentimentAgent:
         system_tpl = load_prompt("news_system")
         user_tpl = load_prompt("news_user")
         rendered_user = render(
-            user_tpl, {"ticker": ticker, "as_of": as_of, "headlines": [h.__dict__ for h in headlines]}
+            user_tpl,
+            {
+                "ticker": ticker,
+                "as_of": as_of,
+                "headlines": [h.__dict__ for h in headlines],
+                "notebook_analysis": context.get("notebook_analysis"),
+            },
         )
 
         if _OPENBB_TOOLS_ENABLED:

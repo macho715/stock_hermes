@@ -209,6 +209,8 @@ Full docs: see `20260529_plan-doc-rdagent-factory.md`.
 
 | Date | Commit | Fix |
 |---|---|---|
+| 2026-05-30 | `5c68df3` | feat(dashboard): Executive Decision Dashboard v2.1 — 17 components, VITE_DASHBOARD_LAYOUT=executive, auto /api/recommend fetch on ticker change |
+| 2026-05-30 | `a212616` | feat(P6/NotebookLM): notebooklm_news.py 전면 재작성, recommendation_engine.py notebooklm_* 4필드, dashboard_bridge.py notebook_analysis+scenario_outlook, 16 tests |
 | 2026-05-29 | `d7eff19` | feat(sizing): CMRS downgrade-only controls — `sizing/` 패키지, `api_server.py` `sizing_kind` 파라미터, `SizingBadge` UI |
 | 2026-05-29 | `69d360c` | feat(dashboard): Wave 4 UI — `RegimeBadge`, `ModelScoresStrip`, `advisor_regime`/`tft_prob`/`model_kind_used` pipeline |
 | 2026-05-29 | `1dca44b` | feat(P3/P7): SPRT promotion gate (`_sprt_promotion_decision`) + TFT stub (`ml/tft_model.py`) |

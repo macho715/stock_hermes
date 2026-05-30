@@ -262,6 +262,11 @@ class RecommendationResult:
     tft_prob: float | None = None
     advisor_regime: str | None = None
     model_kind_used: str | None = None
+    # NotebookLM news intelligence overlay (additive — None when not enriched)
+    notebooklm_impact: str | None = None
+    notebooklm_confidence: float | None = None
+    notebooklm_source_count: int | None = None
+    notebooklm_as_of: str | None = None
 
     def to_dict(self) -> dict:
         data = asdict(self)
@@ -828,7 +833,7 @@ def _apply_advisor_blend(
     snap: dict,
     plan: RiskPlan,
     model_stats: dict,
-) -> tuple[float, str | None, float]:
+) -> tuple[float, str | None, float, str | None, dict | None]:
     """Run the LLM advisor for ``ticker`` and return ``(advisor_score, rationale, blended_score)``.
 
     The blended score is::
@@ -844,7 +849,8 @@ def _apply_advisor_blend(
     from .advisors.orchestrator import Orchestrator
 
     orchestrator = Orchestrator()
-    context = {
+    context: dict = {
+        "market": "KRX" if ticker.endswith((".KS", ".KQ")) else "US",
         "factors": {
             "latest": snap.get("latest"),
             "sma20": snap.get("sma20"),
@@ -858,6 +864,12 @@ def _apply_advisor_blend(
             f"{ticker} score={deterministic_score:.2f} prob={model_stats.get('latest_prob', 0):.3f}"
         ),
     }
+    # Enrich with NotebookLM news analysis when feature is enabled
+    try:
+        from .advisors.notebooklm_news import enrich_context_with_notebooklm
+        context = enrich_context_with_notebooklm(ticker, context)
+    except Exception:
+        pass
     result = orchestrator.analyze(ticker, context)
     for output in result.outputs:
         try:
@@ -902,7 +914,19 @@ def _apply_advisor_blend(
     advisory_pct = 50.0 + advisory_score * 50.0
     blended = deterministic * (1.0 - weight) + advisory_pct * weight
     blended = max(0.0, min(100.0, blended))
-    return advisory_score, advisor_rationale, float(blended), advisor_regime
+
+    notebook_meta: dict | None = None
+    nb_analysis = context.get("notebook_analysis")
+    if nb_analysis:
+        notebook_meta = {
+            "impact": nb_analysis.get("market_impact"),
+            "confidence": nb_analysis.get("confidence"),
+            "source_count": (context.get("notebook_analysis", {}).get("notebook") or {}).get("source_count")
+                            or context.get("notebooklm_count"),
+            "as_of": nb_analysis.get("as_of"),
+        }
+
+    return advisory_score, advisor_rationale, float(blended), advisor_regime, notebook_meta
 
 
 def _verdict(track: Track, score: float, checks: list[ValidationCheck], cfg: RecommendationConfig) -> tuple[Verdict, str]:
@@ -1146,10 +1170,11 @@ class RecommendationEngine:
         advisor_score: float | None = None
         advisor_rationale: str | None = None
         advisor_regime: str | None = None
+        notebook_meta: dict | None = None
         final_score = score
         if cfg.advisor_run and cfg.advisor_blend_weight > 0.0:
             try:
-                advisor_score, advisor_rationale, final_score, advisor_regime = _apply_advisor_blend(
+                advisor_score, advisor_rationale, final_score, advisor_regime, notebook_meta = _apply_advisor_blend(
                     ticker=ticker,
                     deterministic_score=score,
                     cfg=cfg,
@@ -1294,6 +1319,11 @@ class RecommendationEngine:
             tft_prob=None,
             advisor_regime=advisor_regime,
             model_kind_used=model_stats.get("models_used", [None])[-1],
+            # NotebookLM news intelligence overlay
+            notebooklm_impact=notebook_meta.get("impact") if notebook_meta else None,
+            notebooklm_confidence=notebook_meta.get("confidence") if notebook_meta else None,
+            notebooklm_source_count=notebook_meta.get("source_count") if notebook_meta else None,
+            notebooklm_as_of=notebook_meta.get("as_of") if notebook_meta else None,
         )
 
     def _events_for_ticker(self, ticker: str) -> list[dict]:

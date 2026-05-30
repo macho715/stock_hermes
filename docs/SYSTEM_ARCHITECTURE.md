@@ -46,16 +46,91 @@ flowchart TD
     Ops --> Approval[Approval template / ZERO log]
 ```
 
-## Current Architecture Update — 2026-05-29
+## Architecture Update — 2026-05-30 (NotebookLM News Intelligence + Executive Dashboard v2.1 + Thompson Sampling MAB)
 
-The current system has four operator-facing surfaces:
+### Thompson Sampling MAB — Advisor Weighting
+
+```mermaid
+flowchart LR
+    MAB["thompson_weights.py\nThompsonWeights"]
+    MAB -->|"Beta(α,β) per advisor\nBayesian posterior sample"| WEIGHTS["weights: news_sentiment/devils_advocate/macro_regime"]
+    WEIGHTS --> ORCH["orchestrator.py\n_ensure_weights()\nweighted advisory_score blend"]
+    REWARD["실제 outcome 피드백"] -->|"update(advisor_id, reward)"| MAB
+    FLAG["ADVISOR_WEIGHTS_MODE=fixed"] -->|fallback| FIXED["DEFAULT_WEIGHTS dict\n{news:0.4, devils:0.3, macro:0.3}"]
+```
+
+| 환경변수 | 기본값 | 동작 |
+|---|---|---|
+| `ADVISOR_WEIGHTS_MODE` | `mab` | `mab`=Thompson Sampling, `fixed`=고정 가중치 |
+| `ADVISOR_RUN` | `true` (`.env`) | LLM Advisor 자동 실행 |
+| `ADVISOR_BLEND_WEIGHT` | `0.10` (`.env`) | 최종 score 블렌딩 가중치 |
+
+### Changed Modules Summary (2026-05-30)
+
+| 모듈 | 변경 내용 |
+|---|---|
+| `advisors/thompson_weights.py` | **신규** — ThompsonWeights MAB 클래스 |
+| `advisors/orchestrator.py` | ThompsonWeights 통합, `_ensure_weights()`, `update_advisor_reward()` |
+| `advisors/notebooklm_news.py` | **전면 재작성** — fetch_notebooklm_analysis() + enrich_context_with_notebooklm() |
+| `advisors/news_sentiment.py` | `notebook_analysis` → prompt render 전달 |
+| `advisors/prompts/news_user.md` | NotebookLM 분석 블록 + proposition/citations JSON schema |
+| `recommendation_engine.py` | market context + NLM enrich hook + 4 notebooklm_* 필드 + 5-tuple return |
+| `dashboard_bridge.py` | `notebook_analysis` passthrough + `scenario_outlook` fallback |
+| `api_server.py` | `.env` 자동 로드 (dotenv / fallback parser) |
+| `dashboard/stock_pred_v5.jsx` | AdvisorOverlay notebooklm props 추가 |
+
+### NotebookLM News Intelligence Layer
+
+```mermaid
+flowchart LR
+    NLM["iran-war-notelm\nFastAPI :8088"]
+    NLM_EP["GET /api/stock-news/\nnotebook-analysis?symbol=AAPL"]
+    NLM --> NLM_EP
+
+    ADAPTER["advisors/notebooklm_news.py\nfetch_notebooklm_analysis()\nenrich_context_with_notebooklm()"]
+    NLM_EP -->|cache HIT JSON\nschema_version=notebook_stock_analysis.v1| ADAPTER
+
+    ENGINE["recommendation_engine.py\n_apply_advisor_blend()"]
+    ADAPTER -->|context[notebook_analysis]\ncontext[headlines]| ENGINE
+
+    BRIDGE["dashboard_bridge.py\n_normalize_result()"]
+    ENGINE -->|notebooklm_impact\nnotebook_analysis\nscenario_outlook| BRIDGE
+
+    SNAP["dashboard_snapshot.v1\n+notebook_analysis\n+scenario_outlook\n+notebooklm_*"]
+    BRIDGE --> SNAP
+
+    UI["Executive Dashboard v2.1\nAiDecisionPanel\nScenarioOutlookPanel"]
+    SNAP --> UI
+```
+
+### Executive Dashboard v2.1
+
+```mermaid
+flowchart TD
+    FLAG["VITE_DASHBOARD_LAYOUT=executive"] --> EXEC
+    EXEC["StockPredV5 (executive layout)"]
+    EXEC -->|"useEffect\nauto-fetch on ticker change"| API["api_server.py :5151\nGET /api/recommend"]
+    API --> RE["RecommendationEngine\n+ NotebookLM enrich"]
+    RE --> BRIDGE["dashboard_bridge.py\nnotebook_analysis\nscenario_outlook"]
+    BRIDGE --> SNAP["dashboard_snapshot.v1"]
+    SNAP --> KPI["TopKpiGrid\nCurrentPrice/Recommendation/Confidence/R-R"]
+    SNAP --> ADP["AiDecisionPanel\nLLM Advisor + NotebookLM + ActionPlan"]
+    SNAP --> SOL["ScenarioOutlookPanel\nBull/Base/Bear"]
+    SNAP --> WL["WatchlistPanel\nNewsTimelinePanel"]
+```
+
+## Current Architecture — 2026-05-29
+
+The current system has five operator-facing surfaces (Updated: 2026-05-30):
 
 | Surface | Path | Role | Safety boundary |
 |---|---|---|---|
 | Python CLI | `src/stock_rtx4060/main.py` | Runs `recommend`, `dashboard-export`, `paper-status`, `factor-*`, `ops-v1`, `benchmark`, and `env`. | Report-only output under `reports/` and audit logs. |
 | Local API | `api_server.py` | Serves `/api/recommend`, `/api/snapshot`, `/api/universe`, `/api/symbol`, `/api/model-scores`, `/api/paper-status`, and `/api/health`. | Local dashboard integration only; no broker/order route. |
-| Dashboard UI | `root_folder_snapshot/stock-pred-v5` | Vite/React dashboard. REC tab can use API mode or file snapshot mode. | Shows readiness and warnings; does not place orders. |
+| Dashboard UI (classic) | `root_folder_snapshot/stock-pred-v5` | Vite/React dashboard. REC tab can use API mode or file snapshot mode. | Shows readiness and warnings; does not place orders. |
+| Dashboard UI (executive) | `stock-pred-v5` + `VITE_DASHBOARD_LAYOUT=executive` | Executive Decision Dashboard v2.1 — auto-fetches `/api/recommend` on ticker change. | Report-only; no broker/order buttons; ActionPlan labeled "Reference only". |
 | Forward evidence | `src/stock_rtx4060/live_review/auto_forward_recorder.py` | Records daily forward-paper evidence until review pack generation. | `auto_promote=false`, `new_capital_allowed=false`, `broker_order_execution=false`, `manual_approval_required=true`. |
+| **NotebookLM API** | `iran-war-notelm/iran-war-uae-monitor` `:8088` | Stock news → NotebookLM analysis → `GET /api/stock-news/notebook-analysis`. | Read-only advisory data; no order route. |
 
 ```mermaid
 flowchart TD
@@ -74,10 +149,15 @@ flowchart TD
     Recommend --> Risk[risk_rules.py]
     Recommend --> Advisor[advisors/orchestrator.py]
     Advisor --> LLM[claude_client.py optional live LLM]
+    Advisor --> MAB["thompson_weights.py\nThompsonWeights MAB\nBeta distribution sampling"]
+    MAB -->|ADVISOR_WEIGHTS_MODE=mab| Advisor
     Advisor --> Memory[advisors/memory DuckDB L1/L2/L3]
     Advisor --> Tools[advisors/openbb_tools]
+    Advisor --> NewsSent["news_sentiment.py\n+notebook_analysis\n→ news_user.md prompt"]
+    Advisor --> NLMAdapt["advisors/notebooklm_news.py\nfetch + enrich context"]
+    NLMAdapt -->|NOTEBOOKLM_NEWS_MODE=cache| NLMApi["iran-war-notelm :8088\n/api/stock-news/notebook-analysis"]
     Recommend --> DashboardBridge[dashboard_bridge.py]
-    DashboardBridge --> Snapshot[dashboard_snapshot.v1]
+    DashboardBridge -->|"+notebook_analysis\n+scenario_outlook\n+notebooklm_*"| Snapshot[dashboard_snapshot.v1]
     Snapshot --> UI
     CLI --> Readiness[readiness/classifier.py + snapshots.py]
     Readiness --> LiveReview[live_review/auto_forward_recorder.py]

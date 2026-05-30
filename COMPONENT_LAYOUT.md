@@ -20,15 +20,21 @@
 | 영역 | 실제 경로 | 핵심 역할 |
 |---|---|---|
 | Backend engine | `stock_rtx4060_unified/` | 추천 계산, 데이터 공급자 호출, risk gate, report, audit log, API 제공 |
-| API server | `stock_rtx4060_unified/api_server.py` | `/api/symbol`, `/api/recommend`, `/api/snapshot`, `/api/health` 제공 |
-| Dashboard app | `stock-pred-v5/` | React/Vite 화면, US/KRX 시장 토글, 차트, 모델 점수, REC 추천 패널 |
-| Main dashboard component | `stock-pred-v5/src/StockPredV5.jsx` | 전체 화면 레이아웃, 시장 선택, 종목 데이터 fetch, SIGNAL/MODELS/BACKTEST/REC 탭 |
+| API server | `stock_rtx4060_unified/api_server.py` | `/api/symbol`, `/api/recommend`, `/api/snapshot`, `/api/health` 제공; `.env` 자동 로드 |
+| Dashboard app (classic) | `stock-pred-v5/` | React/Vite 화면, US/KRX 시장 토글, 차트, 모델 점수, REC 추천 패널 |
+| **Dashboard app (executive)** | `stock-pred-v5/` + `VITE_DASHBOARD_LAYOUT=executive` | **Executive Decision Dashboard v2.1 — HeaderBar/KPI/AiPanel/Watchlist/Scenario (Added 2026-05-30)** |
+| Main dashboard component | `stock-pred-v5/src/StockPredV5.jsx` | 전체 화면 레이아웃; EXEC_LAYOUT flag; execSnap auto-fetch useEffect |
 | Recommendation panel | `stock-pred-v5/src/components/RecommendationPanel.jsx` | FILE/API 추천 snapshot 로드, Audit/Approval/Provider 요약, 추천 카드 목록 |
 | Recommendation card | `stock-pred-v5/src/components/RecommendationCard.jsx` | 개별 추천 후보 카드 렌더링; LLM Advisor 점수 게이지 포함 (Updated: 2026-05-10) |
+| **AI Decision Panel** | `stock-pred-v5/src/components/AiDecisionPanel.jsx` | **LLM Advisor + NotebookLM 뉴스 + Action Plan 통합 패널 (Added 2026-05-30)** |
+| **NotebookLM News** | `stock-pred-v5/src/components/NotebookNewsAnalysis.jsx` | **bullish/bearish factors + sentiment + sources (null-safe) (Added 2026-05-30)** |
+| **Scenario Panel** | `stock-pred-v5/src/components/ScenarioOutlookPanel.jsx` | **Bull/Base/Bear 시나리오 확률 표시 (Added 2026-05-30)** |
 | Risk badge | `stock-pred-v5/src/components/RiskGateBadge.jsx` | 추천 verdict 시각 표시 |
 | KEVPE badge | `stock-pred-v5/src/components/KevpeBadge.jsx` | KEVPE 이벤트가 있을 때 regime/score 표시 |
 | File bridge | `stock-pred-v5/public/dashboard_snapshot.json` | FILE 모드 REC 입력 |
 | API bridge | `http://127.0.0.1:5151/api/recommend` | API 모드 REC 입력 |
+| **NotebookLM API** | `http://127.0.0.1:8088/api/stock-news/notebook-analysis` | **iran-war-notelm stock_news API (Added 2026-05-30)** |
+| **Thompson MAB** | `advisors/thompson_weights.py` | **Beta 분포 advisor 가중치 동적 결정 (Added 2026-05-30)** |
 
 ## 2. System Component Map
 
@@ -52,17 +58,24 @@ flowchart LR
     end
 
     subgraph Backend["stock_rtx4060_unified Python"]
-        API[api_server.py<br/>Flask :5151]
+        API[api_server.py<br/>Flask :5151<br/>+.env loader]
         Main[src/stock_rtx4060/main.py]
         Provider[data_providers.py]
-        Engine[recommendation_engine.py]
+        Engine[recommendation_engine.py<br/>+notebooklm_* fields]
         Feature[feature_engine.py]
         Model[ensemble_model.py]
         Backtest[backtester.py]
         Risk[risk_rules.py]
-        Bridge[dashboard_bridge.py]
+        Bridge[dashboard_bridge.py<br/>+notebook_analysis<br/>+scenario_outlook]
         Audit[audit_log.jsonl]
         Reports[reports/*.md<br/>reports/*.json]
+        Advisor[advisors/orchestrator.py<br/>+ThompsonWeights MAB]
+        NLMAdapt[advisors/notebooklm_news.py]
+        MAB[advisors/thompson_weights.py<br/>Beta dist MAB]
+    end
+
+    subgraph NLMServer["iran-war-notelm :8088"]
+        NLMApi[GET /api/stock-news/<br/>notebook-analysis]
     end
 
     Browser --> App
@@ -89,7 +102,66 @@ flowchart LR
     Engine --> Reports
     Engine --> Bridge
     Bridge --> PublicSnapshot
+    Engine --> Advisor
+    Advisor --> MAB
+    Advisor --> NLMAdapt
+    NLMAdapt -->|NOTEBOOKLM_NEWS_MODE=cache| NLMApi
 ```
+
+## 2-A. Executive Decision Dashboard v2.1 (Added: 2026-05-30)
+
+`VITE_DASHBOARD_LAYOUT=executive` 환경변수 설정 시 활성화되는 새 레이아웃.
+기존 classic 레이아웃은 flag 미설정 시 100% 보존.
+
+```mermaid
+flowchart TD
+    ExecRoot[StockPredV5<br/>EXEC_LAYOUT=true] --> HB[HeaderBar<br/>brand/market/ticker]
+    ExecRoot --> KPI[TopKpiGrid<br/>4개 KPI 카드]
+    ExecRoot --> MDG[MainDecisionGrid<br/>3열 그리드]
+    ExecRoot --> BIG[BottomInsightGrid<br/>3열 그리드]
+
+    KPI --> CPCard[CurrentPriceCard]
+    KPI --> RecKpi[RecommendationKpi]
+    KPI --> ConfKpi[ConfidenceKpi]
+    KPI --> RRKpi[RiskRewardKpi]
+
+    MDG --> MSP[MarketSnapshotPanel]
+    MDG --> ChartStack[CompactPriceChart ≤300px<br/>+ ModelScoresPanel]
+    MDG --> ADP[AiDecisionPanel]
+
+    ADP --> LLMAdvisor[LLM Advisor Block]
+    ADP --> NLM[NotebookNewsAnalysis<br/>null-safe]
+    ADP --> AP[ActionPlanPanel<br/>Entry/Stop/TP ref only]
+
+    BIG --> WL[WatchlistPanel]
+    BIG --> NT[NewsTimelinePanel]
+    BIG --> SO[ScenarioOutlookPanel<br/>Bull/Base/Bear]
+```
+
+### 자동 데이터 fetch
+
+종목 변경 시 `useEffect`가 `/api/recommend?universe={ticker}` 를 자동 호출해 `execSnap` state를 채움.
+`execSnap`이 `AiDecisionPanel`, KPI 카드, `ScenarioOutlookPanel`에 전달됨.
+
+### dashboard_snapshot.v1 신규 필드 (2026-05-30)
+
+| 필드 | 타입 | 출처 |
+|---|---|---|
+| `notebook_analysis` | dict \| null | `RecommendationResult.notebook_analysis` passthrough |
+| `scenario_outlook` | dict \| null | passthrough 또는 `_build_scenario_fallback()` 자동 생성 |
+| `notebooklm_impact` | str \| null | `MEDIUM_HIGH` 등 NotebookLM market impact |
+| `notebooklm_confidence` | float \| null | 0.0–1.0 |
+| `notebooklm_source_count` | int \| null | 분석에 사용된 뉴스 수 |
+| `notebooklm_as_of` | str \| null | ISO timestamp |
+
+### 안전 경계 (변경 없음)
+
+Executive 레이아웃도 동일 안전 경계 적용:
+- 브로커 실행 버튼 없음
+- ActionPlanPanel: "Reference only · Manual review required" 라벨
+- ScenarioOutlookPanel: "Report-only · No broker execution" 라벨
+
+---
 
 ## 3. Dashboard Screen Layout
 
@@ -637,11 +709,32 @@ classDiagram
         screening_output_only
         validations[]
         reasons[]
+        advisor_score
+        advisor_rationale
+        notebooklm_impact
+        notebooklm_confidence
+        notebooklm_source_count
+        notebooklm_as_of
+        notebook_analysis
+        scenario_outlook
     }
 
     DashboardSnapshot --> Config
     DashboardSnapshot --> Result
 ```
+
+### Additive Fields (Added 2026-05-30)
+
+| 필드 | 타입 | 출처 | 설명 |
+|---|---|---|---|
+| `advisor_score` | float \| null | `_apply_advisor_blend()` | LLM Advisor 블렌딩 점수 [-1,+1] |
+| `advisor_rationale` | str \| null | orchestrator outputs | Advisor 종합 근거 (240자 이내) |
+| `notebooklm_impact` | str \| null | NotebookLM analysis | `LOW/MEDIUM/MEDIUM_HIGH/HIGH` |
+| `notebooklm_confidence` | float \| null | NotebookLM analysis | 0.0–1.0 |
+| `notebooklm_source_count` | int \| null | NotebookLM sources | 분석에 사용된 뉴스 수 |
+| `notebooklm_as_of` | str \| null | NotebookLM cache | ISO 8601 timestamp |
+| `notebook_analysis` | dict \| null | NotebookLM full analysis | summary/bullish_factors/bearish_factors/sentiment/score |
+| `scenario_outlook` | dict \| null | passthrough or fallback | bull/base/bear: range/return/probability |
 
 Minimum REC requirements:
 
