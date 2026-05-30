@@ -116,6 +116,155 @@ function normalizeDashboardConfig(raw) {
   };
 }
 
+/* ---------- Executive safety gate helpers ---------- */
+const EXEC_HARD_BLOCKERS = [
+  "BACKTEST_HONESTY_NOT_PASS",
+  "ACCURACY_BELOW_50",
+  "AUC_BELOW_0_50",
+  "COMPLETED_TRADES_BELOW_50",
+  "SYNTHETIC_DATA_SOURCE",
+  "STALE_DATA",
+  "TARGET_RETURN_SHORTFALL",
+  "OPTIMIZER_FAILURE",
+  "VALIDATION_FAILED",
+  "BROKER_EXECUTION_NOT_ALLOWED",
+  "LIVE_TRADING_NOT_ALLOWED",
+];
+
+const EXEC_SOFT_WARNINGS = [
+  "COST_FRAGILE",
+  "X5_RETURN_FRAGILE_INFO",
+  "LOW_SAMPLE_SIZE",
+  "MARCH_FORWARD_UNDERPERFORM",
+  "FOLD2_REGIME_UNDERPERFORM",
+  "HIGH_CASH_WEIGHT",
+  "DATA_SOURCE_AMBER",
+];
+
+function normalizeConfidencePct(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.round(n <= 1 ? n * 100 : n);
+}
+
+function isExecutiveDataStale(latestDate, now = new Date()) {
+  if (!latestDate) return true;
+  const d = new Date(latestDate);
+  if (Number.isNaN(d.getTime())) return true;
+  return (now.getTime() - d.getTime()) / 86_400_000 > 7;
+}
+
+function executiveSourceRisk(source) {
+  const text = String(source || "").toUpperCase();
+  if (!text || text === "UNAVAILABLE" || text === "ERROR") return "AMBER";
+  if (text.includes("SYN") || text.includes("SYNTHETIC")) return "BLOCK";
+  if (text.includes("YFINANCE") || text.includes("YAHOO") || text.includes("PYKRX") || text.includes("KRX") || text === "API") {
+    return "OK";
+  }
+  if (text.includes("CACHE")) return "AMBER";
+  return "AMBER";
+}
+
+function pushExecutiveReasonFlags(flags, value) {
+  const text = String(value || "").toUpperCase();
+  if (!text) return;
+  if (text.includes("BACKTEST") && (text.includes("HONEST") || text.includes("HONESTY"))) flags.push("BACKTEST_HONESTY_NOT_PASS");
+  if (text.includes("ACCURACY")) flags.push("ACCURACY_BELOW_50");
+  if (text.includes("AUC")) flags.push("AUC_BELOW_0_50");
+  if (text.includes("COMPLETED") && text.includes("TRADE")) flags.push("COMPLETED_TRADES_BELOW_50");
+  if (text.includes("TARGET") && text.includes("RETURN")) flags.push("TARGET_RETURN_SHORTFALL");
+  if (text.includes("OPTIMIZER")) flags.push("OPTIMIZER_FAILURE");
+  if (text.includes("VALIDATION")) flags.push("VALIDATION_FAILED");
+  if (text.includes("SYNTHETIC") || text.includes("SYN_DATA")) flags.push("SYNTHETIC_DATA_SOURCE");
+  if (text.includes("COST")) flags.push("COST_FRAGILE");
+  if (text.includes("LOW") && text.includes("SAMPLE")) flags.push("LOW_SAMPLE_SIZE");
+  if (text.includes("HIGH") && text.includes("CASH")) flags.push("HIGH_CASH_WEIGHT");
+}
+
+function flagsFromExecutiveSnapshot(result) {
+  if (!result) return [];
+  const flags = [];
+  const controls = result.execution_controls || {};
+
+  if (controls.live_trading_allowed !== true) flags.push("LIVE_TRADING_NOT_ALLOWED");
+  if (controls.broker_execution_allowed !== true) flags.push("BROKER_EXECUTION_NOT_ALLOWED");
+  if (Array.isArray(controls.promotion_blockers)) {
+    controls.promotion_blockers.forEach((item) => pushExecutiveReasonFlags(flags, item));
+  }
+
+  const validations = Array.isArray(result.validations) ? result.validations : [];
+  validations.forEach((v) => {
+    const status = String(v?.status || "").toUpperCase();
+    const name = String(v?.name || v?.check || v?.id || "");
+    if (status === "FAIL" || status === "RED" || status === "BLOCK") pushExecutiveReasonFlags(flags, name);
+    if (status === "AMBER" || status === "WARN" || status === "WARNING") pushExecutiveReasonFlags(flags, name);
+  });
+
+  [
+    result.validation_summary,
+    result.dashboard_status,
+    result.blocking_reason,
+    result.blocking_reasons,
+    result.readiness_blocking,
+    result.warnings,
+  ].forEach((value) => {
+    if (Array.isArray(value)) value.forEach((item) => pushExecutiveReasonFlags(flags, item));
+    else if (value && typeof value === "object") Object.values(value).forEach((item) => pushExecutiveReasonFlags(flags, item));
+    else pushExecutiveReasonFlags(flags, value);
+  });
+
+  return flags;
+}
+
+function buildExecutiveSafetyState({
+  result,
+  currentSource,
+  latestDate,
+  aiRecommendation,
+  rawConfidence,
+  now = new Date(),
+}) {
+  const flags = new Set(flagsFromExecutiveSnapshot(result));
+  const sourceRisk = executiveSourceRisk(currentSource);
+  if (sourceRisk === "BLOCK") flags.add("SYNTHETIC_DATA_SOURCE");
+  if (sourceRisk === "AMBER") flags.add("DATA_SOURCE_AMBER");
+  if (isExecutiveDataStale(latestDate, now)) flags.add("STALE_DATA");
+
+  flags.add("LIVE_TRADING_NOT_ALLOWED");
+  flags.add("BROKER_EXECUTION_NOT_ALLOWED");
+
+  const evidenceFlags = [...flags];
+  const hardBlockers = evidenceFlags.filter((flag) => EXEC_HARD_BLOCKERS.includes(flag));
+  const softWarnings = evidenceFlags.filter((flag) => EXEC_SOFT_WARNINGS.includes(flag));
+  const isHardBlocked = hardBlockers.length > 0;
+  const isSoftBlocked = !isHardBlocked && softWarnings.length > 0;
+  const confidenceRaw = normalizeConfidencePct(rawConfidence);
+  const confidenceDisplayed = isHardBlocked
+    ? Math.min(confidenceRaw || 50, 50)
+    : isSoftBlocked
+      ? Math.min(confidenceRaw || 65, 65)
+      : confidenceRaw;
+
+  return {
+    uiVerdict: isHardBlocked ? "NO TRADE / PAPER ONLY" : isSoftBlocked ? "WATCH ONLY / REVIEW" : aiRecommendation,
+    originalRecommendation: aiRecommendation || "PENDING",
+    confidenceRaw,
+    confidenceDisplayed,
+    confidenceLabel: isHardBlocked ? "Blocked by risk gate" : isSoftBlocked ? "Review" : confidenceDisplayed >= 70 ? "High" : confidenceDisplayed >= 50 ? "Medium" : "Low",
+    hardBlockers,
+    softWarnings,
+    isHardBlocked,
+    isSoftBlocked,
+    evidenceFlags,
+    actionPlanEnabled: !isHardBlocked,
+    tradeSignalEnabled: !isHardBlocked,
+    liveTradingAllowed: false,
+    brokerExecutionAllowed: false,
+    sourceRisk,
+    dataSource: currentSource || "unavailable",
+  };
+}
+
 async function fetchDashboardConfig() {
   const res = await fetch(DASHBOARD_CONFIG_PATH, { cache: "no-store" });
   const payload = await res.json().catch(() => ({}));
@@ -1172,6 +1321,13 @@ ${backtest ? `## Backtest (\\$10,000 initial)
       const changePct = prevRow?.close ? ch / prevRow.close * 100 : rowNotelm?.change_pct ?? null;
       const rowRec = recFromVerdict(rowSnap?.verdict || rowSnap?.dashboard_status);
       const rowConfidence = rowSnap?.notebooklm_confidence ?? rowNotelm?.confidence ?? rowSnap?.probability ?? rowSnap?.direction_prob ?? null;
+      const rowSafety = rowSnap ? buildExecutiveSafetyState({
+        result: rowSnap,
+        currentSource: cache[s.symbol]?.source || rowSnap?.price_provider || rowSnap?.price_source || rowSnap?.data_source || rowNotelm?.price_provider || rowNotelm?.price_source,
+        latestDate: lastRow?.date || lastRow?.timestamp || rowSnap?.price_as_of || rowSnap?.notebooklm_as_of || rowSnap?.generated_at_utc || rowNotelm?.price_as_of,
+        aiRecommendation: rowRec,
+        rawConfidence: rowConfidence,
+      }) : null;
       return {
         symbol: s.symbol,
         name: s.name || s.symbol,
@@ -1180,8 +1336,8 @@ ${backtest ? `## Backtest (\\$10,000 initial)
         changePct,
         priceAsOf: lastRow?.date || rowNotelm?.price_as_of || null,
         priceProvider: cache[s.symbol]?.source || rowNotelm?.price_provider || rowNotelm?.price_source || null,
-        rec: rowRec || rowNotelm?.rec || null,
-        confidence: rowConfidence,
+        rec: rowSafety?.isHardBlocked ? "NO TRADE" : rowRec || rowNotelm?.rec || null,
+        confidence: rowSafety ? rowSafety.confidenceDisplayed / 100 : rowConfidence,
         notebookAnalysis: rowSnap?.notebook_analysis || rowNotelm?.notebook_analysis || null,
         newsCount: Array.isArray(rowSnap?.news_headlines)
           ? rowSnap.news_headlines.length
@@ -1202,6 +1358,15 @@ ${backtest ? `## Backtest (\\$10,000 initial)
         : [];
     const dataAsOf = last?.date || last?.timestamp || snap?.notebooklm_as_of || snap?.generated_at_utc || "unavailable";
     const sourceLabel = currentSeries.length ? (cache[selected]?.source || "API") : "unavailable";
+    const selectedRec = recFromVerdict(snap?.verdict || snap?.dashboard_status);
+    const selectedConfidence = snap?.notebooklm_confidence ?? snap?.probability ?? snap?.direction_prob;
+    const safetyState = snap ? buildExecutiveSafetyState({
+      result: snap,
+      currentSource: cache[selected]?.source || snap?.price_provider || snap?.price_source || snap?.data_source || sourceLabel,
+      latestDate: last?.date || last?.timestamp || snap?.price_as_of || snap?.notebooklm_as_of || snap?.generated_at_utc,
+      aiRecommendation: selectedRec,
+      rawConfidence: selectedConfidence,
+    }) : null;
 
     return (
       <div style={{minHeight:"100vh",padding:8,background:"radial-gradient(circle at 18% -10%, rgba(113,50,245,0.18), transparent 28%), linear-gradient(180deg,#05090d,#030609)",color:"#f4f7fb",fontFamily:`"IBM Plex Sans","Inter","Segoe UI",sans-serif`,boxSizing:"border-box"}}>
@@ -1230,9 +1395,9 @@ ${backtest ? `## Backtest (\\$10,000 initial)
         {/* Top KPI row */}
         <div style={{display:"grid",gridTemplateColumns:"1.05fr 0.97fr 0.98fr 1.1fr",gap:8,marginBottom:8}}>
           <CurrentPriceCard price={last?.close} change={chg} changePct={chgPct} volume={last?.volume} currency={currency} ohlcvRecords={currentSeries} asOf={dataAsOf}/>
-          <RecommendationKpi verdict={snap?.verdict} advisorScore={snap?.advisor_score}/>
-          <ConfidenceKpi confidence={snap?.notebooklm_confidence ?? snap?.probability} loading={aiPanelLoading}/>
-          <RiskRewardKpi riskReward={snap?.risk_reward} loading={aiPanelLoading}/>
+          <RecommendationKpi verdict={snap?.verdict} advisorScore={snap?.advisor_score} safetyState={safetyState}/>
+          <ConfidenceKpi confidence={selectedConfidence} loading={aiPanelLoading} safetyState={safetyState}/>
+          <RiskRewardKpi riskReward={snap?.risk_reward} loading={aiPanelLoading} safetyState={safetyState}/>
         </div>
         {/* Main decision grid */}
         <div style={{display:"grid",gridTemplateColumns:"0.9fr 1.14fr 1.52fr",gap:8,marginBottom:8,minHeight:410}}>
@@ -1241,7 +1406,7 @@ ${backtest ? `## Backtest (\\$10,000 initial)
             <CompactPriceChart ohlcvRecords={cache[selected]?.data||[]} currency={currency}/>
             <ModelScoresPanel modelEvidence={modelEvidenceCache[modelEvidenceCacheKey]}/>
           </div>
-          <AiDecisionPanel result={snap} headlines={headlines} loading={aiPanelLoading} ticker={selected}/>
+          <AiDecisionPanel result={snap} headlines={headlines} loading={aiPanelLoading} ticker={selected} safetyState={safetyState}/>
         </div>
         {/* Bottom insight grid */}
         <div style={{display:"grid",gridTemplateColumns:"0.9fr 1.14fr 1.52fr",gap:8,minHeight:230}}>

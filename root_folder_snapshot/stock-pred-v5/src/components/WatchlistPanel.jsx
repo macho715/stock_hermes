@@ -18,7 +18,7 @@ export default function WatchlistPanel({ symbols=[], selected, onSelect }) {
           const hasChange = s.changePct != null && Number.isFinite(Number(s.changePct));
           const up = hasChange ? Number(s.changePct) >= 0 : true;
           const rec = s.rec || "—";
-          const recColor = rec==="SELL"?THEME.red:rec==="HOLD"?THEME.amber:rec==="BUY"?THEME.greenBright:THEME.textMuted;
+          const recColor = rec==="NO TRADE"||rec==="SELL"?THEME.red:rec==="HOLD"?THEME.amber:rec==="BUY"?THEME.greenBright:THEME.textMuted;
           const confidence = s.confidence!=null ? Number(s.confidence) : null;
           const confidencePct = confidence!=null && Number.isFinite(confidence)
             ? Math.round(confidence > 1 ? confidence : confidence * 100)

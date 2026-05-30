@@ -2,7 +2,6 @@ import React from "react";
 import DashboardCard, { THEME } from "./DashboardCard";
 import NotebookNewsAnalysis from "./NotebookNewsAnalysis";
 import ActionPlanPanel from "./ActionPlanPanel";
-const VERDICT_COLOR={ELIGIBLE_RECOMMENDATION:THEME.green,ACCUMULATE_RECOMMENDATION:THEME.green,AMBER_REVIEW_ONLY:THEME.amber,AMBER_WATCHLIST:THEME.amber,RED_NOT_RECOMMENDED:THEME.red,RED_DATA_INSUFFICIENT:THEME.red};
 function labelFromVerdict(verdict, score) {
   if (score != null) return score >= 0 ? "BUY" : "SELL";
   if (!verdict) return "PENDING";
@@ -12,7 +11,7 @@ function labelFromVerdict(verdict, score) {
   return "BUY";
 }
 
-export default function AiDecisionPanel({ result, headlines=[], loading=false, ticker="" }) {
+export default function AiDecisionPanel({ result, headlines=[], loading=false, ticker="", safetyState=null }) {
   if (loading || !result) {
     const tickerLabel = ticker || "selected ticker";
     return (
@@ -52,9 +51,19 @@ export default function AiDecisionPanel({ result, headlines=[], loading=false, t
     || result?.candidate_label
     || "Recommendation snapshot is loading.";
   const verdict = result?.verdict;
-  const scoreColor = score==null?THEME.textDim:score>=0?THEME.green:THEME.red;
-  const vColor = VERDICT_COLOR[verdict]||THEME.textDim;
   const nb = result?.notebook_analysis ?? null;
+  const blocked = Boolean(safetyState?.isHardBlocked);
+  const advisorLabel = blocked ? safetyState.uiVerdict : labelFromVerdict(verdict, score);
+  const advisorBorder = blocked ? `${THEME.red}88` : `${THEME.green}66`;
+  const advisorBg = blocked
+    ? "linear-gradient(90deg,rgba(239,68,68,0.36),rgba(239,68,68,0.07))"
+    : "linear-gradient(90deg,rgba(20,158,97,0.4),rgba(20,158,97,0.08))";
+  const advisorLabelBg = blocked
+    ? "linear-gradient(90deg,#ef4444,#7f1d1d)"
+    : "linear-gradient(90deg,#149e61,#0b6d3b)";
+  const advisorRationale = blocked
+    ? `Risk gate blocks the action plan. Original AI Rec: ${safetyState.originalRecommendation || labelFromVerdict(verdict, score)}.`
+    : rationale;
   return (
     <DashboardCard title="AI Decision Panel" subtitle="Powered by LLM + NotebookLM"
       right={<span style={{fontSize:11,color:THEME.textMuted,fontWeight:800}}>VERDICT</span>}
@@ -64,9 +73,17 @@ export default function AiDecisionPanel({ result, headlines=[], loading=false, t
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
           <span style={{fontSize:12,color:THEME.textDim,letterSpacing:"0.04em",textTransform:"uppercase",fontWeight:800}}>LLM Advisor <span style={{fontSize:10,fontWeight:500}}>(GPT-4o) ⓘ</span></span>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"190px 1fr",border:`1px solid ${THEME.green}66`,borderRadius:6,overflow:"hidden",background:"linear-gradient(90deg,rgba(20,158,97,0.4),rgba(20,158,97,0.08))"}}>
-          <div style={{fontSize:30,fontWeight:900,color:"#fff",background:"linear-gradient(90deg,#149e61,#0b6d3b)",padding:"10px 18px"}}>{labelFromVerdict(verdict, score)}</div>
-          <div style={{fontSize:12,color:THEME.text,lineHeight:1.45,padding:"10px 16px"}}>{rationale}</div>
+        {blocked && (
+          <div style={{marginBottom:8,border:`1px solid ${THEME.red}88`,borderRadius:6,background:"rgba(239,68,68,0.11)",padding:"8px 10px"}}>
+            <div style={{fontSize:12,color:THEME.red,fontWeight:900,letterSpacing:"0.04em"}}>RISK GATE ACTIVE - NO TRADE / PAPER ONLY</div>
+            <div style={{fontSize:10,color:THEME.textDim,marginTop:4}}>
+              {(safetyState.hardBlockers || []).slice(0,4).join(" · ")}
+            </div>
+          </div>
+        )}
+        <div style={{display:"grid",gridTemplateColumns:"190px 1fr",border:`1px solid ${advisorBorder}`,borderRadius:6,overflow:"hidden",background:advisorBg}}>
+          <div style={{fontSize:blocked?18:30,fontWeight:900,color:"#fff",background:advisorLabelBg,padding:"10px 18px",lineHeight:1.1}}>{advisorLabel}</div>
+          <div style={{fontSize:12,color:THEME.text,lineHeight:1.45,padding:"10px 16px"}}>{advisorRationale}</div>
         </div>
       </div>
       {/* NotebookLM */}
@@ -75,7 +92,7 @@ export default function AiDecisionPanel({ result, headlines=[], loading=false, t
       </div>
       {/* Action Plan */}
       <div style={{padding:"8px 0"}}>
-        <ActionPlanPanel result={result}/>
+        <ActionPlanPanel result={result} safetyState={safetyState}/>
       </div>
     </DashboardCard>
   );
