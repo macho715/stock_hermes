@@ -80,6 +80,43 @@ const US_BASE = {
   GOOGL: 165, META: 480, SPY: 510, QQQ: 430,
 };
 
+/* ============================================================
+ * SAFETY GATE — research / paper-trading only. Live trading: forbidden.
+ * ============================================================ */
+const HARD_BLOCKERS = [
+  "BACKTEST_HONESTY_NOT_PASS",
+  "ACCURACY_BELOW_50",
+  "AUC_BELOW_0_50",
+  "COMPLETED_TRADES_BELOW_50",
+  "SYNTHETIC_DATA_SOURCE",
+  "STALE_DATA",
+  "TARGET_RETURN_SHORTFALL",
+  "OPTIMIZER_FAILURE",
+  "VALIDATION_FAILED",
+  "BROKER_EXECUTION_NOT_ALLOWED",
+  "LIVE_TRADING_NOT_ALLOWED",
+];
+
+const SOFT_WARNINGS = [
+  "COST_FRAGILE",
+  "X5_RETURN_FRAGILE_INFO",
+  "LOW_SAMPLE_SIZE",
+  "MARCH_FORWARD_UNDERPERFORM",
+  "FOLD2_REGIME_UNDERPERFORM",
+  "HIGH_CASH_WEIGHT",
+  "DATA_SOURCE_AMBER",
+];
+
+const SOURCE_RISK = {
+  YAHOO: "OK",
+  KRX: "OK",
+  PYKRXCACHE: "AMBER",
+  pykrxcache: "AMBER",
+  SYN: "BLOCK",
+  SYNTHETIC: "BLOCK",
+  synthetic: "BLOCK",
+};
+
 /* ----------  PRNG / hash  ---------- */
 function mulberry32(seed) {
   return function () {
@@ -337,6 +374,114 @@ function signalFromScore(s) {
   return "HOLD";
 }
 
+/* ---- Safety gate helpers ---- */
+function isStaleMarketDate(latestDate, now = new Date()) {
+  if (!latestDate) return true;
+  const d = new Date(latestDate);
+  if (isNaN(d)) return true;
+  return (now - d) / 86_400_000 > 7;
+}
+
+function getConfidenceLabel(conf) {
+  if (conf >= 70) return "High";
+  if (conf >= 50) return "Medium";
+  return "Low";
+}
+
+function buildDecisionSafetyState({
+  aiRecommendation,
+  rawConfidence,
+  evidenceFlags = [],
+  dataSource,
+  latestDate,
+  now = new Date(),
+}) {
+  const normalizedFlags = new Set(evidenceFlags.filter(Boolean));
+
+  const sourceRisk = SOURCE_RISK[dataSource] || "AMBER";
+  if (sourceRisk === "BLOCK") normalizedFlags.add("SYNTHETIC_DATA_SOURCE");
+  if (sourceRisk === "AMBER") normalizedFlags.add("DATA_SOURCE_AMBER");
+
+  if (isStaleMarketDate(latestDate, now)) normalizedFlags.add("STALE_DATA");
+
+  // live/broker always blocked in this dashboard
+  normalizedFlags.add("LIVE_TRADING_NOT_ALLOWED");
+  normalizedFlags.add("BROKER_EXECUTION_NOT_ALLOWED");
+
+  const hardBlockers = [...normalizedFlags].filter((x) => HARD_BLOCKERS.includes(x));
+  const softWarnings = [...normalizedFlags].filter((x) => SOFT_WARNINGS.includes(x));
+
+  const isHardBlocked = hardBlockers.length > 0;
+  const isSoftBlocked = !isHardBlocked && softWarnings.length > 0;
+
+  const confidenceRaw = Number.isFinite(rawConfidence) ? rawConfidence : 0;
+  const confidenceDisplayed = isHardBlocked
+    ? Math.min(confidenceRaw, 50)
+    : isSoftBlocked
+      ? Math.min(confidenceRaw, 65)
+      : confidenceRaw;
+
+  const uiVerdict = isHardBlocked
+    ? "NO TRADE / PAPER ONLY"
+    : isSoftBlocked
+      ? "WATCH ONLY / REVIEW"
+      : aiRecommendation;
+
+  return {
+    uiVerdict,
+    originalRecommendation: aiRecommendation,
+    confidenceRaw,
+    confidenceDisplayed,
+    confidenceLabel: isHardBlocked ? "Blocked" : isSoftBlocked ? "Review" : getConfidenceLabel(confidenceDisplayed),
+    hardBlockers,
+    softWarnings,
+    evidenceFlags: [...normalizedFlags],
+    actionPlanEnabled: !isHardBlocked,
+    tradeSignalEnabled: !isHardBlocked,
+    liveTradingAllowed: false,
+    brokerExecutionAllowed: false,
+    sourceRisk,
+    dataSource,
+  };
+}
+
+function flagsFromBackendResult(result) {
+  if (!result) return [];
+  const flags = [];
+  const controls = result.execution_controls || {};
+  const validations = result.validations || [];
+
+  if (controls.live_trading_allowed !== true) flags.push("LIVE_TRADING_NOT_ALLOWED");
+  if (controls.broker_execution_allowed !== true) flags.push("BROKER_EXECUTION_NOT_ALLOWED");
+  if ((controls.promotion_blockers || []).includes("BLOCKED_BY_TARGET_RETURN_SHORTFALL")) {
+    flags.push("TARGET_RETURN_SHORTFALL");
+  }
+
+  for (const v of validations) {
+    if (v.status === "FAIL" || v.status === "RED") {
+      const name = String(v.name || "").toUpperCase().replace(/\s+/g, "_");
+      if (name.includes("BACKTEST_HONESTY")) flags.push("BACKTEST_HONESTY_NOT_PASS");
+      else if (name.includes("ACCURACY")) flags.push("ACCURACY_BELOW_50");
+      else if (name.includes("AUC")) flags.push("AUC_BELOW_0_50");
+      else if (name.includes("COMPLETED_TRADE")) flags.push("COMPLETED_TRADES_BELOW_50");
+      else if (name.includes("OPTIMIZER")) flags.push("OPTIMIZER_FAILURE");
+      else if (name.includes("VALIDATION")) flags.push("VALIDATION_FAILED");
+      else if (name.includes("TARGET_RETURN")) flags.push("TARGET_RETURN_SHORTFALL");
+    }
+    if (v.status === "AMBER") {
+      const name = String(v.name || "").toUpperCase().replace(/\s+/g, "_");
+      if (name.includes("COST")) flags.push("COST_FRAGILE");
+      else if (name.includes("SAMPLE")) flags.push("LOW_SAMPLE_SIZE");
+    }
+  }
+
+  if (result.warnings && Array.isArray(result.warnings)) {
+    if (result.warnings.includes("cost_fragile")) flags.push("COST_FRAGILE");
+    if (result.warnings.includes("x5_return_fragile_info")) flags.push("X5_RETURN_FRAGILE_INFO");
+  }
+  return flags;
+}
+
 /* ----------  Backtest  ---------- */
 function runBacktest(en) {
   const startIdx = 30;
@@ -502,6 +647,18 @@ export default function StockPredV5() {
     () => backendResults.find((r) => String(r.ticker).toUpperCase() === String(selected).toUpperCase()) || null,
     [backendResults, selected]
   );
+
+  const safetyState = useMemo(() => {
+    if (!sig || ens == null) return null;
+    const backendFlags = flagsFromBackendResult(backendCurrent);
+    return buildDecisionSafetyState({
+      aiRecommendation: sig,
+      rawConfidence: ens,
+      evidenceFlags: backendFlags,
+      dataSource: cur?.source,
+      latestDate: last?.date,
+    });
+  }, [sig, ens, cur, last, backendCurrent]);
 
   /* prefetch other symbols' last-prices for sidebar */
   const [sidebarSnap, setSidebarSnap] = useState({});
@@ -1033,6 +1190,7 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                   sigColor={sigColor}
                   feat={feat}
                   accent={accent}
+                  safetyState={safetyState}
                 />
               )}
               {tab === "MODELS" && (
@@ -1118,7 +1276,7 @@ function CenterPanel({
 
       {/* PRICE + BB */}
       <Panel title="PRICE · EMA · BOLLINGER 20·2" right={`Width ${upPct.toFixed(2)}%`}>
-        <ResponsiveContainer width="100%" height={260}>
+        <ResponsiveContainer width="100%" height={210}>
           <ComposedChart data={chartSlice} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
             <CartesianGrid stroke={C.grid} strokeDasharray="2 4" vertical={false} />
             <XAxis dataKey="date" tick={{ fill: C.textDim, fontSize: 9, fontFamily: FONT }} stroke={C.border} interval="preserveStartEnd" minTickGap={40} />
@@ -1607,8 +1765,35 @@ function AdvisorOverlay({ advisorScore, advisorRationale, verdict, notebooklmImp
   );
 }
 
+/* ----------  RISK GATE BANNER  ---------- */
+function RiskGateBanner({ hardBlockers }) {
+  if (!hardBlockers || hardBlockers.length === 0) return null;
+  return (
+    <div
+      style={{
+        background: "#1A0505",
+        border: `2px solid ${C.red}`,
+        borderLeft: `4px solid ${C.red}`,
+        padding: "10px 12px",
+        marginBottom: 12,
+      }}
+    >
+      <div style={{ color: C.red, fontSize: 11, fontWeight: 800, letterSpacing: 1.5, marginBottom: 6 }}>
+        ⊘ RISK GATE ACTIVE — NO TRADE / PAPER ONLY
+      </div>
+      <div style={{ color: C.amber, fontSize: 9, letterSpacing: 1, marginBottom: 4 }}>BLOCKERS:</div>
+      {hardBlockers.map((b) => (
+        <div key={b} style={{ color: C.textDim, fontSize: 9, lineHeight: 1.6 }}>· {b}</div>
+      ))}
+      <div style={{ marginTop: 8, color: C.textMuted, fontSize: 8, lineHeight: 1.5 }}>
+        Research signal only · Not financial advice · Paper-trading candidate
+      </div>
+    </div>
+  );
+}
+
 /* ----------  SIGNAL TAB  ---------- */
-function SignalTab({ last, scores, ens, sig, sigColor, feat, accent }) {
+function SignalTab({ last, scores, ens, sig, sigColor, feat, accent, safetyState }) {
   if (!last || !scores) return <Empty />;
   const rsiState = last.rsi > 70 ? "OVERBOUGHT" : last.rsi < 30 ? "OVERSOLD" : "NEUTRAL";
   const rsiColor = last.rsi > 70 ? C.red : last.rsi < 30 ? C.green : C.textDim;
@@ -1617,40 +1802,106 @@ function SignalTab({ last, scores, ens, sig, sigColor, feat, accent }) {
   const bbState = bbPos > 0.8 ? "UPPER" : bbPos < 0.2 ? "LOWER" : "MIDDLE";
   const emaState = last.ema12 > last.ema26 ? "GOLDEN" : "DEATH";
 
+  const gs = safetyState;
+  const isBlocked = gs && gs.hardBlockers.length > 0;
+  const isSoftWarn = gs && !isBlocked && gs.softWarnings.length > 0;
+  const verdictColor = isBlocked ? C.red : isSoftWarn ? C.amber : sigColor;
+  const displayedVerdict = gs ? gs.uiVerdict : sig;
+  const displayedConf = gs ? gs.confidenceDisplayed : ens;
+  const confLabel = gs ? gs.confidenceLabel : null;
+
   return (
     <>
+      {/* RISK GATE BANNER — highest priority, above signal card */}
+      {isBlocked && <RiskGateBanner hardBlockers={gs.hardBlockers} />}
+
       {/* SIGNAL CARD */}
       <div
         style={{
           background: C.bgDeep,
-          border: `2px solid ${sigColor}`,
+          border: `2px solid ${verdictColor}`,
           padding: 16, marginBottom: 14,
           textAlign: "center", position: "relative",
-          boxShadow: `0 0 24px ${sigColor}33, inset 0 0 24px ${sigColor}11`,
+          boxShadow: `0 0 24px ${verdictColor}33, inset 0 0 24px ${verdictColor}11`,
         }}
       >
         <div style={{ fontSize: 9, color: C.textMuted, letterSpacing: 2, marginBottom: 4 }}>
-          ENSEMBLE SIGNAL
+          AI RECOMMENDATION
         </div>
-        <div style={{ fontSize: 36, fontWeight: 700, color: sigColor, letterSpacing: 4, lineHeight: 1 }}>
-          {sig}
+        <div
+          style={{
+            fontSize: isBlocked ? 18 : 36,
+            fontWeight: 700,
+            color: verdictColor,
+            letterSpacing: isBlocked ? 1 : 4,
+            lineHeight: 1.2,
+          }}
+        >
+          {displayedVerdict}
         </div>
-        <div style={{ fontSize: 11, color: C.textDim, marginTop: 6, letterSpacing: 1 }}>
-          SCORE <span style={{ color: sigColor, fontWeight: 700, fontSize: 14 }}>{ens}</span> / 100
+        {isBlocked && (
+          <div style={{ fontSize: 10, color: C.textMuted, marginTop: 4, letterSpacing: 1 }}>
+            Original AI Rec:{" "}
+            <span style={{ color: sigColor, fontWeight: 700 }}>{sig}</span>
+          </div>
+        )}
+        <div style={{ fontSize: 11, color: C.textDim, marginTop: 8, letterSpacing: 1 }}>
+          {isBlocked ? (
+            <>
+              <span style={{ color: C.red, fontWeight: 700, fontSize: 14 }}>≤{displayedConf}</span>
+              {" / 100 · "}
+              <span style={{ color: C.amber, fontSize: 10 }}>Blocked by risk gate</span>
+            </>
+          ) : (
+            <>
+              SCORE{" "}
+              <span style={{ color: verdictColor, fontWeight: 700, fontSize: 14 }}>{displayedConf}</span>
+              {" / 100"}
+              {confLabel && confLabel !== "High" && (
+                <span style={{ color: C.textDim, fontSize: 9 }}> · {confLabel}</span>
+              )}
+              {confLabel === "High" && !isBlocked && !isSoftWarn && (
+                <span style={{ color: C.amber, fontSize: 9 }}> · {confLabel}</span>
+              )}
+            </>
+          )}
         </div>
         {/* score bar */}
         <div style={{ marginTop: 10, height: 4, background: C.border, position: "relative" }}>
           <div
             style={{
               position: "absolute", left: 0, top: 0, height: "100%",
-              width: `${ens}%`, background: sigColor,
-              boxShadow: `0 0 8px ${sigColor}`,
+              width: `${displayedConf}%`, background: verdictColor,
+              boxShadow: `0 0 8px ${verdictColor}`,
             }}
           />
           <div style={{ position: "absolute", left: "35%", top: -2, width: 1, height: 8, background: C.textMuted }} />
           <div style={{ position: "absolute", left: "65%", top: -2, width: 1, height: 8, background: C.textMuted }} />
         </div>
       </div>
+
+      {/* ACTION PLAN — disabled when hard-blocked */}
+      {isBlocked && (
+        <div
+          style={{
+            opacity: 0.4,
+            border: `1px dashed ${C.border}`,
+            padding: "8px 10px",
+            marginBottom: 12,
+            pointerEvents: "none",
+          }}
+        >
+          <div style={{ fontSize: 9, color: C.textMuted, letterSpacing: 1.5, marginBottom: 4 }}>
+            REFERENCE PLAN — DISABLED BY RISK GATE
+          </div>
+          <div style={{ fontSize: 9, color: C.textDim, lineHeight: 1.5 }}>
+            Entry / Stop Loss / TP1 / TP2 are not actionable.
+          </div>
+          <div style={{ fontSize: 8, color: C.textMuted, marginTop: 4 }}>
+            Reason: {gs.hardBlockers[0]}
+          </div>
+        </div>
+      )}
 
       {/* INDICATORS */}
       <SectionLabel>INDICATORS</SectionLabel>
@@ -1666,6 +1917,11 @@ function SignalTab({ last, scores, ens, sig, sigColor, feat, accent }) {
       <ModelBar label="XGBoost" value={scores.xgb} color={C.xgb} />
       <ModelBar label="RNN" value={scores.rnn} color={C.rnn} />
       <ModelBar label="ENSEMBLE" value={ens} color={accent} weight={700} />
+      {isBlocked && (
+        <div style={{ fontSize: 8, color: C.textMuted, marginTop: 8, lineHeight: 1.5 }}>
+          10% annualized net return target gate · Paper-trading candidate only · Not financial advice
+        </div>
+      )}
     </>
   );
 }
@@ -2030,11 +2286,13 @@ function BenchmarkPanel({ bench, accent, market, onClose, onPick }) {
               <span
                 style={{
                   textAlign: "center",
-                  color: sigColor, fontWeight: 700, letterSpacing: 1, fontSize: 10,
-                  background: sigColor + "22", padding: "2px 0", borderRadius: 2,
+                  color: (r.src === "SYN" && r.sig === "BUY") ? C.amber : sigColor,
+                  fontWeight: 700, letterSpacing: 1, fontSize: 10,
+                  background: ((r.src === "SYN" && r.sig === "BUY") ? C.amber : sigColor) + "22",
+                  padding: "2px 0", borderRadius: 2,
                 }}
               >
-                {r.sig}
+                {r.src === "SYN" && r.sig === "BUY" ? "HOLD/BLOCKED" : r.sig}
               </span>
             </div>
           );
