@@ -128,3 +128,18 @@ def test_promotion_gate_swallows_promote_errors(monkeypatch):
 def test_research_weekly_cron_constants():
     assert research_weekly.RESEARCH_FLOW_CRON == "0 2 * * 6"
     assert research_weekly.PROMOTION_DELTA_THRESHOLD == 0.05
+
+
+def test_msprt_oos_check_returns_snapshot():
+    out = research_weekly._msprt_oos_check([0.015, 0.012, 0.011, 0.014])
+
+    assert out["msprt_enabled"] is True
+    assert out["decision"] in {"ACCEPT", "REJECT", "CONTINUE"}
+    assert out["n_obs"] == 4
+    assert "llr" in out
+
+
+def test_msprt_oos_check_can_be_disabled():
+    out = research_weekly._msprt_oos_check([0.01, 0.02], enabled=False)
+
+    assert out == {"decision": "DISABLED", "n_obs": 2, "msprt_enabled": False}

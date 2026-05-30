@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 
 from stock_rtx4060.factors.rd_agent.qlib_exporter import (
+    _convert_csv_to_minimal_qlib_bin,
+    _qlib_get_data_available,
     _qlib_installed,
     convert_csv_to_qlib_bin,
     export_ohlcv_to_qlib,
@@ -21,6 +23,9 @@ class TestQlibInstalled:
         # Test the function path — if qlib is installed, it returns True
         result = _qlib_installed()
         assert isinstance(result, bool)
+
+    def test_qlib_get_data_available_returns_bool(self) -> None:
+        assert isinstance(_qlib_get_data_available(), bool)
 
 
 class TestExportOhlcvToQlibCsv:
@@ -151,6 +156,35 @@ class TestConvertCsvToQlibBin:
         ):
             result = convert_csv_to_qlib_bin()
             assert result is False
+
+    def test_returns_false_when_qlib_get_data_missing(self) -> None:
+        with (
+            patch("stock_rtx4060.factors.rd_agent.qlib_exporter._qlib_installed", return_value=True),
+            patch("stock_rtx4060.factors.rd_agent.qlib_exporter._qlib_get_data_available", return_value=False),
+            patch("stock_rtx4060.factors.rd_agent.qlib_exporter._convert_csv_to_minimal_qlib_bin", return_value=True) as fallback,
+        ):
+            result = convert_csv_to_qlib_bin()
+
+        assert result is True
+        fallback.assert_called_once()
+
+    def test_minimal_qlib_bin_fallback_writes_layout(self, monkeypatch, tmp_path: Path) -> None:  # type: ignore[no-untyped-def]
+        csv_dir = tmp_path / "csv"
+        bin_dir = tmp_path / "bin"
+        csv_dir.mkdir()
+        (csv_dir / "AAPL.csv").write_text(
+            "Date,Open,High,Low,Close,Volume\n"
+            "2024-01-01,100,101,99,100.5,1000\n"
+            "2024-01-02,101,102,100,101.5,1100\n",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr("stock_rtx4060.factors.rd_agent.qlib_exporter.CSV_DIR", csv_dir)
+        monkeypatch.setattr("stock_rtx4060.factors.rd_agent.qlib_exporter.BIN_DIR", bin_dir)
+
+        assert _convert_csv_to_minimal_qlib_bin() is True
+        assert (bin_dir / "calendars" / "day.txt").exists()
+        assert (bin_dir / "instruments" / "all.txt").exists()
+        assert (bin_dir / "features" / "aapl" / "close.day.bin").exists()
 
 
 class TestFullExportPipeline:

@@ -5,10 +5,13 @@ delegated to the optional ``rdagent`` package (https://github.com/microsoft/RD-A
 """
 
 from .runner import run_factor_mining
+from .settings import STOCK1901_CONFIG_PATH, load_stock1901_config
 from .validator import ValidationResult, validate_discovered_factor
 
 __all__ = [
     "run_factor_mining",
+    "load_stock1901_config",
+    "STOCK1901_CONFIG_PATH",
     "validate_discovered_factor",
     "ValidationResult",
 ]

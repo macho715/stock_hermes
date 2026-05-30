@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -23,6 +24,14 @@ from .base import Advisor, AdvisoryOutput
 from .devils_advocate import DevilsAdvocateAgent
 from .macro_regime import MacroRegimeAgent
 from .news_sentiment import NewsSentimentAgent
+
+# [NotebookLM bridge] feature-flagged via NOTEBOOKLM_NEWS_MODE env var
+try:
+    from .notebooklm_news import enrich_context_with_notebooklm as _nb_enrich
+    _NOTEBOOKLM_AVAILABLE = True
+except ImportError:  # pragma: no cover - optional dep
+    _NOTEBOOKLM_AVAILABLE = False
+    def _nb_enrich(ticker: str, ctx: dict) -> dict: return ctx  # type: ignore[misc]
 
 if TYPE_CHECKING:
     from .memory.memory_layer import MemoryLayer
@@ -42,6 +51,7 @@ class OrchestratorResult:
     advisory_score: float
     confidence: float
     outputs: list[AdvisoryOutput]
+    debate_result: Any | None = None
     memory_context_used: bool = False   # [AMH Memory — W4] True when ≥1 memory was injected
     session_id: str = ""                # [AMH Memory — W4] session ID for outcome updates
 
@@ -53,6 +63,7 @@ class Orchestrator:
     macro: Advisor = field(default_factory=MacroRegimeAgent)
     weights: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
     use_langgraph: bool = False
+    use_debate: bool = False
     memory_layer: MemoryLayer | None = field(default=None)  # [AMH Memory — W4 FR-6]
 
     async def aanalyze(self, ticker: str, context: dict[str, Any] | None = None) -> OrchestratorResult:
@@ -60,12 +71,30 @@ class Orchestrator:
         session_id = ""
         memory_used = False
 
+        # [NotebookLM bridge] Enrich context with NotebookLM stock news (feature-flagged)
+        if _NOTEBOOKLM_AVAILABLE:
+            ctx = _nb_enrich(ticker, ctx)
+            if ctx.get("notebooklm_enriched"):
+                logger.debug("[NotebookLM] enriched %s with %d headlines",
+                             ticker, ctx.get("notebooklm_count", 0))
+
         if self.use_langgraph and _langgraph_available():
             outputs = await self._langgraph_run(ticker, ctx)
         else:
             outputs = await self._fallback_run(ticker, ctx)
 
         score, confidence = self._blend(outputs)
+        debate_result: Any | None = None
+
+        if self._debate_enabled():
+            from .debate.bull_bear_debate import BullBearDebate
+
+            debate_client = getattr(self.news, "client", None)
+            debate = BullBearDebate(client=debate_client)
+            debate_result = await debate.run(ticker, outputs, ctx)
+            if debate_result.consensus_confidence > confidence:
+                score = float(debate_result.consensus_score)
+                confidence = float(debate_result.consensus_confidence)
 
         # [AMH Memory — W4] post-analyze memory write
         if self.memory_layer is not None:
@@ -79,6 +108,7 @@ class Orchestrator:
             advisory_score=score,
             confidence=confidence,
             outputs=outputs,
+            debate_result=debate_result,
             memory_context_used=memory_used,
             session_id=session_id,
         )
@@ -174,6 +204,11 @@ class Orchestrator:
         score = max(-1.0, min(1.0, score))
         confidence = max(0.0, min(1.0, confidence))
         return float(score), float(confidence)
+
+    def _debate_enabled(self) -> bool:
+        if self.use_debate:
+            return True
+        return os.environ.get("DEBATE_ENABLED", "false").lower() in ("1", "true", "yes")
 
 
 def _to_dict(out: AdvisoryOutput) -> dict[str, Any]:

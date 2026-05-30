@@ -30,3 +30,5 @@ shap>=0.50.0
 lightgbm>=4.5
 # Phase 2 factor library helper
 scipy>=1.13
+# Phase 2 RD-Agent/Qlib integration (optional; CSV export works without bin converter CLI)
+pyqlib>=0.9.7

@@ -53,7 +53,10 @@ def _is_rdagent_enabled() -> bool:
 
 
 _ENABLED: bool = _is_rdagent_enabled()
-_DOCKER_IMAGE: str = os.getenv("RDAGENT_DOCKER_IMAGE", "microsoft/rdagent:latest")
+# _DOCKER_IMAGE is no longer used by default.
+# rdagent builds its own sandboxed container images internally.
+# The Docker path is kept as a graceful-degradation fallback.
+_DOCKER_IMAGE: str = os.getenv("RDAGENT_DOCKER_IMAGE", "")
 _BUDGET_USD: float = float(os.getenv("RDAGENT_BUDGET_USD", "10.0"))
 _CYCLES: int = int(os.getenv("RDAGENT_CYCLES", "2"))
 _TIMEOUT_MIN: int = int(os.getenv("RDAGENT_TIMEOUT_MIN", "30"))

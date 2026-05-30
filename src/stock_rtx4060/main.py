@@ -166,6 +166,7 @@ def build_parser() -> argparse.ArgumentParser:
     factor.add_argument("--universe", help="comma-separated ticker list; defaults to built-in sample universe")
     factor.add_argument("--cycles", type=int, default=1, help="number of RD-Agent evolution cycles (default: 1)")
     factor.add_argument("--budget-usd", type=float, default=1.0, help="LLM spend cap in USD (default: 1.0)")
+    factor.add_argument("--synthetic", action="store_true", help="skip live Qlib export; useful for RDAGENT_DRY_RUN smoke tests")
 
     factor_list = sub.add_parser("factor-list", help="list discovered / pending factors from the audit log")
     factor_list.add_argument("--status", choices=["all", "discovered", "staged", "registered"], default="all", help="filter by factor status (default: all)")
@@ -557,13 +558,20 @@ def cmd_factor_mine(args: argparse.Namespace) -> int:
     from stock_rtx4060.factors.rd_agent.runner import run_factor_mining
 
     universe = parse_universe(args.universe) if args.universe else _default_universe()
-    new_files = run_factor_mining(universe, cycles=args.cycles, budget_usd=args.budget_usd)
+    new_files = run_factor_mining(
+        universe,
+        cycles=args.cycles,
+        budget_usd=args.budget_usd,
+        prepare_qlib=True,
+        synthetic=bool(getattr(args, "synthetic", False)),
+    )
     result = {
         "new_factor_files": [str(p) for p in new_files],
         "count": len(new_files),
         "universe": universe,
         "cycles": args.cycles,
         "budget_usd": args.budget_usd,
+        "synthetic": bool(getattr(args, "synthetic", False)),
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0

@@ -23,12 +23,14 @@ user can manually run the bin conversion later.
 from __future__ import annotations
 
 import logging
+import shutil
 import subprocess
 import sys
 from datetime import date
 from importlib.util import find_spec
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 _logger = logging.getLogger(__name__)
@@ -44,6 +46,10 @@ _OHLCV_COLS = ["Open", "High", "Low", "Close", "Volume"]
 
 def _qlib_installed() -> bool:
     return find_spec("qlib") is not None
+
+
+def _qlib_get_data_available() -> bool:
+    return find_spec("qlib_get_data") is not None or shutil.which("qlib_get_data") is not None
 
 
 def export_ohlcv_to_qlib_csv(
@@ -140,6 +146,40 @@ def export_ohlcv_to_qlib_csv(
     return rows_written
 
 
+def export_synthetic_ohlcv_to_qlib_csv(
+    tickers: list[str],
+    run_date: str | date,
+    *,
+    periods: int = 32,
+) -> dict[str, int]:
+    """Write deterministic synthetic OHLCV CSV files for RD-Agent smoke tests."""
+
+    run_ts = pd.Timestamp(run_date)
+    dates = pd.bdate_range(end=run_ts, periods=periods)
+    rows_written: dict[str, int] = {}
+    CSV_DIR.mkdir(parents=True, exist_ok=True)
+
+    for idx, ticker in enumerate(tickers):
+        base = 100.0 + idx * 10.0
+        steps = pd.Series(range(len(dates)), index=dates, dtype="float64")
+        frame = pd.DataFrame(
+            {
+                "Open": base + steps * 0.10,
+                "High": base + steps * 0.10 + 1.0,
+                "Low": base + steps * 0.10 - 1.0,
+                "Close": base + steps * 0.12,
+                "Volume": 1_000_000.0 + steps * 1000.0,
+            },
+            index=dates,
+        )
+        frame.index = pd.to_datetime(frame.index).strftime("%Y-%m-%d")
+        frame.index.name = "Date"
+        frame.to_csv(CSV_DIR / f"{ticker}.csv")
+        rows_written[ticker] = len(frame)
+
+    return rows_written
+
+
 def convert_csv_to_qlib_bin(
     calendar: str | None = None,
     symbol: str | None = None,
@@ -175,10 +215,17 @@ def convert_csv_to_qlib_bin(
         _logger.warning(
             "qlib is not installed — skipping bin conversion. "
             "CSV data is available at %s. Install qlib to enable bin conversion: "
-            "pip install qlib",
+            "pip install pyqlib",
             CSV_DIR,
         )
         return False
+    if not _qlib_get_data_available():
+        _logger.warning(
+            "qlib is installed but qlib_get_data is not available — skipping bin conversion. "
+            "Using the local dump_bin-compatible fallback. CSV data is available at %s.",
+            CSV_DIR,
+        )
+        return _convert_csv_to_minimal_qlib_bin()
 
     # Write qlib provider config for stock1901 CSV source
     _write_qlib_provider_config(CSV_DIR)
@@ -225,9 +272,69 @@ def convert_csv_to_qlib_bin(
     except FileNotFoundError:
         _logger.warning(
             "qlib_get_data not found in PATH — skipping bin conversion. "
-            "Install qlib: pip install qlib"
+            "Using the local dump_bin-compatible fallback."
         )
+        return _convert_csv_to_minimal_qlib_bin()
+
+
+def _convert_csv_to_minimal_qlib_bin() -> bool:
+    """Convert stock1901 CSV files into Qlib's file layout without dump_bin.py.
+
+    This fallback mirrors the core binary layout used by Qlib's official
+    ``scripts/dump_bin.py``: each feature file starts with the float date-index
+    offset followed by little-endian float values for that feature.
+    """
+
+    csv_files = sorted(CSV_DIR.glob("*.csv"))
+    if not csv_files:
+        _logger.warning("No CSV files found at %s — skipping fallback bin conversion", CSV_DIR)
         return False
+
+    raw_frames: dict[str, pd.DataFrame] = {}
+    calendar_values: set[str] = set()
+    for csv_file in csv_files:
+        frame = pd.read_csv(csv_file)
+        if "Date" not in frame.columns:
+            _logger.warning("CSV file %s has no Date column — skipping", csv_file)
+            continue
+        frame["Date"] = pd.to_datetime(frame["Date"]).dt.strftime("%Y-%m-%d")
+        missing = [col for col in _OHLCV_COLS if col not in frame.columns]
+        if missing:
+            _logger.warning("CSV file %s missing columns %s — skipping", csv_file, missing)
+            continue
+        symbol = csv_file.stem.lower()
+        raw_frames[symbol] = frame[["Date", *_OHLCV_COLS]].copy()
+        calendar_values.update(raw_frames[symbol]["Date"].tolist())
+
+    if not raw_frames or not calendar_values:
+        return False
+
+    calendar = sorted(calendar_values)
+    calendar_index = {value: idx for idx, value in enumerate(calendar)}
+    calendar_dir = BIN_DIR / "calendars"
+    instruments_dir = BIN_DIR / "instruments"
+    features_dir = BIN_DIR / "features"
+    calendar_dir.mkdir(parents=True, exist_ok=True)
+    instruments_dir.mkdir(parents=True, exist_ok=True)
+    features_dir.mkdir(parents=True, exist_ok=True)
+
+    (calendar_dir / "day.txt").write_text("\n".join(calendar) + "\n", encoding="utf-8")
+    instrument_lines: list[str] = []
+
+    for symbol, frame in raw_frames.items():
+        symbol_dir = features_dir / symbol
+        symbol_dir.mkdir(parents=True, exist_ok=True)
+        frame = frame.sort_values("Date")
+        date_index = float(calendar_index[str(frame["Date"].iloc[0])])
+        for field in _OHLCV_COLS:
+            values = pd.to_numeric(frame[field], errors="coerce").to_numpy(dtype="float32")
+            payload = np.hstack([[date_index], values]).astype("<f")
+            payload.tofile(symbol_dir / f"{field.lower()}.day.bin")
+        instrument_lines.append(f"{symbol}\t{frame['Date'].iloc[0]}\t{frame['Date'].iloc[-1]}")
+
+    (instruments_dir / "all.txt").write_text("\n".join(instrument_lines) + "\n", encoding="utf-8")
+    _logger.info("Qlib fallback bin conversion wrote %d instrument(s) to %s", len(instrument_lines), BIN_DIR)
+    return True
 
 
 def _write_qlib_provider_config(csv_dir: Path) -> None:
@@ -314,7 +421,9 @@ def export_ohlcv_to_qlib(
 __all__ = [
     "export_ohlcv_to_qlib",
     "export_ohlcv_to_qlib_csv",
+    "export_synthetic_ohlcv_to_qlib_csv",
     "convert_csv_to_qlib_bin",
+    "_convert_csv_to_minimal_qlib_bin",
     "CSV_DIR",
     "BIN_DIR",
 ]

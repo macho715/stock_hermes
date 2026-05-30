@@ -15,6 +15,7 @@ runs three sequential phases:
 from __future__ import annotations
 
 import logging
+import math as _math
 from typing import Any
 
 from .utils import flow, get_run_logger, slack_on_failure, task, with_retries
@@ -31,8 +32,6 @@ PROMOTION_DELTA_THRESHOLD = 0.05  # 5% improvement required (legacy threshold)
 # Replaces the arbitrary 5% delta with a statistically-grounded decision.
 # Wave 5 will upgrade this to mSPRT for continuous-peeking safety.
 # ---------------------------------------------------------------------------
-import math as _math
-
 
 def _sprt_promotion_decision(
     new_oos_brier: float,
@@ -110,6 +109,38 @@ def _sprt_promotion_decision(
         "beta": beta,
         "delta": delta,
     }
+
+
+def _msprt_oos_check(
+    forward_returns: list[float],
+    *,
+    enabled: bool | None = None,
+) -> dict[str, Any]:
+    """Run Wave-5 mSPRT monitoring over AutoForwardRecorder daily returns."""
+
+    import os as _os
+
+    if enabled is None:
+        enabled = _os.environ.get("MSPRT_ENABLED", "true").lower() not in ("0", "false", "no")
+    if not enabled:
+        return {"decision": "DISABLED", "n_obs": len(forward_returns), "msprt_enabled": False}
+
+    try:
+        from stock_rtx4060.backtest.msprt_monitor import MSPRTMonitor
+    except Exception as exc:  # noqa: BLE001 - keep weekly flow import-safe
+        return {
+            "decision": "SKIPPED",
+            "n_obs": len(forward_returns),
+            "msprt_enabled": False,
+            "reason": f"msprt_unavailable:{exc}",
+        }
+
+    monitor = MSPRTMonitor()
+    for ret in forward_returns:
+        monitor.update(float(ret))
+    snapshot = monitor.snapshot()
+    snapshot["msprt_enabled"] = True
+    return snapshot
 
 
 @with_retries(retries=1, retry_delay_seconds=30)
@@ -436,6 +467,7 @@ __all__ = [
     "qlib_export_task",
     "factor_validation_task",
     "factor_notification_task",
+    "_msprt_oos_check",
     "RESEARCH_FLOW_CRON",
     "RESEARCH_FLOW_TIMEZONE",
     "PROMOTION_DELTA_THRESHOLD",
