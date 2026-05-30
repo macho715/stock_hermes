@@ -1,0 +1,26 @@
+{
+  "algorithm": "B Meta-label + Temporal Conformal Gate",
+  "latest_date": "2021-02-23",
+  "latest_q_conformal": 0.04258179371683239,
+  "latest_abstention_rate": 1.0,
+  "latest_coverage_proxy": 0.55,
+  "latest_trade_count": 0,
+  "policy_verdict": "REJECT_RETRAIN",
+  "metrics": {
+    "periods": 151,
+    "ann_return": -0.04466802652724162,
+    "ann_vol": 0.013777081009698355,
+    "sharpe": -3.242198147473883,
+    "max_drawdown": -0.023249752581100513,
+    "calmar": -1.9212258870897319,
+    "hit_rate": 0.026490066225165563,
+    "avg_turnover": 0.028727628998728286,
+    "ann_cost_drag": 0.005429521880759646,
+    "avg_abstention_rate": 0.984271523178808,
+    "avg_coverage_proxy": 0.5494412251655628,
+    "avg_trades_per_day": 0.12582781456953643,
+    "horizon": 5,
+    "alpha": 0.5,
+    "meta_threshold": 0.5
+  }
+}

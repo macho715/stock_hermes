@@ -1,0 +1,39 @@
+{
+  "label": "x5",
+  "algorithm": "C Decision-focused Multi-period Optimizer",
+  "latest_date": "2026-05-29",
+  "latest_optimizer_success": true,
+  "latest_optimizer_message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+  "latest_objective_value": -0.00010338410624591556,
+  "cost_bps": 25.0,
+  "settings": {
+    "lookback": 252,
+    "rebalance_days": 20,
+    "horizon": 2,
+    "target_vol": 0.1,
+    "max_weight": 0.25,
+    "turnover_budget": 0.2,
+    "cvar_lambda": 0.0,
+    "optimizer_maxiter": 1000
+  },
+  "metrics": {
+    "periods": 647,
+    "ann_return": 0.013240403969249939,
+    "ann_vol": 0.019291692874214048,
+    "sharpe": 0.6863267031867134,
+    "max_drawdown": -0.027126122171559075,
+    "calmar": 0.4881052988521929,
+    "hit_rate": 0.5703245749613601,
+    "avg_turnover": 0.0021329325701734806,
+    "ann_cost_drag": 0.0013437475192092927,
+    "gross_ann_return": 0.014584151488459231,
+    "horizon": 2,
+    "rebalance_days": 20,
+    "risk_aversion": 5.0,
+    "turnover_penalty": 25.0,
+    "optimizer_success_rate": 1.0,
+    "fallback_rate": 0.0,
+    "avg_expected_step_utility": -0.0009403077093697261
+  },
+  "output_dir": "C:\\Users\\jichu\\Downloads\\주식\\stock_1901\\invest_algos\\demo_output\\internet_latest_yahoo\\cfast_validation\\runs\\x5_25bps"
+}

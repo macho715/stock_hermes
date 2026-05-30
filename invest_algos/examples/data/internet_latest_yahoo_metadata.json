@@ -1,0 +1,79 @@
+{
+  "source": "Yahoo Finance chart API daily adjusted close",
+  "symbols": {
+    "SPY": {
+      "rows": 1255,
+      "first_date": "2021-06-01",
+      "last_date": "2026-05-29",
+      "last_close": 756.47998046875
+    },
+    "QQQ": {
+      "rows": 1255,
+      "first_date": "2021-06-01",
+      "last_date": "2026-05-29",
+      "last_close": 738.3099975585938
+    },
+    "IWM": {
+      "rows": 1255,
+      "first_date": "2021-06-01",
+      "last_date": "2026-05-29",
+      "last_close": 290.42999267578125
+    },
+    "TLT": {
+      "rows": 1255,
+      "first_date": "2021-06-01",
+      "last_date": "2026-05-29",
+      "last_close": 85.76000213623047
+    },
+    "IEF": {
+      "rows": 1255,
+      "first_date": "2021-06-01",
+      "last_date": "2026-05-29",
+      "last_close": 94.6500015258789
+    },
+    "GLD": {
+      "rows": 1255,
+      "first_date": "2021-06-01",
+      "last_date": "2026-05-29",
+      "last_close": 417.1199951171875
+    },
+    "DBC": {
+      "rows": 1255,
+      "first_date": "2021-06-01",
+      "last_date": "2026-05-29",
+      "last_close": 29.479999542236328
+    },
+    "UUP": {
+      "rows": 1255,
+      "first_date": "2021-06-01",
+      "last_date": "2026-05-29",
+      "last_close": 27.65999984741211
+    }
+  },
+  "urls": {
+    "SPY": "https://query1.finance.yahoo.com/v8/finance/chart/SPY?range=5y&interval=1d&includeAdjustedClose=true",
+    "QQQ": "https://query1.finance.yahoo.com/v8/finance/chart/QQQ?range=5y&interval=1d&includeAdjustedClose=true",
+    "IWM": "https://query1.finance.yahoo.com/v8/finance/chart/IWM?range=5y&interval=1d&includeAdjustedClose=true",
+    "TLT": "https://query1.finance.yahoo.com/v8/finance/chart/TLT?range=5y&interval=1d&includeAdjustedClose=true",
+    "IEF": "https://query1.finance.yahoo.com/v8/finance/chart/IEF?range=5y&interval=1d&includeAdjustedClose=true",
+    "GLD": "https://query1.finance.yahoo.com/v8/finance/chart/GLD?range=5y&interval=1d&includeAdjustedClose=true",
+    "DBC": "https://query1.finance.yahoo.com/v8/finance/chart/DBC?range=5y&interval=1d&includeAdjustedClose=true",
+    "UUP": "https://query1.finance.yahoo.com/v8/finance/chart/UUP?range=5y&interval=1d&includeAdjustedClose=true"
+  },
+  "aligned": {
+    "rows": 900,
+    "first_date": "2022-10-26",
+    "last_date": "2026-05-29",
+    "columns": [
+      "SPY",
+      "QQQ",
+      "IWM",
+      "TLT",
+      "IEF",
+      "GLD",
+      "DBC",
+      "UUP"
+    ],
+    "output_csv": "C:\\Users\\jichu\\Downloads\\주식\\stock_1901\\invest_algos\\examples\\data\\internet_latest_yahoo_prices.csv"
+  }
+}

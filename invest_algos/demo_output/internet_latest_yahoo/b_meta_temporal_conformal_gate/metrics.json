@@ -1,0 +1,17 @@
+{
+  "periods": 579,
+  "ann_return": -0.04531895537959618,
+  "ann_vol": 0.09221194445939458,
+  "sharpe": -0.4914651311745446,
+  "max_drawdown": -0.21037704572764704,
+  "calmar": -0.21541777632083423,
+  "hit_rate": 0.14507772020725387,
+  "avg_turnover": 0.07986592254061643,
+  "ann_cost_drag": 0.015094659360176503,
+  "avg_abstention_rate": 0.9708549222797928,
+  "avg_coverage_proxy": 0.906357944732297,
+  "avg_trades_per_day": 0.23316062176165803,
+  "horizon": 5,
+  "alpha": 0.1,
+  "meta_threshold": 0.6
+}

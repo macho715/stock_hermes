@@ -1,0 +1,19 @@
+{
+  "periods": 219,
+  "ann_return": -0.05008879094180825,
+  "ann_vol": 0.03275291685035289,
+  "sharpe": -1.5292925259347878,
+  "max_drawdown": -0.051525034306565964,
+  "calmar": -0.9721253292872686,
+  "hit_rate": 0.4931506849315068,
+  "avg_turnover": 0.00410958904109589,
+  "ann_cost_drag": 0.0005178082191780822,
+  "gross_ann_return": -0.049570982722630164,
+  "horizon": 2,
+  "rebalance_days": 100,
+  "risk_aversion": 5.0,
+  "turnover_penalty": 25.0,
+  "optimizer_success_rate": 1.0,
+  "fallback_rate": 0.0,
+  "avg_expected_step_utility": 0.033921892061861345
+}

@@ -1,0 +1,156 @@
+{
+  "data_metadata": {
+    "source": "Yahoo Finance chart API daily adjusted close",
+    "symbols": {
+      "SPY": {
+        "rows": 1255,
+        "first_date": "2021-06-01",
+        "last_date": "2026-05-29",
+        "last_close": 756.47998046875
+      },
+      "QQQ": {
+        "rows": 1255,
+        "first_date": "2021-06-01",
+        "last_date": "2026-05-29",
+        "last_close": 738.3099975585938
+      },
+      "IWM": {
+        "rows": 1255,
+        "first_date": "2021-06-01",
+        "last_date": "2026-05-29",
+        "last_close": 290.42999267578125
+      },
+      "TLT": {
+        "rows": 1255,
+        "first_date": "2021-06-01",
+        "last_date": "2026-05-29",
+        "last_close": 85.76000213623047
+      },
+      "IEF": {
+        "rows": 1255,
+        "first_date": "2021-06-01",
+        "last_date": "2026-05-29",
+        "last_close": 94.6500015258789
+      },
+      "GLD": {
+        "rows": 1255,
+        "first_date": "2021-06-01",
+        "last_date": "2026-05-29",
+        "last_close": 417.1199951171875
+      },
+      "DBC": {
+        "rows": 1255,
+        "first_date": "2021-06-01",
+        "last_date": "2026-05-29",
+        "last_close": 29.479999542236328
+      },
+      "UUP": {
+        "rows": 1255,
+        "first_date": "2021-06-01",
+        "last_date": "2026-05-29",
+        "last_close": 27.65999984741211
+      }
+    },
+    "urls": {
+      "SPY": "https://query1.finance.yahoo.com/v8/finance/chart/SPY?range=5y&interval=1d&includeAdjustedClose=true",
+      "QQQ": "https://query1.finance.yahoo.com/v8/finance/chart/QQQ?range=5y&interval=1d&includeAdjustedClose=true",
+      "IWM": "https://query1.finance.yahoo.com/v8/finance/chart/IWM?range=5y&interval=1d&includeAdjustedClose=true",
+      "TLT": "https://query1.finance.yahoo.com/v8/finance/chart/TLT?range=5y&interval=1d&includeAdjustedClose=true",
+      "IEF": "https://query1.finance.yahoo.com/v8/finance/chart/IEF?range=5y&interval=1d&includeAdjustedClose=true",
+      "GLD": "https://query1.finance.yahoo.com/v8/finance/chart/GLD?range=5y&interval=1d&includeAdjustedClose=true",
+      "DBC": "https://query1.finance.yahoo.com/v8/finance/chart/DBC?range=5y&interval=1d&includeAdjustedClose=true",
+      "UUP": "https://query1.finance.yahoo.com/v8/finance/chart/UUP?range=5y&interval=1d&includeAdjustedClose=true"
+    },
+    "aligned": {
+      "rows": 900,
+      "first_date": "2022-10-26",
+      "last_date": "2026-05-29",
+      "columns": [
+        "SPY",
+        "QQQ",
+        "IWM",
+        "TLT",
+        "IEF",
+        "GLD",
+        "DBC",
+        "UUP"
+      ],
+      "output_csv": "C:\\Users\\jichu\\Downloads\\주식\\stock_1901\\invest_algos\\examples\\data\\internet_latest_yahoo_prices.csv"
+    }
+  },
+  "a_regime_hrp_hmv_cvt": {
+    "algorithm": "A Regime-aware HRP/HMV-CVT",
+    "latest_date": "2026-05-29",
+    "latest_target_vol": 0.07500000000000001,
+    "latest_realized_vol_estimate": 4.0528587125769284e-17,
+    "optimizer_success": true,
+    "optimizer_message": "Optimization terminated successfully",
+    "metrics": {
+      "periods": 647,
+      "ann_return": 7.393148669405235e-07,
+      "ann_vol": 2.3065340653446396e-06,
+      "sharpe": 0.3205306516164789,
+      "max_drawdown": -2.9657838810370762e-06,
+      "calmar": 0.249281436745148,
+      "hit_rate": 0.5409582689335394,
+      "avg_turnover": 2.4882160261375896e-06,
+      "ann_cost_drag": 3.1351521929333634e-07,
+      "gross_ann_return": 1.0528300862338596e-06,
+      "rebalance_days": 5,
+      "lookback": 252,
+      "n_assets": 8
+    }
+  },
+  "b_meta_temporal_conformal_gate": {
+    "algorithm": "B Meta-label + Temporal Conformal Gate",
+    "latest_date": "2026-05-29",
+    "latest_q_conformal": 0.06690018301940333,
+    "latest_abstention_rate": 0.875,
+    "latest_coverage_proxy": 0.9075,
+    "latest_trade_count": 1,
+    "metrics": {
+      "periods": 579,
+      "ann_return": -0.04531895537959618,
+      "ann_vol": 0.09221194445939458,
+      "sharpe": -0.4914651311745446,
+      "max_drawdown": -0.21037704572764704,
+      "calmar": -0.21541777632083423,
+      "hit_rate": 0.14507772020725387,
+      "avg_turnover": 0.07986592254061643,
+      "ann_cost_drag": 0.015094659360176503,
+      "avg_abstention_rate": 0.9708549222797928,
+      "avg_coverage_proxy": 0.906357944732297,
+      "avg_trades_per_day": 0.23316062176165803,
+      "horizon": 5,
+      "alpha": 0.1,
+      "meta_threshold": 0.6
+    }
+  },
+  "c_decision_focused_mpo_fast": {
+    "algorithm": "C Decision-focused Multi-period Optimizer",
+    "latest_date": "2026-05-29",
+    "latest_optimizer_success": true,
+    "latest_optimizer_message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+    "latest_objective_value": 0.003568025093533542,
+    "selected_risk_aversion": 5.0,
+    "selected_turnover_penalty": 25.0,
+    "metrics": {
+      "periods": 647,
+      "ann_return": 0.10110301414791599,
+      "ann_vol": 0.06265622888721704,
+      "sharpe": 1.6136147346164773,
+      "max_drawdown": -0.06535345744783339,
+      "calmar": 1.5470185984975426,
+      "hit_rate": 0.5857805255023184,
+      "avg_turnover": 0.0077671312665539005,
+      "ann_cost_drag": 0.0009786585395857913,
+      "gross_ann_return": 0.10208167268750178,
+      "horizon": 2,
+      "rebalance_days": 20,
+      "risk_aversion": 5.0,
+      "turnover_penalty": 25.0,
+      "optimizer_success_rate": 0.8787878787878788,
+      "avg_expected_step_utility": -1.9671600512900176
+    }
+  }
+}

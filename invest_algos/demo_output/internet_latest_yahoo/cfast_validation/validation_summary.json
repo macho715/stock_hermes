@@ -1,0 +1,176 @@
+{
+  "data_metadata": {
+    "source_path": "invest_algos\\examples\\data\\internet_latest_yahoo_prices.csv",
+    "rows": 900,
+    "first_date": "2022-10-26",
+    "last_date": "2026-05-29",
+    "columns": [
+      "SPY",
+      "QQQ",
+      "IWM",
+      "TLT",
+      "IEF",
+      "GLD",
+      "DBC",
+      "UUP"
+    ]
+  },
+  "policy_verdicts": {
+    "A": "HOLD_DIAGNOSTIC_ONLY",
+    "B": "REJECT_RETRAIN",
+    "C_fast": "CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE"
+  },
+  "execution_controls": {
+    "execution_mode": "PAPER_TRADING_DRY_RUN_ONLY",
+    "promotion_status": "BLOCKED_BY_X5_COST_FRAGILITY",
+    "promotion_blockers": [
+      "BLOCKED_BY_X5_COST_FRAGILITY"
+    ],
+    "live_trading_allowed": false,
+    "broker_execution_allowed": false
+  },
+  "thresholds": {
+    "base_min_sharpe": 1.0,
+    "x2_min_sharpe": 1.0,
+    "base_min_max_drawdown": -0.1,
+    "x2_min_max_drawdown": -0.1,
+    "base_min_optimizer_success_rate": 0.9,
+    "x2_min_optimizer_success_rate": 0.9,
+    "x5_min_sharpe_warning": 1.0
+  },
+  "c_fast_cost_stress": [
+    {
+      "label": "base",
+      "cost_bps": 5.0,
+      "ann_return": 0.11198605890947613,
+      "ann_vol": 0.07924031466183037,
+      "sharpe": 1.4132460148270864,
+      "max_drawdown": -0.08185169186457264,
+      "calmar": 1.3681581450358067,
+      "hit_rate": 0.5857805255023184,
+      "avg_turnover": 0.0072535186762366305,
+      "ann_cost_drag": 0.0009139433532058156,
+      "optimizer_success_rate": 1.0,
+      "fallback_rate": 0.0
+    },
+    {
+      "label": "x2",
+      "cost_bps": 10.0,
+      "ann_return": 0.08776340593999632,
+      "ann_vol": 0.05409927874489231,
+      "sharpe": 1.6222657302669188,
+      "max_drawdown": -0.0564964125417321,
+      "calmar": 1.553433253397608,
+      "hit_rate": 0.5842349304482226,
+      "avg_turnover": 0.006022298229426503,
+      "ann_cost_drag": 0.0015176191538154786,
+      "optimizer_success_rate": 1.0,
+      "fallback_rate": 0.0
+    },
+    {
+      "label": "x5",
+      "cost_bps": 25.0,
+      "ann_return": 0.013240403969249939,
+      "ann_vol": 0.019291692874214048,
+      "sharpe": 0.6863267031867134,
+      "max_drawdown": -0.027126122171559075,
+      "calmar": 0.4881052988521929,
+      "hit_rate": 0.5703245749613601,
+      "avg_turnover": 0.0021329325701734806,
+      "ann_cost_drag": 0.0013437475192092927,
+      "optimizer_success_rate": 1.0,
+      "fallback_rate": 0.0
+    }
+  ],
+  "latest_weights": [
+    {
+      "Asset": "SPY",
+      "Weight": 0.0053469160138678
+    },
+    {
+      "Asset": "QQQ",
+      "Weight": 0.0097250569348658
+    },
+    {
+      "Asset": "IWM",
+      "Weight": 0.0064886258718146
+    },
+    {
+      "Asset": "TLT",
+      "Weight": 0.0
+    },
+    {
+      "Asset": "IEF",
+      "Weight": 0.0169053083333908
+    },
+    {
+      "Asset": "GLD",
+      "Weight": 1.465955130000446e-05
+    },
+    {
+      "Asset": "DBC",
+      "Weight": 0.0
+    },
+    {
+      "Asset": "UUP",
+      "Weight": 0.0173014032014158
+    },
+    {
+      "Asset": "__CASH__",
+      "Weight": 0.9442180300933448
+    }
+  ],
+  "walk_forward": [
+    {
+      "fold": 1,
+      "train_end": "2024-05-16",
+      "test_start": "2024-05-24",
+      "test_end": "2024-11-21",
+      "ann_return": 0.04890800137083646,
+      "ann_vol": 0.033110541045567016,
+      "sharpe": 1.4771127207957382,
+      "max_drawdown": -0.017896636909803143,
+      "optimizer_success_rate": 1.0,
+      "fallback_rate": 0.0
+    },
+    {
+      "fold": 2,
+      "train_end": "2024-11-14",
+      "test_start": "2024-11-22",
+      "test_end": "2025-05-28",
+      "ann_return": 0.05930122741728606,
+      "ann_vol": 0.04164015805454093,
+      "sharpe": 1.4241355025505038,
+      "max_drawdown": -0.017695364502705146,
+      "optimizer_success_rate": 1.0,
+      "fallback_rate": 0.0
+    },
+    {
+      "fold": 3,
+      "train_end": "2025-05-20",
+      "test_start": "2025-05-29",
+      "test_end": "2025-11-25",
+      "ann_return": 0.027258674943612466,
+      "ann_vol": 0.021571633479554535,
+      "sharpe": 1.263635179479944,
+      "max_drawdown": -0.012265886341664367,
+      "optimizer_success_rate": 1.0,
+      "fallback_rate": 0.0
+    },
+    {
+      "fold": 4,
+      "train_end": "2025-11-18",
+      "test_start": "2025-11-26",
+      "test_end": "2026-05-29",
+      "ann_return": -0.010366373277924326,
+      "ann_vol": 0.06684751395571194,
+      "sharpe": -0.1550749259694578,
+      "max_drawdown": -0.04759623355550058,
+      "optimizer_success_rate": 1.0,
+      "fallback_rate": 0.0
+    }
+  ],
+  "warnings": [
+    "cost_fragile"
+  ]
+}

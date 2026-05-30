@@ -1,0 +1,444 @@
+{
+  "data_window": {
+    "source_path": "C:\\Users\\jichu\\Downloads\\주식\\stock_1901\\invest_algos\\examples\\data\\internet_latest_yahoo_prices.csv",
+    "asof_requested": "2026-04-30",
+    "asof_actual_trading_day": "2026-04-30",
+    "forward_start": "2026-05-01",
+    "forward_end": "2026-05-29",
+    "forward_periods": 20,
+    "assets": [
+      "SPY",
+      "QQQ",
+      "IWM",
+      "TLT",
+      "IEF",
+      "GLD",
+      "DBC",
+      "UUP"
+    ]
+  },
+  "algorithms": {
+    "A": {
+      "weights_rows": [
+        {
+          "algorithm": "A_HOLD_DIAGNOSTIC_ONLY",
+          "Asset": "SPY",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "A_HOLD_DIAGNOSTIC_ONLY",
+          "Asset": "QQQ",
+          "Weight": 6.061692729034441e-14
+        },
+        {
+          "algorithm": "A_HOLD_DIAGNOSTIC_ONLY",
+          "Asset": "IWM",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "A_HOLD_DIAGNOSTIC_ONLY",
+          "Asset": "TLT",
+          "Weight": 2.4740585149826893e-15
+        },
+        {
+          "algorithm": "A_HOLD_DIAGNOSTIC_ONLY",
+          "Asset": "IEF",
+          "Weight": 3.1061905442031466e-13
+        },
+        {
+          "algorithm": "A_HOLD_DIAGNOSTIC_ONLY",
+          "Asset": "GLD",
+          "Weight": 5.3177131221742716e-14
+        },
+        {
+          "algorithm": "A_HOLD_DIAGNOSTIC_ONLY",
+          "Asset": "DBC",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "A_HOLD_DIAGNOSTIC_ONLY",
+          "Asset": "UUP",
+          "Weight": 1.8869258049324864e-13
+        },
+        {
+          "algorithm": "A_HOLD_DIAGNOSTIC_ONLY",
+          "Asset": "__CASH__",
+          "Weight": 0.9999999999993844
+        }
+      ],
+      "gross": {
+        "periods": 20,
+        "total_return": 6.661338147750939e-15,
+        "ann_return": 9.423830785049605e-14,
+        "ann_vol": 2.7980194733154332e-14,
+        "sharpe": 0.0,
+        "max_drawdown": -6.994405055138486e-15,
+        "hit_rate": 0.6
+      },
+      "net": {
+        "periods": 20,
+        "total_return": 6.217248937900877e-15,
+        "ann_return": 8.648175781019577e-14,
+        "ann_vol": 2.785650834629949e-14,
+        "sharpe": 0.0,
+        "max_drawdown": -6.8833827526759706e-15,
+        "hit_rate": 0.6
+      },
+      "entry_cost": 6.155992095476413e-16,
+      "cash_weight": 0.9999999999993844,
+      "gross_risky_exposure": 6.155797519406331e-13
+    },
+    "B": {
+      "weights_rows": [
+        {
+          "algorithm": "B_REJECT_RETRAIN",
+          "Asset": "SPY",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "B_REJECT_RETRAIN",
+          "Asset": "QQQ",
+          "Weight": 0.1
+        },
+        {
+          "algorithm": "B_REJECT_RETRAIN",
+          "Asset": "IWM",
+          "Weight": 0.1
+        },
+        {
+          "algorithm": "B_REJECT_RETRAIN",
+          "Asset": "TLT",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "B_REJECT_RETRAIN",
+          "Asset": "IEF",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "B_REJECT_RETRAIN",
+          "Asset": "GLD",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "B_REJECT_RETRAIN",
+          "Asset": "DBC",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "B_REJECT_RETRAIN",
+          "Asset": "UUP",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "B_REJECT_RETRAIN",
+          "Asset": "__CASH__",
+          "Weight": 0.8
+        }
+      ],
+      "gross": {
+        "periods": 20,
+        "total_return": 0.014760281260965735,
+        "ann_return": 0.18523878714105907,
+        "ann_vol": 0.03319696438922645,
+        "sharpe": 5.579991741689954,
+        "max_drawdown": -0.006614454685223925,
+        "hit_rate": 0.6
+      },
+      "net": {
+        "periods": 20,
+        "total_return": 0.01445628826127976,
+        "ann_return": 0.18145878714105906,
+        "ann_vol": 0.033133861679351104,
+        "sharpe": 5.476536025202987,
+        "max_drawdown": -0.006614454685224036,
+        "hit_rate": 0.6
+      },
+      "entry_cost": 0.0003,
+      "cash_weight": 0.8,
+      "gross_risky_exposure": 0.2
+    },
+    "C_fast": {
+      "weights_rows": [
+        {
+          "algorithm": "CFAST_VALIDATION_FAILED_REVIEW_REQUIRED",
+          "Asset": "SPY",
+          "Weight": 0.006839836170553526
+        },
+        {
+          "algorithm": "CFAST_VALIDATION_FAILED_REVIEW_REQUIRED",
+          "Asset": "QQQ",
+          "Weight": 0.022494123904353083
+        },
+        {
+          "algorithm": "CFAST_VALIDATION_FAILED_REVIEW_REQUIRED",
+          "Asset": "IWM",
+          "Weight": 0.009909424268176974
+        },
+        {
+          "algorithm": "CFAST_VALIDATION_FAILED_REVIEW_REQUIRED",
+          "Asset": "TLT",
+          "Weight": 0.010722417302775678
+        },
+        {
+          "algorithm": "CFAST_VALIDATION_FAILED_REVIEW_REQUIRED",
+          "Asset": "IEF",
+          "Weight": 0.004298386882617212
+        },
+        {
+          "algorithm": "CFAST_VALIDATION_FAILED_REVIEW_REQUIRED",
+          "Asset": "GLD",
+          "Weight": 0.010616653705427607
+        },
+        {
+          "algorithm": "CFAST_VALIDATION_FAILED_REVIEW_REQUIRED",
+          "Asset": "DBC",
+          "Weight": 0.028071106627490357
+        },
+        {
+          "algorithm": "CFAST_VALIDATION_FAILED_REVIEW_REQUIRED",
+          "Asset": "UUP",
+          "Weight": 0.0052477153361963295
+        },
+        {
+          "algorithm": "CFAST_VALIDATION_FAILED_REVIEW_REQUIRED",
+          "Asset": "__CASH__",
+          "Weight": 0.9018003358024093
+        }
+      ],
+      "gross": {
+        "periods": 20,
+        "total_return": 0.0016137678362386776,
+        "ann_return": 0.02034164894367508,
+        "ann_vol": 0.006890956801558769,
+        "sharpe": 2.9519338938641577,
+        "max_drawdown": -0.0014086256947789533,
+        "hit_rate": 0.7
+      },
+      "net": {
+        "periods": 20,
+        "total_return": 0.001515415501937234,
+        "ann_return": 0.019104333174785437,
+        "ann_vol": 0.0069032239965389364,
+        "sharpe": 2.7674508583762836,
+        "max_drawdown": -0.0014086256947785092,
+        "hit_rate": 0.65
+      },
+      "entry_cost": 9.819966419759075e-05,
+      "cash_weight": 0.9018003358024093,
+      "gross_risky_exposure": 0.09819966419759077
+    }
+  },
+  "benchmarks": {
+    "SPY_100": {
+      "weights_rows": [
+        {
+          "algorithm": "SPY_100",
+          "Asset": "SPY",
+          "Weight": 1.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "QQQ",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "IWM",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "TLT",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "IEF",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "GLD",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "DBC",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "UUP",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "__CASH__",
+          "Weight": 0.0
+        }
+      ],
+      "gross": {
+        "periods": 20,
+        "total_return": 0.0526257322482222,
+        "ann_return": 0.6515770284872051,
+        "ann_vol": 0.09513699746072528,
+        "sharpe": 6.84882901371983,
+        "max_drawdown": -0.019300430077719977,
+        "hit_rate": 0.65
+      },
+      "net": {
+        "periods": 20,
+        "total_return": 0.0526257322482222,
+        "ann_return": 0.6515770284872051,
+        "ann_vol": 0.09513699746072528,
+        "sharpe": 6.84882901371983,
+        "max_drawdown": -0.019300430077719977,
+        "hit_rate": 0.65
+      },
+      "entry_cost": 0.0,
+      "cash_weight": 0.0,
+      "gross_risky_exposure": 1.0
+    },
+    "EQUAL_8ETF": {
+      "weights_rows": [
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "SPY",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "QQQ",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "IWM",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "TLT",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "IEF",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "GLD",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "DBC",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "UUP",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "__CASH__",
+          "Weight": 0.0
+        }
+      ],
+      "gross": {
+        "periods": 20,
+        "total_return": 0.01868028302368896,
+        "ann_return": 0.23594300048265415,
+        "ann_vol": 0.07254844704661,
+        "sharpe": 3.252212970610777,
+        "max_drawdown": -0.017003341787566018,
+        "hit_rate": 0.65
+      },
+      "net": {
+        "periods": 20,
+        "total_return": 0.01868028302368896,
+        "ann_return": 0.23594300048265415,
+        "ann_vol": 0.07254844704661,
+        "sharpe": 3.252212970610777,
+        "max_drawdown": -0.017003341787566018,
+        "hit_rate": 0.65
+      },
+      "entry_cost": 0.0,
+      "cash_weight": 0.0,
+      "gross_risky_exposure": 1.0
+    },
+    "CASH_100": {
+      "weights_rows": [
+        {
+          "algorithm": "CASH_100",
+          "Asset": "SPY",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "QQQ",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "IWM",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "TLT",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "IEF",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "GLD",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "DBC",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "UUP",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "__CASH__",
+          "Weight": 1.0
+        }
+      ],
+      "gross": {
+        "periods": 20,
+        "total_return": 0.0,
+        "ann_return": 0.0,
+        "ann_vol": 0.0,
+        "sharpe": 0.0,
+        "max_drawdown": 0.0,
+        "hit_rate": 0.0
+      },
+      "net": {
+        "periods": 20,
+        "total_return": 0.0,
+        "ann_return": 0.0,
+        "ann_vol": 0.0,
+        "sharpe": 0.0,
+        "max_drawdown": 0.0,
+        "hit_rate": 0.0
+      },
+      "entry_cost": 0.0,
+      "cash_weight": 1.0,
+      "gross_risky_exposure": 0.0
+    }
+  }
+}

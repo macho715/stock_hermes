@@ -1,0 +1,10 @@
+{
+  "failure_counts": {},
+  "total_failed_rebalance_days": 0,
+  "diagnosis": "No optimizer failures remained after maxiter increase and bounded initial-path clipping.",
+  "runs_checked": [
+    "base_5bps",
+    "x2_10bps",
+    "x5_25bps"
+  ]
+}

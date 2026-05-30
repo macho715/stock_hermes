@@ -1,0 +1,534 @@
+{
+  "data_window": {
+    "source_path": "C:\\Users\\jichu\\Downloads\\주식\\stock_1901\\invest_algos\\examples\\data\\internet_latest_yahoo_prices.csv",
+    "random_seed": 202603,
+    "march_trading_days": [
+      "2026-03-02",
+      "2026-03-03",
+      "2026-03-04",
+      "2026-03-05",
+      "2026-03-06",
+      "2026-03-09",
+      "2026-03-10",
+      "2026-03-11",
+      "2026-03-12",
+      "2026-03-13",
+      "2026-03-16",
+      "2026-03-17",
+      "2026-03-18",
+      "2026-03-19",
+      "2026-03-20",
+      "2026-03-23",
+      "2026-03-24",
+      "2026-03-25",
+      "2026-03-26",
+      "2026-03-27",
+      "2026-03-30",
+      "2026-03-31"
+    ],
+    "asof_random_trading_day": "2026-03-04",
+    "forward_start": "2026-03-05",
+    "forward_end": "2026-05-29",
+    "forward_periods": 60,
+    "assets": [
+      "SPY",
+      "QQQ",
+      "IWM",
+      "TLT",
+      "IEF",
+      "GLD",
+      "DBC",
+      "UUP"
+    ]
+  },
+  "algorithms": {
+    "A": {
+      "policy_verdict": "HOLD_DIAGNOSTIC_ONLY",
+      "details": {
+        "optimizer_success": true,
+        "optimizer_message": "Optimization terminated successfully",
+        "target_vol": 0.1,
+        "realized_vol_estimate": 2.7167796296910174e-16
+      },
+      "weights_rows": [
+        {
+          "algorithm": "A",
+          "Asset": "SPY",
+          "Weight": 7.097127725625521e-16
+        },
+        {
+          "algorithm": "A",
+          "Asset": "QQQ",
+          "Weight": 2.8183002403623614e-16
+        },
+        {
+          "algorithm": "A",
+          "Asset": "IWM",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "A",
+          "Asset": "TLT",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "A",
+          "Asset": "IEF",
+          "Weight": 2.55351295663786e-15
+        },
+        {
+          "algorithm": "A",
+          "Asset": "GLD",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "A",
+          "Asset": "DBC",
+          "Weight": 1.1353765150268202e-15
+        },
+        {
+          "algorithm": "A",
+          "Asset": "UUP",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "A",
+          "Asset": "__CASH__",
+          "Weight": 0.9999999999999953
+        }
+      ],
+      "gross": {
+        "periods": 60,
+        "ann_return": 9.84595016520104e-16,
+        "ann_vol": 2.371143419538418e-16,
+        "sharpe": 0.0,
+        "max_drawdown": 0.0,
+        "calmar": 0.0,
+        "hit_rate": 0.6833333333333333,
+        "avg_turnover": 0.0,
+        "ann_cost_drag": 0.0
+      },
+      "net": {
+        "periods": 60,
+        "ann_return": 9.649739416795565e-16,
+        "ann_vol": 2.3731435833373236e-16,
+        "sharpe": 0.0,
+        "max_drawdown": 0.0,
+        "calmar": 0.0,
+        "hit_rate": 0.6666666666666666,
+        "avg_turnover": 0.0,
+        "ann_cost_drag": 0.0
+      },
+      "entry_cost": 4.671684485844563e-18,
+      "cash_weight": 0.9999999999999953,
+      "gross_risky_exposure": 4.6804322682634685e-15,
+      "net_total_return": 0.0,
+      "gross_total_return": 0.0
+    },
+    "B": {
+      "policy_verdict": "REJECT_RETRAIN",
+      "details": {
+        "q_conformal": 0.04845364766008687,
+        "abstention_rate": 0.75,
+        "coverage_proxy": 0.90625,
+        "trade_count": 2
+      },
+      "weights_rows": [
+        {
+          "algorithm": "B",
+          "Asset": "SPY",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "B",
+          "Asset": "QQQ",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "B",
+          "Asset": "IWM",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "B",
+          "Asset": "TLT",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "B",
+          "Asset": "IEF",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "B",
+          "Asset": "GLD",
+          "Weight": 0.1
+        },
+        {
+          "algorithm": "B",
+          "Asset": "DBC",
+          "Weight": 0.1
+        },
+        {
+          "algorithm": "B",
+          "Asset": "UUP",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "B",
+          "Asset": "__CASH__",
+          "Weight": 0.8
+        }
+      ],
+      "gross": {
+        "periods": 60,
+        "ann_return": 0.005483163188466684,
+        "ann_vol": 0.033094129283063795,
+        "sharpe": 0.16568386318816794,
+        "max_drawdown": -0.017901623308393733,
+        "calmar": 0.3062941887452035,
+        "hit_rate": 0.55,
+        "avg_turnover": 0.0,
+        "ann_cost_drag": 0.0
+      },
+      "net": {
+        "periods": 60,
+        "ann_return": 0.004223163188466684,
+        "ann_vol": 0.03309098125871527,
+        "sharpe": 0.12762278505580482,
+        "max_drawdown": -0.01790162330839362,
+        "calmar": 0.23590951031164584,
+        "hit_rate": 0.5333333333333333,
+        "avg_turnover": 0.0,
+        "ann_cost_drag": 0.0
+      },
+      "entry_cost": 0.0003,
+      "cash_weight": 0.8,
+      "gross_risky_exposure": 0.2,
+      "net_total_return": 0.0008755037330716586,
+      "gross_total_return": 0.0011757808160834937
+    },
+    "C_fast": {
+      "policy_verdict": "CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE",
+      "details": {
+        "optimizer_success": true,
+        "optimizer_message": "CONVERGENCE: RELATIVE REDUCTION OF F <= FACTR*EPSMCH",
+        "fallback_used": false,
+        "optimizer_iterations": 22
+      },
+      "weights_rows": [
+        {
+          "algorithm": "C_fast",
+          "Asset": "SPY",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "C_fast",
+          "Asset": "QQQ",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "C_fast",
+          "Asset": "IWM",
+          "Weight": 0.002666323014223331
+        },
+        {
+          "algorithm": "C_fast",
+          "Asset": "TLT",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "C_fast",
+          "Asset": "IEF",
+          "Weight": 0.03475524372683599
+        },
+        {
+          "algorithm": "C_fast",
+          "Asset": "GLD",
+          "Weight": 0.002245870887076197
+        },
+        {
+          "algorithm": "C_fast",
+          "Asset": "DBC",
+          "Weight": 0.007930608035409693
+        },
+        {
+          "algorithm": "C_fast",
+          "Asset": "UUP",
+          "Weight": 0.03442448116537641
+        },
+        {
+          "algorithm": "C_fast",
+          "Asset": "__CASH__",
+          "Weight": 0.9179774731710784
+        }
+      ],
+      "gross": {
+        "periods": 60,
+        "ann_return": 0.003515004355109816,
+        "ann_vol": 0.0026635913790588463,
+        "sharpe": 1.3196484951651286,
+        "max_drawdown": -0.0011739302353019898,
+        "calmar": 2.9942191191673264,
+        "hit_rate": 0.6166666666666667,
+        "avg_turnover": 0.0,
+        "ann_cost_drag": 0.0
+      },
+      "net": {
+        "periods": 60,
+        "ann_return": 0.003170509742428345,
+        "ann_vol": 0.002668333599721278,
+        "sharpe": 1.188198410708287,
+        "max_drawdown": -0.0011739302353019898,
+        "calmar": 2.7007650430033787,
+        "hit_rate": 0.6,
+        "avg_turnover": 0.0,
+        "ann_cost_drag": 0.0
+      },
+      "entry_cost": 8.202252682892163e-05,
+      "cash_weight": 0.9179774731710784,
+      "gross_risky_exposure": 0.08202252682892162,
+      "net_total_return": 0.000754315239376524,
+      "gross_total_return": 0.000836404927340606
+    }
+  },
+  "benchmarks": {
+    "SPY_100": {
+      "weights_rows": [
+        {
+          "algorithm": "SPY_100",
+          "Asset": "SPY",
+          "Weight": 1.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "QQQ",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "IWM",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "TLT",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "IEF",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "GLD",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "DBC",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "UUP",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "SPY_100",
+          "Asset": "__CASH__",
+          "Weight": 0.0
+        }
+      ],
+      "gross": {
+        "periods": 60,
+        "ann_return": 0.43821298135433173,
+        "ann_vol": 0.1437972845745929,
+        "sharpe": 3.0474357193234387,
+        "max_drawdown": -0.06988612563881225,
+        "calmar": 6.270385965007108,
+        "hit_rate": 0.5666666666666667,
+        "avg_turnover": 0.0,
+        "ann_cost_drag": 0.0
+      },
+      "net": {
+        "periods": 60,
+        "ann_return": 0.43821298135433173,
+        "ann_vol": 0.1437972845745929,
+        "sharpe": 3.0474357193234387,
+        "max_drawdown": -0.06988612563881225,
+        "calmar": 6.270385965007108,
+        "hit_rate": 0.5666666666666667,
+        "avg_turnover": 0.0,
+        "ann_cost_drag": 0.0
+      },
+      "entry_cost": 0.0,
+      "cash_weight": 0.0,
+      "gross_risky_exposure": 1.0,
+      "net_total_return": 0.10715624689303249,
+      "gross_total_return": 0.10715624689303249
+    },
+    "EQUAL_8ETF": {
+      "weights_rows": [
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "SPY",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "QQQ",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "IWM",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "TLT",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "IEF",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "GLD",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "DBC",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "UUP",
+          "Weight": 0.125
+        },
+        {
+          "algorithm": "EQUAL_8ETF",
+          "Asset": "__CASH__",
+          "Weight": 0.0
+        }
+      ],
+      "gross": {
+        "periods": 60,
+        "ann_return": 0.2037234936149263,
+        "ann_vol": 0.0832040931311052,
+        "sharpe": 2.4484792267841673,
+        "max_drawdown": -0.03618061820890606,
+        "calmar": 5.630735562301107,
+        "hit_rate": 0.6166666666666667,
+        "avg_turnover": 0.0,
+        "ann_cost_drag": 0.0
+      },
+      "net": {
+        "periods": 60,
+        "ann_return": 0.2037234936149263,
+        "ann_vol": 0.0832040931311052,
+        "sharpe": 2.4484792267841673,
+        "max_drawdown": -0.03618061820890606,
+        "calmar": 5.630735562301107,
+        "hit_rate": 0.6166666666666667,
+        "avg_turnover": 0.0,
+        "ann_cost_drag": 0.0
+      },
+      "entry_cost": 0.0,
+      "cash_weight": 0.0,
+      "gross_risky_exposure": 1.0,
+      "net_total_return": 0.04881610730150232,
+      "gross_total_return": 0.04881610730150232
+    },
+    "CASH_100": {
+      "weights_rows": [
+        {
+          "algorithm": "CASH_100",
+          "Asset": "SPY",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "QQQ",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "IWM",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "TLT",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "IEF",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "GLD",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "DBC",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "UUP",
+          "Weight": 0.0
+        },
+        {
+          "algorithm": "CASH_100",
+          "Asset": "__CASH__",
+          "Weight": 1.0
+        }
+      ],
+      "gross": {
+        "periods": 60,
+        "ann_return": 0.0,
+        "ann_vol": 0.0,
+        "sharpe": 0.0,
+        "max_drawdown": 0.0,
+        "calmar": 0.0,
+        "hit_rate": 0.0,
+        "avg_turnover": 0.0,
+        "ann_cost_drag": 0.0
+      },
+      "net": {
+        "periods": 60,
+        "ann_return": 0.0,
+        "ann_vol": 0.0,
+        "sharpe": 0.0,
+        "max_drawdown": 0.0,
+        "calmar": 0.0,
+        "hit_rate": 0.0,
+        "avg_turnover": 0.0,
+        "ann_cost_drag": 0.0
+      },
+      "entry_cost": 0.0,
+      "cash_weight": 1.0,
+      "gross_risky_exposure": 0.0,
+      "net_total_return": 0.0,
+      "gross_total_return": 0.0
+    }
+  },
+  "c_fast_execution_controls": {
+    "execution_mode": "PAPER_TRADING_DRY_RUN_ONLY",
+    "promotion_status": "BLOCKED_BY_X5_COST_FRAGILITY",
+    "promotion_blockers": [
+      "BLOCKED_BY_X5_COST_FRAGILITY"
+    ],
+    "live_trading_allowed": false,
+    "broker_execution_allowed": false
+  }
+}

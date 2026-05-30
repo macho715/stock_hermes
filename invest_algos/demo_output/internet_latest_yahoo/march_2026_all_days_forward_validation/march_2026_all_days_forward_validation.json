@@ -1,0 +1,143 @@
+{
+  "data_window": {
+    "source_path": "C:\\Users\\jichu\\Downloads\\주식\\stock_1901\\invest_algos\\examples\\data\\internet_latest_yahoo_prices.csv",
+    "latest_csv_date": "2026-05-29",
+    "march_trading_days": [
+      "2026-03-02",
+      "2026-03-03",
+      "2026-03-04",
+      "2026-03-05",
+      "2026-03-06",
+      "2026-03-09",
+      "2026-03-10",
+      "2026-03-11",
+      "2026-03-12",
+      "2026-03-13",
+      "2026-03-16",
+      "2026-03-17",
+      "2026-03-18",
+      "2026-03-19",
+      "2026-03-20",
+      "2026-03-23",
+      "2026-03-24",
+      "2026-03-25",
+      "2026-03-26",
+      "2026-03-27",
+      "2026-03-30",
+      "2026-03-31"
+    ],
+    "n_march_trading_days": 22,
+    "assets": [
+      "SPY",
+      "QQQ",
+      "IWM",
+      "TLT",
+      "IEF",
+      "GLD",
+      "DBC",
+      "UUP"
+    ]
+  },
+  "aggregate": [
+    {
+      "group": "algorithm",
+      "name": "A",
+      "n_dates": 22,
+      "avg_cash_weight": 0.9999999999999759,
+      "avg_risky_exposure": 2.4032568691731316e-14,
+      "avg_net_total_return": 8.932248879938759e-16,
+      "median_net_total_return": 0.0,
+      "min_net_total_return": -5.551115123125783e-16,
+      "max_net_total_return": 2.0872192862952943e-14,
+      "avg_sharpe": 0.0,
+      "avg_mdd": -3.986709952063062e-16,
+      "worst_mdd": -6.217248937900877e-15,
+      "positive_return_rate": 0.045454545454545456
+    },
+    {
+      "group": "algorithm",
+      "name": "B",
+      "n_dates": 22,
+      "avg_cash_weight": 0.918181818181818,
+      "avg_risky_exposure": 0.08181818181818185,
+      "avg_net_total_return": 0.002889750650689597,
+      "median_net_total_return": 0.002531341597095005,
+      "min_net_total_return": 0.0,
+      "max_net_total_return": 0.008758078436417849,
+      "avg_sharpe": 0.6080685221015524,
+      "avg_mdd": -0.0060006703971028615,
+      "worst_mdd": -0.01790162330839362,
+      "positive_return_rate": 0.7727272727272727
+    },
+    {
+      "group": "algorithm",
+      "name": "C_fast",
+      "n_dates": 22,
+      "avg_cash_weight": 0.9334976766789622,
+      "avg_risky_exposure": 0.06650232332103787,
+      "avg_net_total_return": 0.00042345604613899546,
+      "median_net_total_return": 0.0007887578374174975,
+      "min_net_total_return": -0.010785709580011682,
+      "max_net_total_return": 0.0074307323097484446,
+      "avg_sharpe": 0.8120928840665596,
+      "avg_mdd": -0.0038155023973425435,
+      "worst_mdd": -0.017127284331519,
+      "positive_return_rate": 0.6363636363636364
+    },
+    {
+      "group": "benchmark",
+      "name": "SPY_100",
+      "n_dates": 22,
+      "avg_cash_weight": 0.0,
+      "avg_risky_exposure": 1.0,
+      "avg_net_total_return": 0.14229966722162915,
+      "median_net_total_return": 0.14209667634437384,
+      "min_net_total_return": 0.10513987400113867,
+      "max_net_total_return": 0.19701887041736477,
+      "avg_sharpe": 5.078478707007756,
+      "avg_mdd": -0.04683099986537919,
+      "worst_mdd": -0.07507201911779404,
+      "positive_return_rate": 1.0
+    },
+    {
+      "group": "benchmark",
+      "name": "EQUAL_8ETF",
+      "n_dates": 22,
+      "avg_cash_weight": 0.0,
+      "avg_risky_exposure": 1.0,
+      "avg_net_total_return": 0.06357394237831136,
+      "median_net_total_return": 0.056969265089826804,
+      "min_net_total_return": 0.0442720318338341,
+      "max_net_total_return": 0.0871126455385356,
+      "avg_sharpe": 3.9976176302119923,
+      "avg_mdd": -0.02636839671901065,
+      "worst_mdd": -0.03618061820890617,
+      "positive_return_rate": 1.0
+    },
+    {
+      "group": "benchmark",
+      "name": "CASH_100",
+      "n_dates": 22,
+      "avg_cash_weight": 1.0,
+      "avg_risky_exposure": 0.0,
+      "avg_net_total_return": 0.0,
+      "median_net_total_return": 0.0,
+      "min_net_total_return": 0.0,
+      "max_net_total_return": 0.0,
+      "avg_sharpe": 0.0,
+      "avg_mdd": 0.0,
+      "worst_mdd": 0.0,
+      "positive_return_rate": 0.0
+    }
+  ],
+  "errors": [],
+  "c_fast_execution_controls": {
+    "execution_mode": "PAPER_TRADING_DRY_RUN_ONLY",
+    "promotion_status": "BLOCKED_BY_X5_COST_FRAGILITY",
+    "promotion_blockers": [
+      "BLOCKED_BY_X5_COST_FRAGILITY"
+    ],
+    "live_trading_allowed": false,
+    "broker_execution_allowed": false
+  }
+}

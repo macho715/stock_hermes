@@ -1,0 +1,397 @@
+#!/usr/bin/env python3
+"""Run C fast validation and dry-run reports.
+
+This runner only creates research / paper-trading validation artifacts. It does
+not connect to brokers, place orders, or enable live trading.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import sys
+from pathlib import Path
+from typing import Dict, List, Optional
+
+import pandas as pd
+from sklearn.model_selection import TimeSeriesSplit
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from algos import c_decision_focused_multi_period_optimizer as cfast  # noqa: E402
+from algos.common import ensure_outdir, load_price_csv, write_json  # noqa: E402
+
+A_VERDICT = "HOLD_DIAGNOSTIC_ONLY"
+B_VERDICT = "REJECT_RETRAIN"
+C_PASS = "CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE"
+C_FAIL = "VALIDATION_FAILED_REVIEW_REQUIRED"
+CASH = "__CASH__"
+PAPER_TRADING_ONLY = "PAPER_TRADING_DRY_RUN_ONLY"
+PROMOTION_BLOCKED_COST = "BLOCKED_BY_X5_COST_FRAGILITY"
+PROMOTION_REVIEW_READY = "READY_FOR_PAPER_TRADING_REVIEW"
+PROMOTION_NOT_APPLICABLE = "NOT_APPLICABLE_VALIDATION_FAILED"
+
+THRESHOLDS = {
+    "base_min_sharpe": 1.0,
+    "x2_min_sharpe": 1.0,
+    "base_min_max_drawdown": -0.10,
+    "x2_min_max_drawdown": -0.10,
+    "base_min_optimizer_success_rate": 0.90,
+    "x2_min_optimizer_success_rate": 0.90,
+    "x5_min_sharpe_warning": 1.0,
+}
+
+
+def resolve_path(path: str | Path) -> Path:
+    p = Path(path)
+    if p.is_absolute():
+        return p
+    if p.exists():
+        return p
+    return ROOT / p
+
+
+def parse_cost_bps_list(text: str) -> List[float]:
+    values = [float(x.strip()) for x in text.split(",") if x.strip()]
+    if len(values) < 2:
+        raise ValueError("--cost-bps-list must include at least base and x2 costs")
+    if any(v < 0 for v in values):
+        raise ValueError("--cost-bps-list values must be non-negative")
+    return values
+
+
+def validate_price_frame(raw: pd.DataFrame, min_rows: int) -> None:
+    if "Date" not in raw.columns:
+        raise ValueError("price CSV must include a Date column")
+    dates = pd.to_datetime(raw["Date"], errors="raise")
+    if dates.duplicated().any():
+        raise ValueError("price CSV Date column must not contain duplicates")
+    if not dates.is_monotonic_increasing:
+        raise ValueError("price CSV Date column must be strictly increasing")
+    asset_cols = [c for c in raw.columns if c != "Date"]
+    if not asset_cols:
+        raise ValueError("price CSV must include at least one asset column")
+    if len(raw) < min_rows:
+        raise ValueError(f"price CSV has {len(raw)} rows; at least {min_rows} rows are required")
+    numeric = raw[asset_cols].apply(pd.to_numeric, errors="coerce")
+    if numeric.dropna(axis=1, how="all").empty:
+        raise ValueError("price CSV must include numeric asset prices")
+
+
+def load_validated_prices(path: str | Path, min_rows: int) -> pd.DataFrame:
+    resolved = resolve_path(path)
+    raw = pd.read_csv(resolved)
+    validate_price_frame(raw, min_rows=min_rows)
+    return load_price_csv(resolved)
+
+
+def validate_latest_weights_schema(weights: pd.DataFrame, tolerance: float = 1e-6) -> None:
+    required = {"Asset", "Weight"}
+    missing = required - set(weights.columns)
+    if missing:
+        raise ValueError(f"latest_weights missing columns: {sorted(missing)}")
+    if CASH not in set(weights["Asset"].astype(str)):
+        raise ValueError("latest_weights must include __CASH__")
+    total = float(pd.to_numeric(weights["Weight"], errors="raise").sum())
+    if not math.isclose(total, 1.0, rel_tol=tolerance, abs_tol=tolerance):
+        raise ValueError(f"latest_weights must sum to 1.0, got {total}")
+
+
+def make_c_args(args: argparse.Namespace, outdir: Path, cost_bps: float) -> argparse.Namespace:
+    return argparse.Namespace(
+        prices=str(args.prices),
+        predictions=None,
+        prev_weights=None,
+        outdir=str(outdir),
+        lookback=args.lookback,
+        rebalance_days=args.rebalance_days,
+        horizon=args.horizon,
+        gamma=args.gamma,
+        forecast_decay=args.forecast_decay,
+        shrink_mu=args.shrink_mu,
+        shrinkage=args.shrinkage,
+        risk_aversion=args.risk_aversion,
+        turnover_penalty=args.turnover_penalty,
+        cvar_lambda=args.cvar_lambda,
+        cost_bps=cost_bps,
+        turnover_budget=args.turnover_budget,
+        max_weight=args.max_weight,
+        target_vol=args.target_vol,
+        optimizer_maxiter=args.optimizer_maxiter,
+        no_cash=False,
+        tune=False,
+        tune_risk_grid="3,5,8",
+        tune_turnover_grid="10,25,50",
+    )
+
+
+def latest_weights_frame(weights: pd.Series) -> pd.DataFrame:
+    frame = weights.rename("Weight").reset_index().rename(columns={"index": "Asset"})
+    validate_latest_weights_schema(frame)
+    return frame
+
+
+def run_cfast_once(prices: pd.DataFrame, args: argparse.Namespace, label: str, cost_bps: float, run_dir: Path) -> Dict[str, object]:
+    ensure_outdir(run_dir)
+    c_args = make_c_args(args, outdir=run_dir, cost_bps=cost_bps)
+    bt = cfast.run_backtest(prices, c_args, predictions=None)
+    latest = cfast.latest_plan(prices, c_args, predictions=None)
+
+    bt["net_returns"].to_csv(run_dir / "backtest_net_returns.csv", index_label="Date")
+    bt["gross_returns"].to_csv(run_dir / "backtest_gross_returns.csv", index_label="Date")
+    bt["costs"].to_csv(run_dir / "transaction_costs.csv", index_label="Date")
+    bt["turnover"].to_csv(run_dir / "turnover.csv", index_label="Date")
+    bt["weights"].to_csv(run_dir / "weights_history.csv", index_label="Date")
+    bt["plans"].to_csv(run_dir / "plans_history.csv", index=False)
+    bt["orders"].to_csv(run_dir / "orders.csv", index=False)
+    bt["diagnostics"].to_csv(run_dir / "optimizer_diagnostics.csv", index=False)
+    latest.plan.to_csv(run_dir / "latest_multi_period_plan.csv", index_label="Horizon")
+    weights = latest_weights_frame(latest.first_step)
+    weights.to_csv(run_dir / "latest_weights.csv", index=False)
+    write_json(bt["metrics"], run_dir / "metrics.json")
+
+    summary = {
+        "label": label,
+        "algorithm": "C Decision-focused Multi-period Optimizer",
+        "latest_date": str(prices.index[-1].date()),
+        "latest_optimizer_success": latest.success,
+        "latest_optimizer_message": latest.message,
+        "latest_objective_value": latest.objective_value,
+        "cost_bps": cost_bps,
+        "settings": {
+            "lookback": args.lookback,
+            "rebalance_days": args.rebalance_days,
+            "horizon": args.horizon,
+            "target_vol": args.target_vol,
+            "max_weight": args.max_weight,
+            "turnover_budget": args.turnover_budget,
+            "cvar_lambda": args.cvar_lambda,
+            "optimizer_maxiter": args.optimizer_maxiter,
+        },
+        "metrics": bt["metrics"],
+        "output_dir": str(run_dir),
+    }
+    write_json(summary, run_dir / "summary.json")
+    return summary
+
+
+def run_walk_forward(prices: pd.DataFrame, args: argparse.Namespace, cost_bps: float) -> List[Dict[str, object]]:
+    splitter = TimeSeriesSplit(n_splits=args.splits, gap=args.gap, test_size=args.test_size)
+    rows: List[Dict[str, object]] = []
+    for fold, (train_idx, test_idx) in enumerate(splitter.split(prices), start=1):
+        start = max(0, int(test_idx[0]) - args.lookback)
+        fold_prices = prices.iloc[start : int(test_idx[-1]) + 1]
+        if len(fold_prices) <= max(args.lookback, 80):
+            continue
+        c_args = make_c_args(args, outdir=Path("_unused"), cost_bps=cost_bps)
+        bt = cfast.run_backtest(fold_prices, c_args, predictions=None)
+        metrics = bt["metrics"]
+        rows.append({
+            "fold": fold,
+            "train_end": str(prices.index[int(train_idx[-1])].date()),
+            "test_start": str(prices.index[int(test_idx[0])].date()),
+            "test_end": str(prices.index[int(test_idx[-1])].date()),
+            "ann_return": metrics["ann_return"],
+            "ann_vol": metrics["ann_vol"],
+            "sharpe": metrics["sharpe"],
+            "max_drawdown": metrics["max_drawdown"],
+            "optimizer_success_rate": metrics["optimizer_success_rate"],
+            "fallback_rate": metrics.get("fallback_rate", 0.0),
+        })
+    return rows
+
+
+def cost_label(position: int, cost_bps: float) -> str:
+    if position == 0:
+        return "base"
+    if position == 1:
+        return "x2"
+    if position == 2:
+        return "x5"
+    return f"cost_{cost_bps:g}bps"
+
+
+def evaluate_policy(stress: Dict[str, Dict[str, object]]) -> tuple[str, List[str]]:
+    warnings: List[str] = []
+    base = stress["base"]["metrics"]
+    x2 = stress["x2"]["metrics"]
+    x5 = stress.get("x5", {}).get("metrics")
+    passes = (
+        base["sharpe"] >= THRESHOLDS["base_min_sharpe"]
+        and x2["sharpe"] >= THRESHOLDS["x2_min_sharpe"]
+        and base["max_drawdown"] >= THRESHOLDS["base_min_max_drawdown"]
+        and x2["max_drawdown"] >= THRESHOLDS["x2_min_max_drawdown"]
+        and base["optimizer_success_rate"] >= THRESHOLDS["base_min_optimizer_success_rate"]
+        and x2["optimizer_success_rate"] >= THRESHOLDS["x2_min_optimizer_success_rate"]
+    )
+    if x5 and x5["sharpe"] < THRESHOLDS["x5_min_sharpe_warning"]:
+        warnings.append("cost_fragile")
+    return (C_PASS if passes else C_FAIL), warnings
+
+
+def build_execution_controls(c_verdict: str, warnings: List[str]) -> Dict[str, object]:
+    """Separate paper-trading permission from live/promotion eligibility."""
+    if c_verdict != C_PASS:
+        return {
+            "execution_mode": "VALIDATION_FAILED_NO_TRADING",
+            "promotion_status": PROMOTION_NOT_APPLICABLE,
+            "promotion_blockers": ["validation_failed"],
+            "live_trading_allowed": False,
+            "broker_execution_allowed": False,
+        }
+    blockers = [PROMOTION_BLOCKED_COST] if "cost_fragile" in warnings else []
+    return {
+        "execution_mode": PAPER_TRADING_ONLY,
+        "promotion_status": PROMOTION_BLOCKED_COST if blockers else PROMOTION_REVIEW_READY,
+        "promotion_blockers": blockers,
+        "live_trading_allowed": False,
+        "broker_execution_allowed": False,
+    }
+
+
+def build_cost_stress_frame(stress: Dict[str, Dict[str, object]]) -> pd.DataFrame:
+    rows = []
+    for label, summary in stress.items():
+        metrics = summary["metrics"]
+        rows.append({
+            "label": label,
+            "cost_bps": summary["cost_bps"],
+            "ann_return": metrics["ann_return"],
+            "ann_vol": metrics["ann_vol"],
+            "sharpe": metrics["sharpe"],
+            "max_drawdown": metrics["max_drawdown"],
+            "calmar": metrics["calmar"],
+            "hit_rate": metrics["hit_rate"],
+            "avg_turnover": metrics["avg_turnover"],
+            "ann_cost_drag": metrics["ann_cost_drag"],
+            "optimizer_success_rate": metrics["optimizer_success_rate"],
+            "fallback_rate": metrics.get("fallback_rate", 0.0),
+        })
+    return pd.DataFrame(rows)
+
+
+def build_report(summary: Dict[str, object]) -> str:
+    rows = []
+    for item in summary["c_fast_cost_stress"]:
+        rows.append(
+            f"| {item['label']} | {item['cost_bps']:.2f} | {item['sharpe']:.2f} | "
+            f"{item['ann_return']:.2%} | {item['max_drawdown']:.2%} | "
+            f"{item['optimizer_success_rate']:.2%} | {item.get('fallback_rate', 0.0):.2%} |"
+        )
+    warnings = ", ".join(summary["warnings"]) if summary["warnings"] else "none"
+    controls = summary["execution_controls"]
+    blockers = ", ".join(controls["promotion_blockers"]) if controls["promotion_blockers"] else "none"
+    return "\n".join([
+        "# C Fast Validation Report",
+        "",
+        "No broker execution. No live trading. Dry-run validation only.",
+        "",
+        "## Verdicts",
+        "",
+        f"- A: `{summary['policy_verdicts']['A']}`",
+        f"- B: `{summary['policy_verdicts']['B']}`",
+        f"- C fast: `{summary['policy_verdicts']['C_fast']}`",
+        f"- warnings: `{warnings}`",
+        f"- execution_mode: `{controls['execution_mode']}`",
+        f"- promotion_status: `{controls['promotion_status']}`",
+        f"- promotion_blockers: `{blockers}`",
+        "",
+        "## Cost Stress",
+        "",
+        "| Label | Cost bps | Sharpe | Ann Return | MDD | Optimizer Success | Fallback Rate |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+        *rows,
+        "",
+        "## Data",
+        "",
+        f"- rows: {summary['data_metadata']['rows']}",
+        f"- first_date: {summary['data_metadata']['first_date']}",
+        f"- last_date: {summary['data_metadata']['last_date']}",
+        f"- columns: {', '.join(summary['data_metadata']['columns'])}",
+        "",
+    ])
+
+
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="C fast validation runner")
+    p.add_argument("--prices", default="examples/data/internet_latest_yahoo_prices.csv")
+    p.add_argument("--outdir", default="demo_output/internet_latest_yahoo/cfast_validation")
+    p.add_argument("--cost-bps-list", default="5,10,25")
+    p.add_argument("--splits", type=int, default=4)
+    p.add_argument("--gap", type=int, default=5)
+    p.add_argument("--test-size", type=int, default=126)
+    p.add_argument("--lookback", type=int, default=252)
+    p.add_argument("--rebalance-days", type=int, default=20)
+    p.add_argument("--horizon", type=int, default=2)
+    p.add_argument("--target-vol", type=float, default=0.10)
+    p.add_argument("--max-weight", type=float, default=0.25)
+    p.add_argument("--turnover-budget", type=float, default=0.20)
+    p.add_argument("--cvar-lambda", type=float, default=0.0)
+    p.add_argument("--optimizer-maxiter", type=int, default=1000)
+    p.add_argument("--gamma", type=float, default=0.97)
+    p.add_argument("--forecast-decay", type=float, default=0.90)
+    p.add_argument("--shrink-mu", type=float, default=0.50)
+    p.add_argument("--shrinkage", type=float, default=0.35)
+    p.add_argument("--risk-aversion", type=float, default=5.0)
+    p.add_argument("--turnover-penalty", type=float, default=25.0)
+    return p.parse_args(argv)
+
+
+def main(argv: Optional[List[str]] = None) -> None:
+    args = parse_args(argv)
+    args.prices = resolve_path(args.prices)
+    outdir = ensure_outdir(resolve_path(args.outdir))
+    cost_bps_values = parse_cost_bps_list(args.cost_bps_list)
+    min_rows = max(args.lookback + args.test_size + args.gap + 2, args.splits * args.test_size + args.gap + 1)
+    prices = load_validated_prices(args.prices, min_rows=min_rows)
+
+    stress: Dict[str, Dict[str, object]] = {}
+    for position, cost_bps in enumerate(cost_bps_values):
+        label = cost_label(position, cost_bps)
+        stress[label] = run_cfast_once(prices, args, label, cost_bps, outdir / "runs" / f"{label}_{cost_bps:g}bps")
+    if "base" not in stress or "x2" not in stress:
+        raise ValueError("cost stress must produce at least base and x2 runs")
+
+    c_verdict, warnings = evaluate_policy(stress)
+    execution_controls = build_execution_controls(c_verdict, warnings)
+    if "base" in stress:
+        walk_forward = run_walk_forward(prices, args, cost_bps=float(stress["base"]["cost_bps"]))
+    else:
+        walk_forward = []
+
+    cost_stress = build_cost_stress_frame(stress)
+    cost_stress.to_csv(outdir / "cost_stress_summary.csv", index=False)
+
+    latest_weights = pd.read_csv(Path(stress["base"]["output_dir"]) / "latest_weights.csv")
+    validate_latest_weights_schema(latest_weights)
+    latest_weights.to_csv(outdir / "latest_weights.csv", index=False)
+
+    summary = {
+        "data_metadata": {
+            "source_path": str(args.prices),
+            "rows": int(len(prices)),
+            "first_date": str(prices.index.min().date()),
+            "last_date": str(prices.index.max().date()),
+            "columns": list(prices.columns),
+        },
+        "policy_verdicts": {
+            "A": A_VERDICT,
+            "B": B_VERDICT,
+            "C_fast": c_verdict,
+        },
+        "execution_controls": execution_controls,
+        "thresholds": THRESHOLDS,
+        "c_fast_cost_stress": cost_stress.to_dict(orient="records"),
+        "latest_weights": latest_weights.to_dict(orient="records"),
+        "walk_forward": walk_forward,
+        "warnings": warnings,
+    }
+    write_json(summary, outdir / "validation_summary.json")
+    (outdir / "validation_report.md").write_text(build_report(summary), encoding="utf-8")
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    main()

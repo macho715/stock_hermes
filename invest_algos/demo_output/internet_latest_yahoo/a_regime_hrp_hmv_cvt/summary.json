@@ -1,0 +1,23 @@
+{
+  "algorithm": "A Regime-aware HRP/HMV-CVT",
+  "latest_date": "2026-05-29",
+  "latest_target_vol": 0.07500000000000001,
+  "latest_realized_vol_estimate": 4.0528587125769284e-17,
+  "optimizer_success": true,
+  "optimizer_message": "Optimization terminated successfully",
+  "metrics": {
+    "periods": 647,
+    "ann_return": 7.393148669405235e-07,
+    "ann_vol": 2.3065340653446396e-06,
+    "sharpe": 0.3205306516164789,
+    "max_drawdown": -2.9657838810370762e-06,
+    "calmar": 0.249281436745148,
+    "hit_rate": 0.5409582689335394,
+    "avg_turnover": 2.4882160261375896e-06,
+    "ann_cost_drag": 3.1351521929333634e-07,
+    "gross_ann_return": 1.0528300862338596e-06,
+    "rebalance_days": 5,
+    "lookback": 252,
+    "n_assets": 8
+  }
+}

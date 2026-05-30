@@ -1,0 +1,27 @@
+{
+  "algorithm": "A Regime-aware HRP/HMV-CVT",
+  "latest_date": "2021-02-23",
+  "latest_target_vol": 0.07500000000000001,
+  "latest_realized_vol_estimate": 0.02793428650867454,
+  "optimizer_success": true,
+  "optimizer_message": "Optimization terminated successfully",
+  "cash_weight": 0.875,
+  "gross_risky_exposure": 0.125,
+  "cash_collapse_warning": false,
+  "policy_verdict": "HOLD_DIAGNOSTIC_ONLY",
+  "metrics": {
+    "periods": 219,
+    "ann_return": 0.0026709700802393646,
+    "ann_vol": 0.023900083930418203,
+    "sharpe": 0.11175567784680278,
+    "max_drawdown": -0.025608246042405303,
+    "calmar": 0.10430117220119027,
+    "hit_rate": 0.5068493150684932,
+    "avg_turnover": 0.0034246575342465947,
+    "ann_cost_drag": 0.00043150684931507087,
+    "gross_ann_return": 0.0031024769295544354,
+    "rebalance_days": 100,
+    "lookback": 80,
+    "n_assets": 8
+  }
+}
