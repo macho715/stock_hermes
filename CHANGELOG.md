@@ -2,6 +2,63 @@
 
 All notable changes for `stock_1901` are documented here.
 
+## 2026-05-31 — C_fast CONDITIONAL_PASS + --candidate CLI + C_FAST 대시보드 뱃지
+
+### Summary
+
+C_fast `vol_cap_relaxed` 파라미터 세트로 `CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE` 달성.
+`CANDIDATE_PROFILES` 단일 소스(run_cfast_validation.py 이동) + `--candidate` CLI 플래그로 CLI-benchmark 결과 완전 일치.
+대시보드 footer에 C_FAST 상태 뱃지 자동 표시 (`✓ C_FAST · PAPER · FWD✓` 초록).
+
+### Added
+
+- **`invest_algos/examples/run_cfast_validation.py`** — `CANDIDATE_PROFILES` 단일 소스 이동 (2026-05-31)
+  - `apply_candidate_profile()` — 14개 optimizer 파라미터 원자적 override
+  - `--candidate` CLI 플래그 — `{baseline_default|vol_cap_relaxed|accepted_v2_target10_paper|defensive_v2|cost_conservative}`
+  - `evaluate_forward_month()` → `main()` 연결 + `forward_month_gate` 키 `validation_summary.json` 출력
+  - `compute_regime_diagnostics()` weight 버그 수정 (가격 값 → 실제 포트폴리오 weight)
+  - GLD 15% hard weight cap + DBC 5% weight floor (`check_sleeve_cap_warnings`)
+- **`invest_algos/examples/run_cfast_upgrade_benchmark.py`** — 신규 (2026-05-31)
+  - `CANDIDATE_PROFILES` 제거 → `run_cfast_validation`에서 import (순환 없음, 단일 소스)
+- **`invest_algos/tests/test_cfast_validation_phase2.py`** — `TestCandidateProfileSelector` 6개 테스트 추가
+  - `CANDIDATE_PROFILES is bench_profiles` 동일 객체 검증
+  - `apply_candidate_profile` 14개 파라미터 전체 override 검증
+- **`invest_algos/tests/test_cfast_upgrade_benchmark.py`** — `test_accepted_v2` 구조적 assertion으로 수정
+  - 수치 의존 → 구조(컬럼 존재, notna) 검증으로 교체 (Python/numpy 버전 무관)
+- **`api_server.py`** — `/api/cfast-validation` 엔드포인트 신규 (read-only)
+  - `GET /api/cfast-validation` → `validation_summary.json` 요약 반환
+  - `c_fast_verdict`, `forward_month_gate`, `promotion_status`, `regime_diagnostics` 포함
+- **`root_folder_snapshot/stock-pred-v5/src/StockPredV5.jsx`** — C_FAST footer 뱃지
+  - `cfastValidation` state + mount-only `useEffect([], [])` — 페이지 로드 1회 자동 fetch
+  - 상태별 색상: CONDITIONAL_PASS → 초록, VALIDATION_FAILED → 빨강, 기타 → 노랑
+  - hover tooltip으로 full verdict + promotion_status + forward_pass 표시
+
+### C_fast 검증 결과 (vol_cap_relaxed, 2026-05-31)
+
+```
+C_fast verdict:     CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE
+execution_mode:     PAPER_TRADING_DRY_RUN_ONLY
+promotion_status:   READY_FOR_PAPER_TRADING_REVIEW
+promotion_blockers: []
+base  return=11.65%  sharpe=1.52  target_pass=True
+x2    return=13.06%  sharpe=1.52  target_pass=True
+forward_month_gate: pass=True, return=+2.53%, mdd=-0.47%
+```
+
+### Tests
+
+- `invest_algos/tests/test_cfast_validation_phase2.py` — 24 PASS (199s)
+- `invest_algos/tests/test_cfast_upgrade_benchmark.py::test_accepted_v2_runs_and_produces_required_columns` — 1 PASS (693s)
+
+### Safety Invariants (변경 없음)
+
+- `live_trading_allowed = False`
+- `broker_execution_allowed = False`
+- `screening_output_only = True`
+- `dashboard_snapshot.v1` 스키마 append-only 유지
+
+---
+
 ## 2026-05-31 — Dashboard Safety Gate + Quant1901 통합 완료 + 자동화 대시보드
 
 ### Summary

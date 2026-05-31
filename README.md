@@ -48,6 +48,8 @@
 | **Executive Dashboard v2.1** | **`VITE_DASHBOARD_LAYOUT=executive` — HeaderBar·KPI·AI Decision Panel·Watchlist·Scenario** |
 | **Safety Gate** | **`NO TRADE / PAPER ONLY` — BACKTEST_HONESTY_NOT_PASS 등 11개 HARD_BLOCKER 시 거래 신호 강제 차단 (Added 2026-05-31)** |
 | **Quant1901 보조 검증** | **`/api/quant1901` 자동 fetch — EMA/RSI/HTF kill-switch 백테스트 결과를 대시보드에 자동 표시 (Added 2026-05-31)** |
+| **C_fast 검증** | **`/api/cfast-validation` — `vol_cap_relaxed` CONDITIONAL_PASS (x2=13.06%, forward_pass=True). Footer C_FAST 뱃지 자동 표시 (Added 2026-05-31)** |
+| **--candidate CLI** | **`python invest_algos/examples/run_cfast_validation.py --candidate vol_cap_relaxed` — 5개 candidate 프로파일 원자적 override (Added 2026-05-31)** |
 | 모델 점수 | 앙상블·LogReg·XGBoost·GRU/RNN (LSTM 선택) |
 | 어드바이저 | LiteLLM 게이트웨이 · OpenAI API Structured Outputs · MLflow span tracing · AMH memory · OpenBB tool-use |
 | **Thompson Sampling MAB** | **`thompson_weights.py` — Beta 분포 기반 advisor 가중치 동적 결정 (`ADVISOR_WEIGHTS_MODE=mab`)** |
