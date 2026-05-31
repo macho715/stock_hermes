@@ -46,6 +46,50 @@ flowchart TD
     Ops --> Approval[Approval template / ZERO log]
 ```
 
+## Architecture Update — 2026-05-31 (Quant1901 통합 + Safety Gate + 자동화 대시보드)
+
+### Quant1901 보조 백테스트 레이어 (Added 2026-05-31)
+
+```mermaid
+flowchart LR
+    Dashboard[Executive Dashboard v2.1] -->|auto fetch ticker change| API[/api/quant1901]
+    API --> Runner[quant1901_runner.py\nP5 Backtest Plugin]
+    Runner --> Bundle[quant1901_executor.py\nEMA·RSI·HTF·kill-switch]
+    Runner -->|dashboard_snapshot.v1| Panel[BACKEND Panel\nQuant1901EvidenceCard]
+    Panel -->|BLOCKED_RISK_HALT\nNOT_PASS\nCONDITIONAL_PASS| UI[대시보드 자동 표시]
+```
+
+**Key constraints (불변)**:
+- `execution_controls.live_trading_allowed = False` (항상)
+- `execution_controls.broker_execution_allowed = False` (항상)
+- `screening_output_only = True`
+- 결과는 보조 검증 증거; 주 추천 verdict를 업그레이드하지 않음
+
+### Dashboard Safety Gate (Added 2026-05-31)
+
+| 상태 | 조건 | 표시 |
+|---|---|---|
+| Hard blocked | HARD_BLOCKERS ∩ evidence_flags ≠ ∅ | NO TRADE / PAPER ONLY (Confidence ≤ 50) |
+| Soft warning | SOFT_WARNINGS ∩ evidence_flags ≠ ∅ | WATCH ONLY / REVIEW (Confidence ≤ 65) |
+| Clean | 블로커 없음 | 원본 AI 추천 유지 |
+
+HARD_BLOCKERS (11개): `BACKTEST_HONESTY_NOT_PASS`, `ACCURACY_BELOW_50`, `AUC_BELOW_0_50`, `COMPLETED_TRADES_BELOW_50`, `SYNTHETIC_DATA_SOURCE`, `STALE_DATA`, `TARGET_RETURN_SHORTFALL`, `OPTIMIZER_FAILURE`, `VALIDATION_FAILED`, `BROKER_EXECUTION_NOT_ALLOWED`, `LIVE_TRADING_NOT_ALLOWED`
+
+### New API Endpoints (Added 2026-05-31)
+
+| Endpoint | 역할 |
+|---|---|
+| `GET /api/quant1901?ticker=X&period=2y&optimize=0` | Quant1901 보조 백테스트 실행 → dashboard_snapshot.v1 반환 |
+
+### New CLI Subcommands (Added 2026-05-31)
+
+```bash
+python -m stock_rtx4060.main quant1901-backtest --ticker 005930.KS --period 2y --optimize
+python -m stock_rtx4060.main recommend --quant1901 --quant1901-optimize
+```
+
+---
+
 ## Architecture Update — 2026-05-30 (NotebookLM News Intelligence + Executive Dashboard v2.1 + Thompson Sampling MAB)
 
 ### Thompson Sampling MAB — Advisor Weighting

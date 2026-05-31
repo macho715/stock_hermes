@@ -46,6 +46,8 @@
 | 투자 준비도 | backtest_honesty·PBO·3x 비용생존·엠바고 스트레스·어드바이저 감사 게이트 |
 | 대시보드 | REC탭 — 후보카드·PBO뱃지·어드바이저게이지·투자등급 |
 | **Executive Dashboard v2.1** | **`VITE_DASHBOARD_LAYOUT=executive` — HeaderBar·KPI·AI Decision Panel·Watchlist·Scenario** |
+| **Safety Gate** | **`NO TRADE / PAPER ONLY` — BACKTEST_HONESTY_NOT_PASS 등 11개 HARD_BLOCKER 시 거래 신호 강제 차단 (Added 2026-05-31)** |
+| **Quant1901 보조 검증** | **`/api/quant1901` 자동 fetch — EMA/RSI/HTF kill-switch 백테스트 결과를 대시보드에 자동 표시 (Added 2026-05-31)** |
 | 모델 점수 | 앙상블·LogReg·XGBoost·GRU/RNN (LSTM 선택) |
 | 어드바이저 | LiteLLM 게이트웨이 · OpenAI API Structured Outputs · MLflow span tracing · AMH memory · OpenBB tool-use |
 | **Thompson Sampling MAB** | **`thompson_weights.py` — Beta 분포 기반 advisor 가중치 동적 결정 (`ADVISOR_WEIGHTS_MODE=mab`)** |
@@ -78,6 +80,8 @@ flowchart LR
         Risk --> Bridge[dashboard_bridge.py\npbo_summary_for_card]
         Bridge --> Snap[dashboard_snapshot.v1]
         API[api_server.py :5151] --> Engine
+        API -->|/api/quant1901| Q1901[quant1901_runner.py\nP5 Backtest Plugin]
+        Q1901 -->|dashboard_snapshot.v1| Dashboard
     end
 
     subgraph Frontend["React 프론트엔드 (stock-pred-v5)"]
@@ -454,6 +458,7 @@ PYTHONPATH=.:src python main.py <command> [options]
 | `report` | 일간 리포트 | Markdown/JSON |
 | `recommend` | 추천 스캔 (Track-S/L) | 추천 Markdown/JSON · `audit_log.jsonl` |
 | `backtest` | 백테스트 실행 | 백테스트 결과 |
+| `quant1901` | 계획됨: P5 Backtest Plugin 기반 Quant1901 보조 검증 | `reports/quant1901/` |
 | `ops-v1` | 수동 검토 워크플로우 패킷 | 승인 템플릿·ZERO 로그·요약 |
 | `dashboard-export` | 추천 JSON → 대시보드 스냅샷 | `dashboard_snapshot.json` |
 | `paper` | 페이퍼트레이딩 시뮬레이션 | 페이퍼 포지션 리포트 |
@@ -486,6 +491,28 @@ VITE_DASHBOARD_LAYOUT=executive npm run build
 ```
 
 종목 선택 시 `/api/recommend`가 자동 호출되어 AI Decision Panel이 실시간으로 채워집니다.
+
+### Quant1901 보조 검증 계획
+
+Quant1901은 기존 추천 엔진을 대체하지 않는 선택형 보조 백테스트 검증 레이어로 병합할 계획입니다.
+최신 방향은 `Strategy C — Backtest Plugin (P5)` 우선이며, `Strategy A — Thin Wrapper Import`는 방어용 보조 래퍼로 결합합니다.
+기본값은 OFF이며, 명시적으로 켠 경우에만 `/api/recommend?quant1901=1` 또는 CLI 옵션에서 실행됩니다.
+
+| 항목 | 계약 |
+|---|---|
+| 실행 범위 | paper/backtest-only |
+| 기본값 | OFF |
+| 우선 구현 | `src/stock_rtx4060/backtest/quant1901_runner.py` |
+| 보조 래퍼 | `src/stock_rtx4060/strategies/quant1901_strategy.py` |
+| 후순위 후보 | `src/stock_rtx4060/factors/quant1901_trend_factor.py` |
+| API 파라미터 | `quant1901=0|1` |
+| 결과 필드 | `dashboard_snapshot.v1.results[].quant1901` |
+| 출력 위치 | `reports/quant1901/` 또는 `<output_dir>/quant1901/` |
+| 안전 경계 | `screening_output_only=true`, `new_capital_allowed=false`, `broker_order_execution=false` |
+
+`quant1901.orders`는 simulated order ledger입니다.
+브로커 주문이나 투자 승인으로 해석하지 않습니다.
+현재 로컬 구현은 `quant1901_runner.py`가 존재하지만, bundle import 경로와 optimize 함수 연결을 추가 검증해야 합니다.
 
 ### 데이터 모드
 
@@ -601,6 +628,7 @@ flowchart LR
 | Kill Switch | `~/.cache/stock_1901/KILLED` 파일이 모든 라이브 주문 차단 |
 | PIT as_of 가드 | 레이크 미스 + `as_of!=None` → `RuntimeError` (silent look-ahead 금지) |
 | `screening_output_only` | 모든 `RecommendationResult`에 항상 `True` |
+| Quant1901 | 계획됨: P5 plugin 보조 검증만 허용, live orders disabled, broker adapter disabled |
 
 ---
 
@@ -624,6 +652,7 @@ PYTHONPATH=.:src python main.py paper --help
 | `pytest --cov-fail-under=75` | 전체 통과, 커버리지 ≥75% |
 | `dashboard_snapshot.v1` | `schema_version` 필드 존재 |
 | `screening_output_only` | 모든 결과에 `True` |
+| Quant1901 보조 검증 | 계획됨: P5 plugin smoke, 기본 OFF 호환, `paper_only=true`, `live_orders_enabled=false` |
 | `PurgedKFold groups` | `cv.split()` 시 항상 `groups=` 전달 |
 | numpy 버전 | `>=1.26,<3.0` |
 | shap 버전 | `>=0.50.0` |
@@ -642,6 +671,7 @@ PYTHONPATH=.:src python main.py paper --help
 | P3 | ML 업그레이드 | `src/stock_rtx4060/ml/` (LightGBM, Optuna HPO, MLflow) |
 | P4 | 포트폴리오 최적화 | `src/stock_rtx4060/portfolio/` (skfolio HRP/NCO/CVaR) |
 | P5 | 백테스트 | `src/stock_rtx4060/backtest/` (vectorbt, MC bootstrap, CPCV/PBO) |
+| P5-A | Quant1901 보조 검증 | 계획됨: `src/stock_rtx4060/backtest/quant1901_runner.py` + thin wrapper |
 | P6 | LLM 어드바이저 | `src/stock_rtx4060/advisors/` (LiteLLM, MLflow tracing) |
 | P7 | 오케스트레이션 | `flows/` (Prefect 3 · daily_krx · daily_us · research_weekly) |
 | P8 | 라이브 브로커 | `src/stock_rtx4060/broker/` (Alpaca · IBKR · KIS) |
@@ -656,6 +686,7 @@ PYTHONPATH=.:src python main.py paper --help
 | Provider 감사 로그 | `reports/**/audit_log.jsonl` |
 | MLflow 어드바이저 trace | `audit_log/advisor.jsonl` |
 | 대시보드 스냅샷 | `dashboard_snapshot.json` (dashboard-export 명령) |
+| Quant1901 보조 검증 | 계획됨: `reports/quant1901/` |
 | forward tracking CSV | `reports/live_review/005930KS/paper_trading_log_005930KS.csv` |
 | 대시보드 빌드 | `stock-pred-v5/dist/` |
 

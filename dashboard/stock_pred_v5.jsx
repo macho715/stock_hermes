@@ -1504,6 +1504,7 @@ function BackendTab({ snapshot, currentResult, backendError, accent }) {
             notebooklmConfidence={selected.notebooklm_confidence}
             notebooklmSourceCount={selected.notebooklm_source_count}
           />
+          <Quant1901EvidenceCard quant1901={selected.quant1901} />
         </Panel>
       )}
 
@@ -1695,6 +1696,109 @@ function ReadinessWarning({ message, reasons, status }) {
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ----------  QUANT1901 AUXILIARY EVIDENCE CARD  ---------- */
+function Quant1901EvidenceCard({ quant1901 }) {
+  // Not shown when disabled (SKIPPED) or absent
+  if (!quant1901 || quant1901.status === "SKIPPED" || quant1901.status == null) return null;
+
+  const isOk = quant1901.status === "OK";
+  const isError = quant1901.status === "ERROR";
+  const verdict = quant1901?.policy_verdicts?.C_fast || "—";
+  const isPass = verdict.includes("CONDITIONAL_PASS");
+  const isHalt = verdict.includes("BLOCKED_RISK_HALT");
+  const m = quant1901.metrics || {};
+
+  const verdictColor = isPass ? C.amber : C.red;
+
+  return (
+    <div
+      style={{
+        marginTop: 10,
+        padding: "10px 12px",
+        background: "#060c10",
+        borderRadius: 6,
+        border: `1px solid ${C.border}`,
+        borderTop: `2px solid ${isPass ? C.amber : C.red}44`,
+        opacity: 0.82,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 6,
+        }}
+      >
+        <span style={{ fontSize: 9, color: C.textMuted, letterSpacing: "0.08em" }}>
+          QUANT1901 AUXILIARY
+        </span>
+        <span
+          style={{
+            fontSize: 8,
+            color: C.textMuted,
+            background: `${C.border}88`,
+            padding: "1px 5px",
+            borderRadius: 2,
+            letterSpacing: 0.5,
+          }}
+        >
+          PAPER ONLY · NOT FINANCIAL ADVICE
+        </span>
+      </div>
+
+      {isError && (
+        <div style={{ color: C.textMuted, fontSize: 9, lineHeight: 1.5 }}>
+          ⚠ Quant1901 execution failed: {quant1901.error || "unknown error"}
+        </div>
+      )}
+
+      {isOk && (
+        <>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 4,
+              marginBottom: 6,
+            }}
+          >
+            <BackendKV
+              label="C_FAST VERDICT"
+              value={isHalt ? "RISK HALT" : isPass ? "PAPER CANDIDATE" : "NOT PASS"}
+              color={verdictColor}
+            />
+            <BackendKV label="CALMAR" value={m.calmar != null ? m.calmar.toFixed(3) : "—"} />
+            <BackendKV
+              label="SHARPE"
+              value={m.sharpe != null ? m.sharpe.toFixed(3) : "—"}
+              color={m.sharpe >= 0 ? C.textDim : C.red}
+            />
+            <BackendKV
+              label="MAX DD %"
+              value={m.max_drawdown_pct != null ? m.max_drawdown_pct.toFixed(1) : "—"}
+              color={C.red}
+            />
+            <BackendKV
+              label="RISK HALT"
+              value={m.risk_halt ? "YES" : "NO"}
+              color={m.risk_halt ? C.red : C.textDim}
+            />
+            <BackendKV
+              label="TRADES"
+              value={m.trades != null ? String(m.trades) : "—"}
+            />
+          </div>
+          <div style={{ fontSize: 8, color: C.textMuted, lineHeight: 1.5 }}>
+            Quant1901 supplementary evidence only.
+            Does not upgrade or replace the main recommendation verdict.
+          </div>
+        </>
       )}
     </div>
   );

@@ -34,6 +34,13 @@
 | KEVPE badge | `stock-pred-v5/src/components/KevpeBadge.jsx` | KEVPE 이벤트가 있을 때 regime/score 표시 |
 | File bridge | `stock-pred-v5/public/dashboard_snapshot.json` | FILE 모드 REC 입력 |
 | API bridge | `http://127.0.0.1:5151/api/recommend` | API 모드 REC 입력 |
+| **Quant1901 API** | `http://127.0.0.1:5151/api/quant1901?ticker=X&period=2y` | **quant1901 보조 백테스트 자동 fetch — dashboard 티커 변경 시 자동 호출 (Added 2026-05-31)** |
+| **Quant1901 Runner** | `src/stock_rtx4060/backtest/quant1901_runner.py` | **EMA/RSI/HTF kill-switch → dashboard_snapshot.v1 변환 (Added 2026-05-31)** |
+| **Quant1901 Strategy** | `src/stock_rtx4060/strategies/quant1901_strategy.py` | **Strategy A thin wrapper — OHLCV 정규화, paper-only guard (Added 2026-05-31)** |
+| **Quant1901 Factor** | `src/stock_rtx4060/factors/quant1901_trend_factor.py` | **Factor Zoo 등록 — IC 측정용 (Added 2026-05-31)** |
+| **Quant1901 Flow** | `flows/quant1901_daily.py` | **Prefect 일별 자동화 — 17:00 KST, MLflow 연동 (Added 2026-05-31)** |
+| **Safety Gate** | `dashboard/stock_pred_v5.jsx` + `root_folder_snapshot/.../StockPredV5.jsx` | **HARD_BLOCKERS 11개 → NO TRADE/PAPER ONLY 강제 (Added 2026-05-31)** |
+| **Quant1901 Evidence Card** | `Quant1901EvidenceCard` (JSX 컴포넌트) | **보조 검증 결과 카드 — paper-only, not financial advice (Added 2026-05-31)** |
 | **NotebookLM API** | `http://127.0.0.1:8088/api/stock-news/notebook-analysis` | **iran-war-notelm stock_news API (Added 2026-05-30)** |
 | **Thompson MAB** | `advisors/thompson_weights.py` | **Beta 분포 advisor 가중치 동적 결정 (Added 2026-05-30)** |
 

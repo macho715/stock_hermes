@@ -35,7 +35,7 @@ git push -u origin claude/upgrade-investment-system-2Mc7x
 
 ## Key Invariants (Must Never Break)
 
-1. **CLI compatibility**: `main.py {env,benchmark,report,recommend,paper,ops,backtest} --help` must exit 0.
+1. **CLI compatibility**: `main.py {env,benchmark,report,recommend,paper,ops,backtest,quant1901-backtest} --help` must exit 0.
 2. **`dashboard_snapshot.v1` schema**: `build_dashboard_snapshot` always returns `schema_version="dashboard_snapshot.v1"`. Additive fields only.
 3. **`audit_log.jsonl` format**: Existing event names/format preserved. New events go to new files (`advisor.jsonl`, `provenance.jsonl`).
 4. **`screening_output_only=True`**: All recommendation outputs carry this flag. No broker order path can be triggered without explicit user action.
@@ -206,6 +206,16 @@ Full docs: see `20260529_plan-doc-rdagent-factory.md`.
 | `pd.Timestamp.utcnow()` deprecated in Pandas 4.x | Use `pd.Timestamp.now('UTC')` — patched in `data_providers.py`, `recommendation_engine.py` |
 
 ## Recent Fix Log
+
+| Date | Commit | Fix |
+|---|---|---|
+| 2026-05-31 | (local) | feat(dashboard): Safety Gate — HARD_BLOCKERS 11개, NO TRADE/PAPER ONLY, Quant1901EvidenceCard, chart 210px |
+| 2026-05-31 | (local) | feat(P5): Quant1901Runner — dashboard_snapshot.v1 변환, 5 validation gates, execution_controls.live=False 강제 |
+| 2026-05-31 | (local) | feat(api): /api/quant1901 엔드포인트 추가 — 대시보드 자동 fetch |
+| 2026-05-31 | (local) | feat(dashboard): Executive v2.1 — useEffect auto-fetch /api/quant1901, BACKEND 패널 자동 표시 |
+| 2026-05-31 | (local) | feat(flows): quant1901_daily.py Prefect flow + deploy_quant1901.py + .env.example |
+| 2026-05-31 | (local) | feat(factors): quant1901_trend_factor.py 3 blockers 해소 (PIT guard, HTF warn, category doc) |
+| 2026-05-31 | (local) | feat(recommend): RecommendationConfig.quant1901_enabled, RecommendationResult.quant1901 additive field |
 
 | Date | Commit | Fix |
 |---|---|---|

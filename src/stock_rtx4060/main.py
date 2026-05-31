@@ -82,6 +82,8 @@ def build_parser() -> argparse.ArgumentParser:
     recommend.add_argument("--sizing-alpha", type=float, default=0.1)
     recommend.add_argument("--sizing-n-min", type=int, default=30)
     recommend.add_argument("--output-dir", default="reports/recommendations")
+    recommend.add_argument("--quant1901", action="store_true", help="run Quant1901 auxiliary backtest for each candidate (paper/backtest only; never overrides verdict)")
+    recommend.add_argument("--quant1901-optimize", action="store_true", help="enable EMA grid search inside Quant1901 auxiliary backtest (implies --quant1901)")
 
     paper = sub.add_parser("paper-run", help="paper-only virtual trading — no broker orders (screening only)")
     paper.add_argument("--universe", help="comma-separated ticker list")
@@ -178,6 +180,22 @@ def build_parser() -> argparse.ArgumentParser:
     factor_status = sub.add_parser("factor-status", help="show status of all registered discovered factors")
     factor_status.add_argument("--ticker", help="show only factors for this ticker")
 
+    # ── quant1901 — paper/backtest-only trend strategy bridge ──────────────────
+    quant1901 = sub.add_parser(
+        "quant1901-backtest",
+        help="run quant1901 paper/backtest strategy and emit a dashboard_snapshot.v1 (no broker orders)",
+    )
+    q1901_src = quant1901.add_mutually_exclusive_group()
+    q1901_src.add_argument("--csv", help="OHLCV CSV with Date, Open, High, Low, Close, Volume")
+    q1901_src.add_argument("--synthetic", action="store_true", help="use deterministic synthetic OHLCV data")
+    quant1901.add_argument("--ticker", default="SYNTH1901", help="ticker symbol / label for the snapshot")
+    quant1901.add_argument("--period", default="2y", help="lookback period when loading via provider (default: 2y)")
+    quant1901.add_argument("--rows", type=int, default=360, help="synthetic row count (with --synthetic)")
+    quant1901.add_argument("--seed", type=int, default=1901, help="synthetic random seed (with --synthetic)")
+    quant1901.add_argument("--optimize", action="store_true", help="grid-search fast/slow EMA windows before final run")
+    quant1901.add_argument("--data-provider", default="auto", help="provider when neither --csv nor --synthetic is given (default: auto)")
+    quant1901.add_argument("--output", help="snapshot output path (default: reports/quant1901/<ticker>/snapshot.json)")
+
     return parser
 
 
@@ -218,6 +236,8 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_factor_approve(args)
             case "factor-status":
                 return cmd_factor_status(args)
+            case "quant1901-backtest":
+                return cmd_quant1901_backtest(args)
             case _:
                 parser.print_help()
                 return 2
@@ -311,6 +331,8 @@ def cmd_recommend(args: argparse.Namespace) -> int:
         sizing_kind=getattr(args, "sizing_kind", "off"),
         sizing_alpha=getattr(args, "sizing_alpha", 0.1),
         sizing_n_min=getattr(args, "sizing_n_min", 30),
+        quant1901_enabled=getattr(args, "quant1901", False) or getattr(args, "quant1901_optimize", False),
+        quant1901_optimize=getattr(args, "quant1901_optimize", False),
     )
     engine = RecommendationEngine(config)
     results = engine.run()
@@ -525,6 +547,68 @@ def cmd_dashboard_export(args: argparse.Namespace) -> int:
     if args.public_dir:
         print(f"exported public assets: {args.public_dir}")
     return 0
+
+
+def cmd_quant1901_backtest(args: argparse.Namespace) -> int:
+    """Run the quant1901 paper/backtest strategy and write a dashboard_snapshot.v1.
+
+    Live trading and broker execution remain disabled at the runner boundary.
+    """
+    import pandas as pd
+
+    from .backtest.quant1901_runner import Quant1901Runner
+
+    ticker = args.ticker
+
+    # ── resolve OHLCV source ───────────────────────────────────────────────
+    if args.csv:
+        df = pd.read_csv(args.csv)
+        date_col = next((c for c in df.columns if c.strip().lower() == "date"), None)
+        if date_col is not None:
+            df[date_col] = pd.to_datetime(df[date_col])
+            df = df.set_index(date_col)
+    elif args.synthetic:
+        df = make_synthetic_ohlcv(args.rows)
+    else:
+        # provider path — period is required; fall back to synthetic on failure
+        try:
+            from .data_providers import load_ohlcv_with_provider
+
+            result = load_ohlcv_with_provider(
+                ticker,
+                args.period,
+                data_provider=args.data_provider,
+                command="quant1901-backtest",
+            )
+            df = result.frame
+            print(f"data source: {result.source} (provider={result.provider_used})")
+        except Exception as exc:  # noqa: BLE001 — provider failure is non-fatal
+            print(f"WARNING: provider load failed ({type(exc).__name__}: {exc}); using synthetic data", file=sys.stderr)
+            df = make_synthetic_ohlcv(args.rows)
+
+    runner = Quant1901Runner()
+    snapshot = runner.run(df, ticker=ticker, optimize=args.optimize)
+
+    # ── write snapshot ─────────────────────────────────────────────────────
+    if args.output:
+        out_path = Path(args.output)
+    else:
+        out_path = Path("reports") / "quant1901" / _safe_ticker(ticker) / "snapshot.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    result_item = snapshot["results"][0]
+    print(json.dumps(result_item["policy_verdicts"], ensure_ascii=False))
+    print(f"verdict: {result_item['policy_verdicts']['C_fast']}")
+    print(f"live_trading_allowed: {result_item['execution_controls']['live_trading_allowed']}")
+    print(f"broker_execution_allowed: {result_item['execution_controls']['broker_execution_allowed']}")
+    print(f"saved: {out_path}")
+    return 0
+
+
+def _safe_ticker(ticker: str) -> str:
+    """Return a filesystem-safe slug for a ticker symbol."""
+    return "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in ticker)
 
 
 def cmd_demo(args: argparse.Namespace) -> int:

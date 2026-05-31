@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   ComposedChart,
   LineChart,
@@ -57,6 +57,7 @@ const C = {
   buy: "#00FF88",
   sell: "#FF3366",
   hold: "#FFB800",
+  hgb: "#A9FF66",
   lstm: "#BB66FF",
   lr: "#66CCFF",
   xgb: "#66FFAA",
@@ -552,15 +553,31 @@ function signalFromScore(s, thresholds) {
 }
 function scoresFromModelEvidence(evidence) {
   if (!evidence || evidence.status !== "PASS" || !evidence.model_scores) return null;
-  const main = Number(evidence.model_scores.main ?? evidence.ensemble_score);
-  if (!Number.isFinite(main)) return null;
+  const raw = evidence.model_scores || {};
+  const actionable = evidence.actionable_model_scores || {};
+  const backendMain = Number(raw.main ?? evidence.ensemble_score);
+  const consensus = Number(evidence.actionable_consensus_score ?? evidence.ensemble_score ?? raw.main);
+  if (!Number.isFinite(consensus)) return null;
   return {
-    main,
-    lr: evidence.model_scores.logistic == null ? null : Number(evidence.model_scores.logistic),
-    xgb: evidence.model_scores.xgboost == null ? null : Number(evidence.model_scores.xgboost),
-    lstm: evidence.model_scores.lstm == null ? null : Number(evidence.model_scores.lstm),
-    rnn: evidence.model_scores.rnn == null ? null : Number(evidence.model_scores.rnn),
+    main: consensus,
+    backendMain: Number.isFinite(backendMain) ? backendMain : null,
+    hgb: actionable.hgb == null ? raw.hgb == null ? null : Number(raw.hgb) : Number(actionable.hgb),
+    lr: actionable.logistic == null ? raw.logistic == null ? null : Number(raw.logistic) : Number(actionable.logistic),
+    xgb: actionable.xgboost == null ? raw.xgboost == null ? null : Number(raw.xgboost) : Number(actionable.xgboost),
+    lstm: raw.lstm == null ? null : Number(raw.lstm),
+    rnn: raw.rnn == null ? null : Number(raw.rnn),
+    consensus,
+    actionableSignal: evidence.actionable_signal || evidence.signal,
+    sources: evidence.evidence?.model_score_sources || {},
+    nonActionable: new Set(evidence.evidence?.non_actionable_model_scores || []),
   };
+}
+
+function modelNote(scores, key) {
+  const source = scores?.sources?.[key];
+  const suffix = scores?.nonActionable?.has(key) ? "reference only" : source;
+  if (!suffix) return null;
+  return String(suffix).replace(/_/g, " ");
 }
 
 function getModelQualityWarning(evidence, qualityConfig) {
@@ -692,6 +709,11 @@ export default function StockPredV5() {
   const [bench, setBench] = useState({ open: false, rows: [], loading: false, progress: 0 });
   const [clock, setClock] = useState("");
   const [exportFlash, setExportFlash] = useState("");
+  // ── BACKEND tab: quant1901 auto-fetch ────────────────────────────────────
+  const [backendSnapshot, setBackendSnapshot] = useState(null);
+  const [backendError, setBackendError] = useState("");
+  const [backendLoading, setBackendLoading] = useState(false);
+  const snapshotInputRef = useRef(null);
 
   const symbols = universeByMarket[market] || [];
   const accent = market === "US" ? C.us : C.krx;
@@ -1032,8 +1054,8 @@ export default function StockPredV5() {
     () => getModelQualityWarning(modelEvidence, modelQualityConfig),
     [modelEvidence, modelQualityConfig]
   );
-  const ens = scores ? Number(modelEvidence.ensemble_score) : null;
-  const sig = scores ? modelEvidence.signal : null;
+  const ens = scores ? Number(scores.consensus ?? modelEvidence.actionable_consensus_score ?? modelEvidence.ensemble_score) : null;
+  const sig = scores ? (scores.actionableSignal || modelEvidence.actionable_signal || modelEvidence.signal) : null;
 
   const backtest = useMemo(
     () => (enriched.length > 35 ? runBacktest(enriched, signalThresholds) : null),
@@ -1143,6 +1165,61 @@ export default function StockPredV5() {
       : `₩${Math.round(v).toLocaleString()}`;
   const fmtPct = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
 
+  // ── BACKEND snapshot import ──────────────────────────────────────────────
+  const importBackendSnapshot = useCallback((event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const payload = JSON.parse(String(reader.result || "{}"));
+        if (payload.schema_version !== "dashboard_snapshot.v1" || !Array.isArray(payload.results)) {
+          throw new Error("dashboard_snapshot.v1 JSON 형식이 필요합니다");
+        }
+        setBackendSnapshot({ ...payload, importedFileName: file.name });
+        setBackendError("");
+        setTab("BACKEND");
+        if (payload.results[0]?.ticker) setSelected(payload.results[0].ticker);
+        setExportFlash("BACKEND SNAPSHOT ✓");
+        setTimeout(() => setExportFlash(""), 1800);
+      } catch (err) {
+        setBackendError(err instanceof Error ? err.message : "스냅샷 import 실패");
+        setTab("BACKEND");
+      } finally {
+        event.target.value = "";
+      }
+    };
+    reader.readAsText(file);
+  }, []);
+
+  // ── Auto-fetch quant1901 when ticker changes ─────────────────────────────
+  useEffect(() => {
+    if (!selected || !API_BASE) return;
+    let cancelled = false;
+    setBackendLoading(true);
+    setBackendError("");
+    const params = new URLSearchParams({ ticker: selected, period: "2y", optimize: "0" });
+    fetch(`${API_BASE}/api/quant1901?${params}`, { cache: "no-store" })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((snap) => {
+        if (cancelled) return;
+        if (snap?.schema_version === "dashboard_snapshot.v1") {
+          setBackendSnapshot({ ...snap, importedFileName: `auto:${selected}` });
+          setBackendError("");
+        } else if (snap?.status === "ERROR") {
+          setBackendError(snap.error || "quant1901 API error");
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setBackendError(`quant1901: ${err.message}`);
+      })
+      .finally(() => { if (!cancelled) setBackendLoading(false); });
+    return () => { cancelled = true; };
+  }, [selected]);
+
   const triggerDownload = (text, name, mime) => {
     const blob = new Blob([text], { type: mime });
     const url = URL.createObjectURL(blob);
@@ -1222,11 +1299,12 @@ ${modelEvidence && scores ? `Backend model evidence: ${modelEvidence.model_kind}
 | Model | Score |
 |---|---|
 | Backend main | ${scores.main} |
+| HGB | ${scores.hgb ?? "N/A"} |
 | Logistic Regression | ${scores.lr ?? "N/A"} |
 | XGBoost | ${scores.xgb ?? "N/A"} |
-| LSTM | ${scores.lstm ?? "N/A"} |
-| RNN | ${scores.rnn ?? "N/A"} |
-| **Ensemble** | **${ens}** |` : "MODEL EVIDENCE UNAVAILABLE"}
+| LSTM fallback | ${scores.lstm ?? "N/A"} |
+| RNN fallback | ${scores.rnn ?? "N/A"} |
+| **Actionable consensus** | **${ens}** |` : "MODEL EVIDENCE UNAVAILABLE"}
 
 ## Signal: **${sig || "MODEL EVIDENCE UNAVAILABLE"}**
 
@@ -1414,10 +1492,72 @@ ${backtest ? `## Backtest (\\$10,000 initial)
           <NewsTimelinePanel headlines={headlines}/>
           <ScenarioOutlookPanel scenario={scenario}/>
         </div>
+        {/* BACKEND quant1901 panel — auto-loaded from /api/quant1901 */}
+        {backendLoading && (
+          <div style={{marginTop:8,padding:"10px 14px",border:"1px solid rgba(113,50,245,0.3)",borderRadius:10,background:"rgba(8,14,20,0.98)",display:"flex",alignItems:"center",gap:10,fontSize:11,color:"#b995ff"}}>
+            <span style={{animation:"spin 1s linear infinite",display:"inline-block"}}>⟳</span>
+            Quant1901 보조 백테스트 실행 중 ({selected})…
+            <span style={{fontSize:9,color:"rgba(185,149,255,0.6)"}}>paper/backtest only · live trading disabled</span>
+          </div>
+        )}
+        {!backendLoading && backendSnapshot && (
+          <div style={{marginTop:8,border:"1px solid rgba(104,107,130,0.35)",borderRadius:10,background:"rgba(8,14,20,0.98)",padding:"10px 14px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <span style={{fontSize:10,color:"#b6bfca",letterSpacing:"0.08em",fontWeight:700}}>
+                ✓ BACKEND SNAPSHOT · {backendSnapshot.importedFileName || "dashboard_snapshot.v1"}
+              </span>
+              <button onClick={() => { setBackendSnapshot(null); setBackendError(""); }}
+                style={{fontSize:9,color:"#7e8896",background:"transparent",border:"1px solid rgba(104,107,130,0.3)",borderRadius:4,padding:"2px 8px",cursor:"pointer"}}>
+                ✕ 닫기
+              </button>
+            </div>
+            <BackendSnapshotTab
+              snapshot={backendSnapshot}
+              currentResult={
+                (backendSnapshot?.results || []).find(
+                  (r) => String(r.ticker).toUpperCase() === String(selected).toUpperCase()
+                ) || backendSnapshot?.results?.[0] || null
+              }
+              backendError={backendError}
+              accent={accent}
+            />
+          </div>
+        )}
+        {backendError && !backendSnapshot && (
+          <div style={{marginTop:8,padding:"8px 14px",background:"rgba(246,76,76,0.1)",border:"1px solid rgba(246,76,76,0.35)",borderRadius:8,fontSize:10,color:"#ff7b7b"}}>
+            ⚠ BACKEND: {backendError}
+          </div>
+        )}
+
+        {/* footer bar */}
+        <input ref={snapshotInputRef} type="file" accept="application/json,.json"
+          onChange={importBackendSnapshot} style={{ display: "none" }} />
         <div style={{marginTop:12,height:48,border:"1px solid rgba(104,107,130,0.28)",borderRadius:10,background:"rgba(10,18,24,0.96)",display:"grid",gridTemplateColumns:"1fr 1.5fr 1.25fr",alignItems:"center",padding:"0 14px",fontSize:12,color:"#7e8896"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{width:24,height:24,borderRadius:8,background:"#7132f5",display:"grid",placeItems:"center",color:"#071018",fontWeight:900}}>m</span><b style={{color:"#b6bfca"}}>STOCKPRED</b> v2.1</div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <span style={{width:24,height:24,borderRadius:8,background:"#7132f5",display:"grid",placeItems:"center",color:"#071018",fontWeight:900}}>m</span>
+            <b style={{color:"#b6bfca"}}>STOCKPRED</b> v2.1
+          </div>
           <div style={{textAlign:"center"}}>dashboard_snapshot.v1 · screening_output_only · Report-only · No broker execution.</div>
-          <div style={{textAlign:"right"}}>Data as of {dataAsOf}&nbsp;&nbsp;&nbsp; Source: {sourceLabel}</div>
+          <div style={{textAlign:"right",display:"flex",alignItems:"center",justifyContent:"flex-end",gap:8}}>
+            {/* Quant1901 auto-status indicator */}
+            <span style={{
+              padding:"3px 10px",fontSize:10,fontWeight:700,letterSpacing:"0.05em",borderRadius:5,
+              background: backendLoading ? "rgba(113,50,245,0.15)" :
+                          backendSnapshot ? "rgba(0,255,136,0.12)" :
+                          backendError ? "rgba(246,76,76,0.12)" : "transparent",
+              border: `1px solid ${backendLoading ? "rgba(113,50,245,0.5)" :
+                                   backendSnapshot ? "#00ff88" :
+                                   backendError ? "#f64c4c" : "rgba(104,107,130,0.5)"}`,
+              color: backendLoading ? "#b995ff" :
+                     backendSnapshot ? "#00ff88" :
+                     backendError ? "#ff7b7b" : "#7e8896",
+            }}>
+              {backendLoading ? "⟳ QUANT1901…" :
+               backendSnapshot ? `✓ QUANT1901 · ${backendSnapshot.results?.[0]?.policy_verdicts?.C_fast || "OK"}` :
+               backendError ? "⚠ QUANT1901" : "QUANT1901"}
+            </span>
+            <span>Data as of {dataAsOf}&nbsp; Source: {sourceLabel}</span>
+          </div>
         </div>
       </div>
     );
@@ -1509,6 +1649,27 @@ ${backtest ? `## Backtest (\\$10,000 initial)
           <div style={{ color: C.textDim, fontSize: 10, letterSpacing: 1 }}>{clock}</div>
 
           <div className="flex items-center gap-2">
+            {/* BACKEND snapshot import */}
+            <input
+              ref={snapshotInputRef}
+              type="file"
+              accept="application/json,.json"
+              onChange={importBackendSnapshot}
+              style={{ display: "none" }}
+            />
+            <button
+              onClick={() => snapshotInputRef.current?.click()}
+              style={{
+                padding: "6px 12px",
+                background: backendSnapshot ? C.panelHi : "transparent",
+                border: `1px solid ${backendSnapshot ? C.green : C.border}`,
+                color: backendSnapshot ? C.green : C.textDim,
+                fontFamily: FONT, fontSize: 10, letterSpacing: 1.5, fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {backendSnapshot ? "✓ BACKEND" : "BACKEND"}
+            </button>
             <button
               onClick={runBenchmark}
               style={{
@@ -1714,7 +1875,7 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                 display: "flex", borderBottom: `1px solid ${C.border}`, background: C.bgDeep,
               }}
             >
-              {["SIGNAL", "MODELS", "BACKTEST", "REC", "PAPER"].map((t) => (
+              {["SIGNAL", "MODELS", "BACKTEST", "REC", "PAPER", "BACKEND"].map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -1965,6 +2126,18 @@ ${backtest ? `## Backtest (\\$10,000 initial)
                   error={paperStatusError}
                   accent={accent}
                   fmtMoney={fmtMoney}
+                />
+              )}
+              {tab === "BACKEND" && (
+                <BackendSnapshotTab
+                  snapshot={backendSnapshot}
+                  currentResult={
+                    (backendSnapshot?.results || []).find(
+                      (r) => String(r.ticker).toUpperCase() === String(selected).toUpperCase()
+                    ) || backendSnapshot?.results?.[0] || null
+                  }
+                  backendError={backendError}
+                  accent={accent}
                 />
               )}
             </div>
@@ -2338,7 +2511,7 @@ function SignalTab({
           }}
         >
           <div style={{ fontSize: 9, color: C.textMuted, letterSpacing: 2, marginBottom: 4 }}>
-            BACKEND MODEL EVIDENCE
+            ACTIONABLE MODEL EVIDENCE
           </div>
           <div style={{ fontSize: 36, fontWeight: 700, color: sigColor, letterSpacing: 4, lineHeight: 1 }}>
             {sig}
@@ -2347,7 +2520,7 @@ function SignalTab({
             SCORE <span style={{ color: sigColor, fontWeight: 700, fontSize: 14 }}>{ens}</span> / 100
           </div>
           <div style={{ fontSize: 9, color: C.textMuted, marginTop: 6, lineHeight: 1.5 }}>
-            {modelEvidence.model_kind} · {modelEvidence.provider} · rows {modelEvidence.evidence?.row_count ?? "N/A"}
+            HGB/XGB/LogReg consensus · {modelEvidence.provider} · rows {modelEvidence.evidence?.row_count ?? "N/A"}
           </div>
           {modelQualityWarning && (
             <div
@@ -2397,17 +2570,19 @@ function SignalTab({
       <IndRow label="EMA12/26" value={(last.ema12 - last.ema26).toFixed(2)} state={emaState} color={emaState === "GOLDEN" ? C.green : C.red} />
 
       {/* MODEL BARS */}
-      <SectionLabel style={{ marginTop: 14 }}>MODELS</SectionLabel>
+      <SectionLabel style={{ marginTop: 14 }}>ACTIONABLE MODELS</SectionLabel>
       {scores ? (
         <>
-          <ModelBar label="Backend Main" value={scores.main} color={accent} weight={700} />
-          <ModelBar label="LogReg" value={scores.lr} color={C.lr} />
-          {scores.xgb != null && <ModelBar label="XGBoost" value={scores.xgb} color={C.xgb} />}
-          {scores.lstm != null && <ModelBar label="LSTM" value={scores.lstm} color={C.lstm} />}
-          {scores.rnn != null && <ModelBar label="RNN" value={scores.rnn} color={C.rnn} />}
+          <ModelBar label="Actionable Consensus" value={scores.main} color={accent} weight={700} note={modelEvidence.evidence?.actionable_consensus_weighting} />
+          {scores.hgb != null && <ModelBar label="HGB" value={scores.hgb} color={C.hgb} note={modelNote(scores, "hgb")} />}
+          {scores.xgb != null && <ModelBar label="XGBoost" value={scores.xgb} color={C.xgb} note={modelNote(scores, "xgboost")} />}
+          <ModelBar label="LogReg" value={scores.lr} color={C.lr} note={modelNote(scores, "logistic")} />
+          {scores.backendMain != null && <ModelBar label="Backend Main" value={scores.backendMain} color={C.textDim} note={modelEvidence.model_kind} muted />}
+          {scores.lstm != null && <ModelBar label="LSTM-sim" value={scores.lstm} color={C.lstm} note={modelNote(scores, "lstm")} muted />}
+          {scores.rnn != null && <ModelBar label="RNN-sim" value={scores.rnn} color={C.rnn} note={modelNote(scores, "rnn")} muted />}
         </>
       ) : (
-        <ModelBar label="Backend Main" value={null} color={accent} weight={700} />
+        <ModelBar label="Actionable Consensus" value={null} color={accent} weight={700} />
       )}
     </>
   );
@@ -2460,14 +2635,19 @@ function IndRow({ label, value, state, color, bar, barMax }) {
   );
 }
 
-function ModelBar({ label, value, color, weight }) {
+function ModelBar({ label, value, color, weight, note, muted }) {
   const displayValue = value == null || Number.isNaN(value) ? "N/A" : value;
   const width = value == null || Number.isNaN(value) ? 0 : Math.max(0, Math.min(100, value));
   return (
-    <div style={{ marginBottom: 6 }}>
+    <div style={{ marginBottom: 6, opacity: muted ? 0.72 : 1 }}>
       <div className="flex justify-between" style={{ marginBottom: 2 }}>
-        <span style={{ fontSize: 10, color: C.textDim, letterSpacing: 1, fontWeight: weight || 400 }}>
+        <span style={{ fontSize: 10, color: muted ? C.textMuted : C.textDim, letterSpacing: 1, fontWeight: weight || 400 }}>
           {label}
+          {note && (
+            <span style={{ color: C.textMuted, fontSize: 8, marginLeft: 6, letterSpacing: 0.6 }}>
+              {note}
+            </span>
+          )}
         </span>
         <span style={{ fontSize: 11, color, fontWeight: weight || 600 }}>{displayValue}</span>
       </div>
@@ -2476,6 +2656,7 @@ function ModelBar({ label, value, color, weight }) {
           style={{
             height: "100%", width: `${width}%`, background: color,
             boxShadow: weight ? `0 0 6px ${color}` : "none",
+            filter: muted ? "saturate(0.55)" : "none",
             transition: "width .3s",
           }}
         />
@@ -2494,11 +2675,13 @@ function ModelsTab({
     return <EvidenceUnavailable loading={modelEvidenceLoading} error={modelEvidenceError} />;
   }
   const data = [
-    { name: "Main", value: scores.main, color: sigColor, required: true },
-    { name: "LogReg", value: scores.lr, color: C.lr, required: true },
-    { name: "XGBoost", value: scores.xgb, color: C.xgb },
-    { name: "LSTM", value: scores.lstm, color: C.lstm },
-    { name: "RNN", value: scores.rnn, color: C.rnn },
+    { name: "Action", value: scores.main, color: sigColor, required: true, role: "consensus", note: modelEvidence.evidence?.actionable_consensus_weighting },
+    { name: "HGB", value: scores.hgb, color: C.hgb, role: "actionable", note: modelNote(scores, "hgb") },
+    { name: "XGBoost", value: scores.xgb, color: C.xgb, role: "actionable", note: modelNote(scores, "xgboost") },
+    { name: "LogReg", value: scores.lr, color: C.lr, required: true, role: "actionable", note: modelNote(scores, "logistic") },
+    { name: "Backend", value: scores.backendMain, color: C.textDim, role: "reference", note: modelEvidence.model_kind },
+    { name: "LSTM-sim", value: scores.lstm, color: C.lstm, role: "reference", note: modelNote(scores, "lstm") },
+    { name: "RNN-sim", value: scores.rnn, color: C.rnn, role: "reference", note: modelNote(scores, "rnn") },
   ].filter((item) => item.required || (item.value != null && !Number.isNaN(Number(item.value))));
   const chartData = data.map((item) => ({ ...item, value: item.value == null ? 0 : item.value }));
 
@@ -2510,7 +2693,7 @@ function ModelsTab({
           padding: 12, marginBottom: 14, textAlign: "center",
         }}
       >
-        <div style={{ fontSize: 9, color: C.textMuted, letterSpacing: 2 }}>ENSEMBLE</div>
+        <div style={{ fontSize: 9, color: C.textMuted, letterSpacing: 2 }}>ACTIONABLE CONSENSUS</div>
         <div style={{ fontSize: 28, fontWeight: 700, color: sigColor, letterSpacing: 3 }}>
           {ens}
         </div>
@@ -2534,7 +2717,7 @@ function ModelsTab({
         )}
       </div>
 
-      <SectionLabel>BACKEND MODEL COMPARISON</SectionLabel>
+      <SectionLabel>MODEL COMPARISON</SectionLabel>
       <ResponsiveContainer width="100%" height={140}>
         <BarChart data={chartData} margin={{ top: 10, right: 4, left: -28, bottom: 0 }}>
           <CartesianGrid stroke={C.grid} strokeDasharray="2 4" vertical={false} />
@@ -2560,7 +2743,9 @@ function ModelsTab({
       <SectionLabel style={{ marginTop: 14 }}>EVIDENCE</SectionLabel>
       {[
         { l: "Provider", v: modelEvidence.provider, c: C.text },
-        { l: "Model", v: modelEvidence.model_kind, c: sigColor },
+        { l: "Action signal", v: modelEvidence.actionable_signal || modelEvidence.signal, c: sigColor },
+        { l: "Backend model", v: modelEvidence.model_kind, c: C.textDim },
+        { l: "Consensus", v: modelEvidence.evidence?.actionable_consensus_weighting || "N/A", c: C.hgb },
         { l: "OOF coverage", v: `${((modelEvidence.evidence?.oof_coverage ?? 0) * 100).toFixed(1)}%`, c: C.lr },
         { l: "Accuracy", v: (modelEvidence.evidence?.model_accuracy ?? 0).toFixed(3), c: C.hold },
         { l: "AUC", v: (modelEvidence.evidence?.model_auc ?? 0.5).toFixed(3), c: C.xgb },
@@ -2585,9 +2770,19 @@ function ModelsTab({
           <div className="flex justify-between" style={{ marginBottom: 2 }}>
             <span style={{ color: d.color, fontSize: 10, fontWeight: 600, letterSpacing: 1 }}>
               {d.name}
+              {d.role === "reference" && (
+                <span style={{ color: C.textMuted, fontSize: 8, marginLeft: 6 }}>
+                  reference only
+                </span>
+              )}
             </span>
             <span style={{ color: d.color, fontSize: 11, fontWeight: 600 }}>{d.value}</span>
           </div>
+          {d.note && (
+            <div style={{ color: C.textMuted, fontSize: 8, letterSpacing: 0.7 }}>
+              {d.note}
+            </div>
+          )}
         </div>
       ))}
     </>
@@ -2600,7 +2795,7 @@ function BacktestTab({ backtest, market, fmtMoney, accent }) {
   const trades = backtest.trades.slice(-12).reverse();
   return (
     <>
-      <SectionLabel>EQUITY CURVE · ML vs B&H</SectionLabel>
+      <SectionLabel>EQUITY CURVE · CLIENT SIM vs B&H</SectionLabel>
       <ResponsiveContainer width="100%" height={170}>
         <LineChart data={backtest.eq} margin={{ top: 6, right: 4, left: -10, bottom: 0 }}>
           <CartesianGrid stroke={C.grid} strokeDasharray="2 4" vertical={false} />
@@ -2613,19 +2808,19 @@ function BacktestTab({ backtest, market, fmtMoney, accent }) {
           />
           <ReferenceLine y={backtest.initial} stroke={C.textMuted} strokeDasharray="2 4" />
           <Line type="monotone" dataKey="bh" stroke={C.textDim} strokeWidth={1.2} dot={false} name="Buy&Hold" />
-          <Line type="monotone" dataKey="ml" stroke={accent} strokeWidth={2} dot={false} name="ML" />
+          <Line type="monotone" dataKey="ml" stroke={accent} strokeWidth={2} dot={false} name="Client Sim" />
         </LineChart>
       </ResponsiveContainer>
 
       <SectionLabel style={{ marginTop: 12 }}>STATS</SectionLabel>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-        <Stat label="ML RETURN" value={`${(backtest.mlRet * 100).toFixed(2)}%`} color={backtest.mlRet >= 0 ? C.green : C.red} />
+        <Stat label="SIM RETURN" value={`${(backtest.mlRet * 100).toFixed(2)}%`} color={backtest.mlRet >= 0 ? C.green : C.red} />
         <Stat label="B&H RETURN" value={`${(backtest.bhRet * 100).toFixed(2)}%`} color={backtest.bhRet >= 0 ? C.green : C.red} />
         <Stat label="ALPHA" value={`${(backtest.alpha * 100).toFixed(2)}%`} color={backtest.alpha >= 0 ? C.green : C.red} highlight />
         <Stat label="SHARPE" value={backtest.sharpe.toFixed(2)} color={backtest.sharpe >= 1 ? C.green : backtest.sharpe >= 0 ? C.amber : C.red} />
         <Stat label="WIN RATE" value={`${(backtest.winRate * 100).toFixed(1)}%`} color={backtest.winRate >= 0.5 ? C.green : C.amber} />
         <Stat label="TRADES" value={`${backtest.totalTrades} (${backtest.completedTrades})`} color={C.text} />
-        <Stat label="ML FINAL" value={fmtMoney(backtest.finalVal)} color={C.text} />
+        <Stat label="SIM FINAL" value={fmtMoney(backtest.finalVal)} color={C.text} />
         <Stat label="B&H FINAL" value={fmtMoney(backtest.bhFinal)} color={C.textDim} />
       </div>
 
@@ -2884,7 +3079,7 @@ function BenchmarkPanel({ bench, accent, market, onClose, onPick }) {
             ◊ BENCHMARK · {market}
           </div>
           <div style={{ fontSize: 10, color: C.textDim, marginTop: 2 }}>
-            ENSEMBLE SCAN · ALL SYMBOLS · CLIENT-SIDE INFERENCE
+            REFERENCE SCAN · ALL SYMBOLS · CLIENT-SIDE SIMULATION
           </div>
         </div>
         <button
@@ -2930,12 +3125,12 @@ function BenchmarkPanel({ bench, accent, market, onClose, onPick }) {
           <span>SYMBOL</span>
           <span style={{ textAlign: "right" }}>PRICE</span>
           <span style={{ textAlign: "right" }}>CHG</span>
-          <span style={{ textAlign: "center" }}>LSTM</span>
+          <span style={{ textAlign: "center" }}>LSTM*</span>
           <span style={{ textAlign: "center" }}>LR</span>
           <span style={{ textAlign: "center" }}>XGB</span>
-          <span style={{ textAlign: "center" }}>RNN</span>
-          <span style={{ textAlign: "center", color: accent }}>ENS</span>
-          <span style={{ textAlign: "center" }}>SIG</span>
+          <span style={{ textAlign: "center" }}>RNN*</span>
+          <span style={{ textAlign: "center", color: accent }}>ENS*</span>
+          <span style={{ textAlign: "center" }}>REF</span>
         </div>
 
         {bench.rows.map((r, i) => {
@@ -3031,7 +3226,7 @@ function BenchmarkPanel({ bench, accent, market, onClose, onPick }) {
             SELL: <span style={{ color: C.sell }}>{bench.rows.filter((r) => r.sig === "SELL").length}</span>
           </div>
           <div>
-            ◇ Click any row to load full chart · Data source labels come from API results
+            ◇ Click any row to load full chart · * client-side reference simulation, not action plan
           </div>
         </div>
       )}
@@ -3056,5 +3251,207 @@ function ScoreCell({ value, color }) {
         />
       </div>
     </div>
+  );
+}
+
+/* ====================  BACKEND SNAPSHOT TAB  ==================== */
+
+function SnapKV({ label, value, color }) {
+  return (
+    <div style={{ background: C.bgDeep, border: `1px solid ${C.border}`, padding: "6px 7px", minWidth: 0 }}>
+      <div style={{ fontSize: 8, color: C.textMuted, letterSpacing: 1.5 }}>{label}</div>
+      <div style={{ fontSize: 11, color: color || C.text, fontWeight: 600, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis" }}>
+        {value ?? "—"}
+      </div>
+    </div>
+  );
+}
+
+function snapVerdictColor(verdict) {
+  const v = String(verdict || "");
+  if (v.startsWith("CONDITIONAL_PASS")) return C.amber;
+  if (v.startsWith("ELIGIBLE") || v.startsWith("ACCUMULATE")) return C.green;
+  if (v.startsWith("AMBER")) return C.amber;
+  if (v.includes("HALT") || v.startsWith("ZERO") || v.startsWith("RED") || v === "NOT_PASS") return C.red;
+  return C.textDim;
+}
+
+function Quant1901EvidenceCard({ quant1901 }) {
+  if (!quant1901 || quant1901.status === "SKIPPED" || quant1901.status == null) return null;
+  const isOk = quant1901.status === "OK";
+  const isError = quant1901.status === "ERROR";
+  const verdict = quant1901?.policy_verdicts?.C_fast || "—";
+  const isPass = verdict.includes("CONDITIONAL_PASS");
+  const m = quant1901.metrics || {};
+  const borderColor = isPass ? C.amber : C.red;
+  return (
+    <div style={{ marginTop: 10, padding: "10px 12px", background: "#060c10", borderRadius: 6,
+      border: `1px solid ${C.border}`, borderTop: `2px solid ${borderColor}44`, opacity: 0.85 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span style={{ fontSize: 9, color: C.textMuted, letterSpacing: "0.08em" }}>QUANT1901 AUXILIARY</span>
+        <span style={{ fontSize: 8, color: C.textMuted, background: `${C.border}88`, padding: "1px 5px", borderRadius: 2 }}>
+          PAPER ONLY · NOT FINANCIAL ADVICE
+        </span>
+      </div>
+      {isError && (
+        <div style={{ color: C.textMuted, fontSize: 9 }}>⚠ {quant1901.error || "실행 오류"}</div>
+      )}
+      {isOk && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 6 }}>
+            <SnapKV label="C_FAST VERDICT"
+              value={verdict.includes("CONDITIONAL_PASS") ? "PAPER CANDIDATE" : verdict.includes("HALT") ? "RISK HALT" : "NOT PASS"}
+              color={borderColor} />
+            <SnapKV label="CALMAR" value={m.calmar != null ? m.calmar.toFixed(3) : "—"} />
+            <SnapKV label="SHARPE" value={m.sharpe != null ? m.sharpe.toFixed(3) : "—"}
+              color={m.sharpe >= 0 ? C.textDim : C.red} />
+            <SnapKV label="MAX DD %" value={m.max_drawdown_pct != null ? m.max_drawdown_pct.toFixed(1) : "—"} color={C.red} />
+            <SnapKV label="RISK HALT" value={m.risk_halt ? "YES" : "NO"} color={m.risk_halt ? C.red : C.textDim} />
+            <SnapKV label="TRADES" value={m.trades != null ? String(m.trades) : "—"} />
+          </div>
+          <div style={{ fontSize: 8, color: C.textMuted, lineHeight: 1.5 }}>
+            Quant1901 supplementary evidence only. Does not upgrade or replace the main recommendation verdict.
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function BackendSnapshotTab({ snapshot, currentResult, backendError, accent }) {
+  const fmtNum = (v, d = 2) => (typeof v === "number" ? v.toFixed(d) : "—");
+  const rows = snapshot?.results || [];
+  const sel = currentResult || rows[0] || null;
+
+  if (backendError) {
+    return (
+      <div style={{ padding: 10, color: C.red, fontSize: 11, lineHeight: 1.6,
+        border: `1px solid ${C.border}`, marginBottom: 8 }}>
+        <div style={{ color: C.red, fontSize: 10, fontWeight: 700, marginBottom: 4 }}>⚠ IMPORT ERROR</div>
+        {backendError}
+      </div>
+    );
+  }
+
+  if (!snapshot) {
+    return (
+      <div style={{ padding: 16, color: C.textDim, fontSize: 11, lineHeight: 1.6, textAlign: "center" }}>
+        <div style={{ marginBottom: 8, color: C.textMuted }}>NO SNAPSHOT LOADED</div>
+        <div style={{ fontSize: 9, color: C.textMuted }}>
+          Header의 BACKEND 버튼으로 dashboard_snapshot.v1 JSON을 import하세요.
+        </div>
+        <div style={{ marginTop: 8, fontSize: 8, color: C.textMuted, opacity: 0.7 }}>
+          quant1901-backtest CLI 출력 또는 /api/recommend 결과를 사용할 수 있습니다.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* 스냅샷 메타 */}
+      <div style={{ background: C.bgDeep, border: `1px solid ${C.border}`, padding: "6px 8px", marginBottom: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+          <SnapKV label="SOURCE" value={snapshot.source || "—"} color={C.green} />
+          <SnapKV label="RESULTS" value={String(snapshot.result_count ?? rows.length)} color={accent} />
+          <SnapKV label="MODE" value={snapshot.mode || "report_only"} />
+          <SnapKV label="FILE" value={snapshot.importedFileName || "—"} />
+        </div>
+        <div style={{ padding: "4px 0 0", color: C.textMuted, fontSize: 8 }}>
+          schema: {snapshot.schema_version} · screening_output_only · No broker execution
+        </div>
+      </div>
+
+      {/* 선택 티커 상세 */}
+      {sel && (
+        <div style={{ border: `1px solid ${C.border}`, marginBottom: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 8px",
+            background: C.bgDeep, borderBottom: `1px solid ${C.border}` }}>
+            <span style={{ fontSize: 9, color: C.textMuted, letterSpacing: 1.5 }}>
+              ▸ {sel.ticker} · {sel.track || "quant1901"}
+            </span>
+            <span style={{ fontSize: 9, color: snapVerdictColor(sel.policy_verdicts?.C_fast || sel.verdict),
+              fontWeight: 700 }}>
+              {sel.policy_verdicts?.C_fast || sel.verdict || "—"}
+            </span>
+          </div>
+          <div style={{ padding: "6px 8px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 6 }}>
+              <SnapKV label="SCORE" value={fmtNum(sel.score)} color={accent} />
+              <SnapKV label="LIVE TRADING"
+                value={sel.execution_controls?.live_trading_allowed === false ? "BLOCKED" : sel.execution_controls?.live_trading_allowed ? "ALLOWED" : "—"}
+                color={sel.execution_controls?.live_trading_allowed === false ? C.red : C.green} />
+              <SnapKV label="BROKER EXEC"
+                value={sel.execution_controls?.broker_execution_allowed === false ? "BLOCKED" : "—"}
+                color={C.red} />
+              <SnapKV label="PAPER ONLY"
+                value={sel.paper_trading_only || sel.paper_recording_allowed ? "YES" : "—"}
+                color={C.amber} />
+            </div>
+
+            {/* validations */}
+            {Array.isArray(sel.validations) && sel.validations.length > 0 && (
+              <div style={{ marginBottom: 6 }}>
+                {sel.validations.slice(0, 6).map((v) => {
+                  const statusColor = v.status === "PASS" ? C.green : v.status === "WARN" ? C.amber : C.red;
+                  return (
+                    <div key={v.rule_id || v.name}
+                      style={{ padding: "4px 6px", marginBottom: 3, background: C.bgDeep,
+                        borderLeft: `2px solid ${statusColor}` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ color: C.textDim, fontSize: 8, letterSpacing: 1 }}>{v.rule_id || v.name}</span>
+                        <span style={{ color: statusColor, fontSize: 8, fontWeight: 700 }}>{v.status}</span>
+                      </div>
+                      {v.message && (
+                        <div style={{ color: C.textMuted, fontSize: 8, marginTop: 1 }}>{v.message}</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* promotion blockers */}
+            {Array.isArray(sel.promotion_blockers) && sel.promotion_blockers.length > 0 && (
+              <div style={{ padding: "5px 6px", marginBottom: 6, background: "#1a0808",
+                border: `1px solid ${C.red}44`, borderLeft: `3px solid ${C.red}` }}>
+                <div style={{ color: C.red, fontSize: 8, fontWeight: 700, marginBottom: 3 }}>PROMOTION BLOCKERS</div>
+                {sel.promotion_blockers.map((b, i) => (
+                  <div key={i} style={{ color: C.textDim, fontSize: 8 }}>
+                    · {typeof b === "string" ? b : b.blocker || JSON.stringify(b)}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* quant1901 evidence card */}
+            <Quant1901EvidenceCard quant1901={sel.quant1901} />
+          </div>
+        </div>
+      )}
+
+      {/* 전체 랭킹 */}
+      {rows.length > 1 && (
+        <>
+          <div style={{ fontSize: 9, color: C.textMuted, letterSpacing: 2, marginBottom: 4 }}>── RANKING ──</div>
+          <div style={{ maxHeight: 200, overflowY: "auto" }}>
+            {rows.slice(0, 10).map((r, i) => (
+              <div key={`${i}-${r.ticker}`}
+                style={{ display: "grid", gridTemplateColumns: "20px 60px 1fr 44px",
+                  alignItems: "center", padding: "4px 6px", marginBottom: 2,
+                  background: C.bgDeep, borderLeft: `2px solid ${snapVerdictColor(r.policy_verdicts?.C_fast || r.verdict)}`,
+                  fontSize: 9 }}>
+                <span style={{ color: C.textMuted }}>{i + 1}</span>
+                <span style={{ color: accent, fontWeight: 700 }}>{r.ticker}</span>
+                <span style={{ color: C.textDim, fontSize: 8 }}>
+                  {r.policy_verdicts?.C_fast || r.verdict || "—"}
+                </span>
+                <span style={{ color: C.text, textAlign: "right" }}>{fmtNum(r.score)}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </>
   );
 }

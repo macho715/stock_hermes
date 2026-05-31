@@ -136,6 +136,11 @@ class RecommendationConfig:
     sizing_kind: Literal["off", "global", "mondrian", "auto"] = "off"
     sizing_alpha: float = 0.1
     sizing_n_min: int = 30
+    # Quant1901 auxiliary backtest verification (additive only — never overrides gate).
+    # ``quant1901_enabled`` must be explicitly set to True; default is OFF for
+    # backward compatibility.  ``quant1901_optimize`` triggers EMA grid search.
+    quant1901_enabled: bool = False
+    quant1901_optimize: bool = False
 
     def __post_init__(self) -> None:
         if self.sizing_kind not in {"off", "global", "mondrian", "auto"}:
@@ -272,6 +277,9 @@ class RecommendationResult:
     news_headlines: list[dict[str, Any]] = field(default_factory=list)
     notebook_analysis: dict[str, Any] | None = None
     scenario_outlook: dict[str, Any] | None = None
+    # Quant1901 auxiliary backtest result (additive, never upgrades verdict).
+    # ``status`` is "SKIPPED" | "OK" | "ERROR"; ``None`` when engine is off.
+    quant1901: dict[str, Any] | None = None
 
     def to_dict(self) -> dict:
         data = asdict(self)
@@ -1502,6 +1510,48 @@ class RecommendationEngine:
                 f"sizing={sizing_strategy_used} x{size_multiplier:.3f} coverage={sizing_coverage_status}"
             )
 
+        # ── Quant1901 auxiliary backtest (additive — never overrides gate) ─────
+        quant1901_result: dict[str, Any] | None = None
+        if cfg.quant1901_enabled:
+            try:
+                from .backtest.quant1901_runner import Quant1901Runner as _Q1901Runner  # noqa: PLC0415
+
+                _q_runner = _Q1901Runner()
+                _q_snap = _q_runner.run(df, ticker=ticker, optimize=cfg.quant1901_optimize)
+                _q_item = _q_snap.get("results", [{}])[0]
+                quant1901_result = {
+                    "status": "OK",
+                    "metrics": _q_item.get("metrics"),
+                    "policy_verdicts": _q_item.get("policy_verdicts"),
+                    "validations": _q_item.get("validations"),
+                    "promotion_blockers": _q_item.get("promotion_blockers"),
+                    "output_paths": {},
+                    "execution_guard": {
+                        "live_orders_enabled": False,
+                        "broker_adapter": "disabled",
+                    },
+                    "error": None,
+                }
+            except Exception as _qexc:  # noqa: BLE001 — must never break main path
+                import logging as _qlog
+
+                _qlog.getLogger(__name__).warning("quant1901 auxiliary backtest failed for %s: %s", ticker, _qexc)
+                quant1901_result = {
+                    "status": "ERROR",
+                    "metrics": None,
+                    "output_paths": {},
+                    "execution_guard": {"live_orders_enabled": False, "broker_adapter": "disabled"},
+                    "error": str(_qexc),
+                }
+        else:
+            quant1901_result = {
+                "status": "SKIPPED",
+                "metrics": None,
+                "output_paths": {},
+                "execution_guard": {"live_orders_enabled": False, "broker_adapter": "disabled"},
+                "error": None,
+            }
+
         # ── KEVPE risk overlay (supplementary only — never overrides Risk Gate) ──
         kevpe_result = get_kevpe_adapter().get_signal_for_ticker(df, self._events_for_ticker(ticker), as_of=pd.Timestamp.now().normalize())
         kevpe_supp = kevpe_signal_to_supplement(kevpe_result)
@@ -1591,6 +1641,7 @@ class RecommendationEngine:
             news_headlines=news_headlines,
             notebook_analysis=notebook_analysis,
             scenario_outlook=scenario_outlook,
+            quant1901=quant1901_result,
         )
 
     def _events_for_ticker(self, ticker: str) -> list[dict]:

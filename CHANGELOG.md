@@ -2,6 +2,93 @@
 
 All notable changes for `stock_1901` are documented here.
 
+## 2026-05-31 — Dashboard Safety Gate + Quant1901 통합 완료 + 자동화 대시보드
+
+### Summary
+
+2026-05-31 세션 주요 작업: (1) Dashboard Safety Gate 패치 — `NO TRADE / PAPER ONLY` 강제, (2) 6-에이전트 병렬 전략 평가로 Strategy C 선정, (3) quant1901 백테스트 엔진 stock_1901 통합 완료, (4) `/api/quant1901` 자동 fetch 대시보드 구현. 신규 테스트 35+ 개 통과, 회귀 0건.
+
+### Added
+
+- **`dashboard/stock_pred_v5.jsx`** — Safety Gate 패치 (2026-05-31)
+  - `HARD_BLOCKERS[]` 11개, `SOFT_WARNINGS[]` 7개, `SOURCE_RISK{}` 정의
+  - `buildDecisionSafetyState()` — UI 안전 상태 정규화 함수
+  - `RiskGateBanner` 컴포넌트 — 하드 블록 시 최상단 빨간 배너
+  - `Quant1901EvidenceCard` 컴포넌트 — quant1901 보조 검증 표시
+  - `SignalTab` 전면 교체 — verdict/confidence/action-plan 안전 게이트
+  - Watchlist: SYN+BUY → `HOLD/BLOCKED` 차단
+  - 차트 높이 260px → 210px (decision gate 우선순위 ↑)
+- **`src/stock_rtx4060/backtest/quant1901_runner.py`** — Strategy C Backtest Plugin (296줄)
+  - `Quant1901Runner.run()` → `dashboard_snapshot.v1` 변환
+  - 5개 validation gate (BACKTEST_HONESTY, SHARPE, CALMAR, MAX_DRAWDOWN, TARGET_RETURN_10PCT)
+  - `execution_controls.live_trading_allowed = False` 항상 강제
+  - `execution_controls.broker_execution_allowed = False` 항상 강제
+- **`src/stock_rtx4060/strategies/quant1901_strategy.py`** — Strategy A thin wrapper (126줄)
+  - lowercase 컬럼 정규화, import-time execution guard
+- **`src/stock_rtx4060/factors/quant1901_trend_factor.py`** — Factor Zoo 등록
+  - `_compute_single()` rows<60 early-exit guard (블로커 1 해소)
+  - HTF <25행 debug log (블로커 2 해소)
+  - `category='technical'` docstring 명시 (블로커 3 해소)
+- **`flows/quant1901_daily.py`** — Prefect flow (daily 17:00 KST)
+  - dry_run=True 기본, 개별 실패 시 flow 전체 중단하지 않음
+  - MLflow log_metrics 연동
+- **`flows/deploy_quant1901.py`** — Prefect 배포 스크립트
+- **`.env.example`** — `QUANT1901_UNIVERSE`, `QUANT1901_PERIOD` 등 환경변수 문서화
+- **`api_server.py`** — `/api/quant1901` 엔드포인트 추가
+  - `GET /api/quant1901?ticker=005930.KS&period=2y&optimize=0`
+  - 자동 OHLCV 로드 → Quant1901Runner → dashboard_snapshot.v1 반환
+  - provider 실패 시 synthetic fallback
+- **`root_folder_snapshot/stock-pred-v5/src/StockPredV5.jsx`** — 통합 대시보드
+  - `useEffect` 자동 fetch `/api/quant1901` (티커 변경 시)
+  - BACKEND 패널 auto-display (파일 선택 불필요)
+  - Footer: `✓ QUANT1901 · {verdict}` 상태 표시
+- **`scripts/measure_quant1901_ic.py`** — IC/IR 측정 스크립트
+  - Spearman rank IC (binary signal에 강인)
+  - 005930.KS IC=+0.037, 000660.KS IC=-0.038 (평균 -0.010 → factor_zoo 보류)
+- **`tools/legacy/quant1901_to_snapshot.py`** — Strategy E bridge (legacy 보관)
+- **`docs/20260531_quant1901_merge_safety_gate_v1.md`** — 전체 작업 종합 plan 문서
+
+### Changed
+
+- **`src/stock_rtx4060/main.py`** — `quant1901-backtest` 서브커맨드 + `--quant1901`, `--quant1901-optimize` 옵션 추가
+- **`src/stock_rtx4060/recommendation_engine.py`** — `RecommendationConfig.quant1901_enabled`, `quant1901_optimize` 추가; `RecommendationResult.quant1901` additive field
+- **`src/stock_rtx4060/dashboard_bridge.py`** — `quant1901` passthrough 추가
+- **`src/stock_rtx4060/backtest/quant1901_runner.py`** — bundle 경로 버그 `parents[5]→[3]` 수정; `grid_search→optimize_parameters` 수정
+
+### Tests
+
+- `tests/test_dashboard_safety_gate.js` — 11/11 PASS (JS Safety Gate)
+- `tests/test_quant1901_runner.py` — 12/12 PASS (Python runner)
+- `tests/test_quant1901_trend_factor.py` — 12/12 PASS (Factor Zoo)
+- `tests/test_quant1901_daily_flow.py` — 6/6 PASS (Prefect flow)
+- 통합 회귀: 129+ PASS
+
+### Safety Invariants (변경 없음)
+
+- `live_trading_allowed = False` (모듈 경계 강제)
+- `broker_execution_allowed = False`
+- `screening_output_only = True`
+- Guaranteed-return 금지 문구: 0건
+
+---
+
+## 2026-05-31 — Quant1901 integration design saved and revised
+
+### Summary
+
+Quant1901 병합 설계 문서를 저장한 뒤, mstack 전략 검토 결과에 맞춰 `Strategy C — Backtest Plugin (P5)` 우선으로 정정했다.
+이번 변경은 문서 업데이트이며, 코드 구현 완료로 간주하지 않는다.
+
+### Added
+
+- `docs/superpowers/specs/20260531-quant1901-integration-design.md` — Quant1901을 기존 `stock_rtx4060` 추천 시스템의 P5 backtest plugin 기반 선택형 보조 검증 레이어로 병합하는 설계 문서.
+- README와 dashboard guide에 계획된 `quant1901=0|1` API 계약, `dashboard_snapshot.v1.results[].quant1901` additive field, report-only 안전 경계를 기록했다.
+
+### Notes
+
+- 현재 로컬 작업트리에는 `src/stock_rtx4060/backtest/quant1901_runner.py`, `src/stock_rtx4060/strategies/quant1901_strategy.py`, `src/stock_rtx4060/factors/quant1901_trend_factor.py`가 있으나 아직 추적되지 않는다.
+- 현재 세션에서 `quant1901_runner.py`는 bundle import 경로와 `optimize=True` 함수 연결을 추가 수정해야 하는 상태로 확인했다.
+
 ## 2026-05-30 — Executive Decision Dashboard v2.1 · NotebookLM News Intelligence · iran-war-notelm API 연동
 
 ### Summary

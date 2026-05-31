@@ -186,6 +186,34 @@ def _mean_metric(items: list[dict[str, Any]], key: str, fallback: float) -> floa
     return float(sum(values) / len(values))
 
 
+def _model_edge_weight(auc: float | None) -> float:
+    if auc is None:
+        return 0.0
+    try:
+        return max(float(auc) - 0.50, 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _consensus_score_and_weights(
+    scores: dict[str, float | None],
+    aucs: dict[str, float | None],
+) -> tuple[float | None, dict[str, float], str]:
+    available = {k: float(v) for k, v in scores.items() if v is not None}
+    if not available:
+        return None, {}, "unavailable"
+    raw_weights = {k: _model_edge_weight(aucs.get(k)) for k in available}
+    total = sum(raw_weights.values())
+    if total <= 0:
+        equal = 1.0 / len(available)
+        weights = {k: equal for k in available}
+        score = sum(available[k] * weights[k] for k in available)
+        return round(score, 2), {k: round(v, 6) for k, v in weights.items()}, "equal_weight_no_positive_oof_edge"
+    weights = {k: raw_weights[k] / total for k in available}
+    score = sum(available[k] * weights[k] for k in available)
+    return round(score, 2), {k: round(v, 6) for k, v in weights.items()}, "oof_auc_positive_edge"
+
+
 def _last_date_value(frame: Any) -> str | None:
     if frame is None or getattr(frame, "empty", True):
         return None
@@ -193,6 +221,121 @@ def _last_date_value(frame: Any) -> str | None:
     if hasattr(last_index, "strftime"):
         return last_index.strftime("%Y-%m-%d")
     return str(last_index)[:10]
+
+
+def _sigmoid(value: float) -> float:
+    value = max(-30.0, min(30.0, float(value)))
+    return 1.0 / (1.0 + pow(2.718281828459045, -value))
+
+
+def _tanh(value: float) -> float:
+    value = max(-30.0, min(30.0, float(value)))
+    pos = pow(2.718281828459045, value)
+    neg = pow(2.718281828459045, -value)
+    return (pos - neg) / (pos + neg)
+
+
+def _column_by_base_name(frame: Any, base_name: str) -> str | None:
+    if frame is None or getattr(frame, "empty", True):
+        return None
+    target = base_name.lower()
+    for col in frame.columns:
+        text = str(col)
+        if text.lower() == target or text.split("_")[0].lower() == target:
+            return text
+    return None
+
+
+def _close_values_from_frame(frame: Any) -> list[float]:
+    close_col = _column_by_base_name(frame, "close")
+    if not close_col:
+        return []
+    values: list[float] = []
+    for raw in frame[close_col].tolist():
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if value == value and value > 0:
+            values.append(value)
+    return values
+
+
+def _rsi_latest(closes: list[float], period: int = 14) -> float:
+    if len(closes) <= period:
+        return 50.0
+    gains = 0.0
+    losses = 0.0
+    for idx in range(len(closes) - period, len(closes)):
+        delta = closes[idx] - closes[idx - 1]
+        if delta >= 0:
+            gains += delta
+        else:
+            losses -= delta
+    avg_gain = gains / period
+    avg_loss = losses / period
+    if avg_loss <= 0:
+        return 100.0
+    return 100.0 - 100.0 / (1.0 + avg_gain / avg_loss)
+
+
+def _ema_values(values: list[float], period: int) -> list[float]:
+    if not values:
+        return []
+    k = 2.0 / (period + 1.0)
+    out = [float(values[0])]
+    for value in values[1:]:
+        out.append(float(value) * k + out[-1] * (1.0 - k))
+    return out
+
+
+def _browser_model_sim_scores(frame: Any) -> dict[str, float | str] | None:
+    """Deterministic browser-style LSTM/RNN fallback for dashboard evidence.
+
+    This intentionally mirrors the dashboard README contract: lightweight
+    LSTM-sim and Elman RNN-sim scores, not trained PyTorch model outputs.
+    """
+    closes = _close_values_from_frame(frame)
+    if len(closes) < 25:
+        return None
+
+    ema12 = _ema_values(closes, 12)
+    ema26 = _ema_values(closes, 26)
+    macd_line = [a - b for a, b in zip(ema12, ema26, strict=False)]
+    macd_signal = _ema_values(macd_line, 9)
+    macd_hist = macd_line[-1] - macd_signal[-1] if macd_line and macd_signal else 0.0
+    latest_close = closes[-1]
+    rsi_norm = (_rsi_latest(closes) - 50.0) / 50.0
+    mom5 = (closes[-1] - closes[-6]) / closes[-6] if len(closes) > 6 else 0.0
+
+    h = 0.0
+    c = 0.0
+    for idx in range(len(closes) - 20, len(closes)):
+        ret = (closes[idx] - closes[idx - 1]) / closes[idx - 1]
+        x = ret * 50.0
+        fg = _sigmoid(0.45 * x + 0.32 * h + 0.10)
+        ig = _sigmoid(0.55 * x + 0.42 * h + 0.05)
+        og = _sigmoid(0.50 * x + 0.35 * h)
+        ct = _tanh(0.60 * x + 0.50 * h)
+        c = fg * c + ig * ct
+        h = og * _tanh(c)
+    macd_scaled = macd_hist / max(abs(latest_close * 0.02), 0.001)
+    lstm_tech = (rsi_norm * 0.35) + (macd_scaled * 0.45)
+    lstm_score = round(_sigmoid((h + lstm_tech) * 1.6) * 100.0, 2)
+
+    h_rnn = 0.0
+    for idx in range(len(closes) - 15, len(closes)):
+        ret = (closes[idx] - closes[idx - 1]) / closes[idx - 1]
+        x = ret * 40.0
+        h_rnn = _tanh(0.50 * x + 0.42 * h_rnn + 0.04)
+    rnn_feedback = (macd_scaled * 0.30) + (rsi_norm * 0.22) + (mom5 * 5.0)
+    rnn_score = round(_sigmoid((h_rnn + rnn_feedback) * 1.55) * 100.0, 2)
+
+    return {
+        "lstm": max(0.0, min(100.0, lstm_score)),
+        "rnn": max(0.0, min(100.0, rnn_score)),
+        "source": "browser_native_sim",
+    }
 
 
 @app.route("/api/universe", methods=["GET"])
@@ -316,8 +459,8 @@ def api_model_scores():
 
     if not symbol:
         return jsonify({"error": "symbol param required"}), 400
-    if model_kind not in {"auto", "xgb", "logistic", "rf", "lightgbm"}:
-        return jsonify({"error": "model_kind must be auto, xgb, logistic, rf, or lightgbm"}), 400
+    if model_kind not in {"auto", "xgb", "logistic", "rf", "lightgbm", "hgb"}:
+        return jsonify({"error": "model_kind must be auto, xgb, logistic, rf, lightgbm, or hgb"}), 400
     if horizon <= 0:
         return jsonify({"error": "horizon must be positive"}), 400
 
@@ -379,6 +522,12 @@ def api_model_scores():
             if latest.get("lstm_enabled") and latest.get("lstm_prob") is not None
             else None
         )
+        fallback_scores = _browser_model_sim_scores(provider_result.frame) if not _has_torch() else None
+        lstm_fallback_used = False
+        rnn_fallback_used = False
+        if lstm_score is None and fallback_scores is not None:
+            lstm_score = float(fallback_scores["lstm"])
+            lstm_fallback_used = True
         signal = _score_signal(main_score)
         backend_kind = str(latest["backend"])
         oof_coverage = 0.0
@@ -400,6 +549,7 @@ def api_model_scores():
         logistic_score: float | None
         if backend_kind == "logistic":
             logistic_score = primary_score
+            logistic_auc = mean_auc
         else:
             try:
                 _lr = EnsemblePredictor(ModelConfig(
@@ -407,16 +557,19 @@ def api_model_scores():
                     model_kind="logistic", use_lstm=False, lite=True,
                     cv_kind=cv_kind, embargo_pct=_embargo_pct,  # v5.1: purged
                 ))
-                _lr.fit(feature_df)
+                _lr_cv = _lr.fit(feature_df)
                 _lr_latest = _lr.predict_latest(feature_df)
                 logistic_score = round(float(_lr_latest["direction_prob"]) * 100.0, 2)
+                logistic_auc = _mean_metric(_lr_cv, "auc", 0.5)
             except Exception:
                 logistic_score = None
+                logistic_auc = None
 
         # XGBoost secondary score — computed when primary backend is NOT xgb
         xgboost_score: float | None
         if backend_kind.startswith("xgb"):
             xgboost_score = primary_score
+            xgboost_auc = mean_auc
         else:
             try:
                 _xgb = EnsemblePredictor(ModelConfig(
@@ -424,12 +577,34 @@ def api_model_scores():
                     model_kind="xgb", xgb_device="cpu", use_lstm=False, lite=True,
                     cv_kind=cv_kind, embargo_pct=_embargo_pct,
                 ))
-                _xgb.fit(feature_df)
+                _xgb_cv = _xgb.fit(feature_df)
                 _xgb_latest = _xgb.predict_latest(feature_df)
                 xgboost_score = round(float(_xgb_latest["direction_prob"]) * 100.0, 2)
+                xgboost_auc = _mean_metric(_xgb_cv, "auc", 0.5)
             except Exception as _xgb_exc:
                 print(f"[XGBoost secondary] FAILED: {type(_xgb_exc).__name__}: {_xgb_exc}", flush=True)
                 xgboost_score = None
+                xgboost_auc = None
+
+        hgb_score: float | None
+        if backend_kind == "hgb":
+            hgb_score = primary_score
+            hgb_auc = mean_auc
+        else:
+            try:
+                _hgb = EnsemblePredictor(ModelConfig(
+                    horizon=horizon, n_splits=5, gap=horizon,
+                    model_kind="hgb", use_lstm=False, lite=True,
+                    cv_kind=cv_kind, embargo_pct=_embargo_pct,
+                ))
+                _hgb_cv = _hgb.fit(feature_df)
+                _hgb_latest = _hgb.predict_latest(feature_df)
+                hgb_score = round(float(_hgb_latest["direction_prob"]) * 100.0, 2)
+                hgb_auc = _mean_metric(_hgb_cv, "auc", 0.5)
+            except Exception as _hgb_exc:
+                print(f"[HGB secondary] FAILED: {type(_hgb_exc).__name__}: {_hgb_exc}", flush=True)
+                hgb_score = None
+                hgb_auc = None
 
         # RNN (GRU) score — computed when PyTorch is available
         rnn_score: float | None = None
@@ -448,14 +623,33 @@ def api_model_scores():
                     rnn_score = round(float(_gru_prob[-1]) * 100.0, 2)
             except Exception:
                 rnn_score = None
+        elif fallback_scores is not None:
+            rnn_score = float(fallback_scores["rnn"])
+            rnn_fallback_used = True
 
         model_scores = {
             "main": main_score,
+            "hgb": hgb_score,
             "xgboost": xgboost_score,
             "logistic": logistic_score,
             "lstm": lstm_score,
             "rnn": rnn_score,
         }
+        actionable_scores = {
+            "hgb": hgb_score,
+            "xgboost": xgboost_score,
+            "logistic": logistic_score,
+        }
+        actionable_aucs = {
+            "hgb": hgb_auc,
+            "xgboost": xgboost_auc,
+            "logistic": logistic_auc,
+        }
+        consensus_score, consensus_weights, consensus_weighting = _consensus_score_and_weights(
+            actionable_scores,
+            actionable_aucs,
+        )
+        actionable_signal = _score_signal(consensus_score) if consensus_score is not None else "MODEL_EVIDENCE_UNAVAILABLE"
 
         return jsonify(
             {
@@ -467,6 +661,9 @@ def api_model_scores():
                 "requested_model_kind": model_kind,
                 "signal": signal,
                 "ensemble_score": main_score,
+                "actionable_signal": actionable_signal,
+                "actionable_consensus_score": consensus_score,
+                "actionable_model_scores": actionable_scores,
                 "model_scores": model_scores,
                 "evidence": {
                     "row_count": int(len(provider_result.frame)),
@@ -476,6 +673,14 @@ def api_model_scores():
                     "oof_coverage": round(oof_coverage, 6),
                     "model_accuracy": round(_mean_metric(cv_results, "accuracy", 0.0), 6),
                     "model_auc": round(mean_auc, 6),
+                    "actionable_model_aucs": {
+                        "hgb": round(hgb_auc, 6) if hgb_auc is not None else None,
+                        "xgboost": round(xgboost_auc, 6) if xgboost_auc is not None else None,
+                        "logistic": round(logistic_auc, 6) if logistic_auc is not None else None,
+                    },
+                    "actionable_consensus_weights": consensus_weights,
+                    "actionable_consensus_weighting": consensus_weighting,
+                    "non_actionable_model_scores": ["lstm", "rnn"],
                     # Fold diagnostics (v5.1 — signal quality analysis)
                     "fold_aucs": [round(a, 4) for a in fold_aucs],
                     "inverse_auc": inverse_auc,
@@ -493,6 +698,29 @@ def api_model_scores():
                     "training_mode": "purged_kfold_oof_refit" if cv_kind == "purged" else "walk_forward_refit",
                     "lstm_requested": use_lstm,
                     "lstm_enabled": bool(latest.get("lstm_enabled")),
+                    "torch_available": _has_torch(),
+                    "lstm_fallback_used": lstm_fallback_used,
+                    "rnn_fallback_used": rnn_fallback_used,
+                    "model_score_sources": {
+                        "main": backend_kind,
+                        "hgb": "hgb" if hgb_score is not None else None,
+                        "xgboost": "xgb-cpu" if xgboost_score is not None else None,
+                        "logistic": "logistic" if logistic_score is not None else None,
+                        "lstm": (
+                            "pytorch_lstm"
+                            if bool(latest.get("lstm_enabled"))
+                            else "lstm-sim-browser-native"
+                            if lstm_fallback_used
+                            else None
+                        ),
+                        "rnn": (
+                            "pytorch_gru"
+                            if (not rnn_fallback_used and rnn_score is not None)
+                            else "elman-rnn-sim-browser-native"
+                            if rnn_fallback_used
+                            else None
+                        ),
+                    },
                     "contrarian_mode": contrarian_mode,
                     "generated_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
                 },
@@ -716,6 +944,63 @@ def api_watchlist_notelm():
         })
     except Exception as exc:
         return jsonify({"error": str(exc), "type": type(exc).__name__}), 500
+
+
+@app.route("/api/quant1901", methods=["GET"])
+def api_quant1901():
+    """Run Quant1901 auxiliary backtest for a given ticker and return dashboard_snapshot.v1.
+
+    Query params:
+        ticker   : e.g. 005930.KS or AAPL  (required)
+        period   : lookback period (default: 2y)
+        optimize : 0 or 1 — enable EMA grid search (default: 0, slow)
+        provider : data provider override (default: auto)
+
+    Safety: live_trading_allowed=False and broker_execution_allowed=False are always enforced.
+    """
+    ticker = request.args.get("ticker", "").strip().upper()
+    if not ticker:
+        return jsonify({"status": "ERROR", "error": "ticker param required"}), 400
+
+    period = request.args.get("period", "2y")
+    optimize = request.args.get("optimize", "0") not in ("0", "false", "")
+    provider = request.args.get("provider", "auto")
+
+    try:
+        sys.path.insert(0, str(ROOT / "src"))
+        from stock_rtx4060.backtest.quant1901_runner import Quant1901Runner  # noqa: PLC0415
+
+        # Load OHLCV — fall back to synthetic on provider failure
+        try:
+            result = load_ohlcv_with_provider(ticker, period, data_provider=provider, command="api-quant1901")
+            df = result.frame
+            data_source = result.source
+        except Exception as load_exc:
+            import logging as _log
+            _log.getLogger(__name__).warning("quant1901 OHLCV load failed for %s: %s — using synthetic", ticker, load_exc)
+            from stock_rtx4060.recommendation_engine import make_synthetic_ohlcv  # noqa: PLC0415
+            df = make_synthetic_ohlcv(360)
+            data_source = "synthetic_fallback"
+
+        runner = Quant1901Runner()
+        snapshot = runner.run(df, ticker=ticker, optimize=optimize)
+        snapshot["data_source"] = data_source
+        return jsonify(snapshot)
+
+    except Exception as exc:
+        return jsonify({
+            "status": "ERROR",
+            "error": str(exc),
+            "schema_version": "dashboard_snapshot.v1",
+            "results": [{
+                "ticker": ticker,
+                "quant1901": {
+                    "status": "ERROR",
+                    "error": str(exc),
+                    "execution_guard": {"live_orders_enabled": False, "broker_adapter": "disabled"},
+                }
+            }]
+        }), 500
 
 
 @app.route("/api/snapshot", methods=["GET"])

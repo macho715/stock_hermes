@@ -808,4 +808,7 @@ def _normalize_result(result: Any, *, rank: int, provider_summary: Any = None) -
         "notebook_analysis": result.get("notebook_analysis"),
         # scenario_outlook: bull/base/bear scenarios — generated from existing fields if absent
         "scenario_outlook": result.get("scenario_outlook") or _build_scenario_fallback(result),
+        # Quant1901 auxiliary backtest evidence (additive — None or SKIPPED when disabled).
+        # status: "SKIPPED" | "OK" | "ERROR" ; never upgrades RED/AMBER to GREEN.
+        "quant1901": result.get("quant1901"),
     }
