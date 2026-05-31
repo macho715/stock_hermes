@@ -1,0 +1,75 @@
+version: hermes.stockpred.v1
+timezone: Asia/Dubai
+repo: macho715/stock_1901
+
+policy:
+  repo_state: AMBER_WATCHLIST
+  new_capital_allowed: false
+  paper_trading_only: true
+  live_order_execution: false
+  auto_buy_sell: false
+  broker_adapter_activation: false
+
+automation_levels:
+  read_report:
+    auto: true
+    allowed:
+      - read_files
+      - inspect_docs
+      - run_local_tests
+      - run_dry_run_validations
+      - generate_reports
+      - upload_artifacts
+      - create_issue
+  write_pr:
+    auto: false
+    approval_environment: hermes-write
+    allowed_after_approval:
+      - create_branch
+      - create_draft_pr
+      - update_docs
+      - update_dashboard
+  production:
+    auto: false
+    approval_environment: production
+    blocked_by_default: true
+
+paths:
+  backend_root: src/stock_rtx4060
+  dashboard_root: root_folder_snapshot/stock-pred-v5
+  dashboard_entry: root_folder_snapshot/stock-pred-v5/src/StockPredV5.jsx
+  api_entry: api_server.py
+  reports_dir: reports/hermes
+  audit_dir: reports/hermes/audit
+  traceability_dir: docs/traceability
+
+checks:
+  backend:
+    - "PYTHONPATH=.:src pytest --cov=stock_rtx4060 --cov-fail-under=75 --tb=short -rfE -q"
+    - "mypy src/stock_rtx4060/observability || true"
+    - "PYTHONPATH=.:src python main.py recommend --help"
+    - "PYTHONPATH=.:src python main.py backtest --help"
+    - "PYTHONPATH=.:src python main.py paper --help"
+  dashboard:
+    - "cd root_folder_snapshot/stock-pred-v5 && npm ci"
+    - "cd root_folder_snapshot/stock-pred-v5 && npm run build"
+  cfast:
+    - "cd invest_algos && python examples/run_cfast_validation.py"
+    - "cd invest_algos && pytest -q tests/test_cfast_validation.py tests/test_latest_weights_schema.py tests/test_timeseries_input_validation.py"
+
+gates:
+  zero_conditions:
+    - live_order_execution_enabled
+    - auto_buy_sell_enabled
+    - broker_credentials_detected
+    - env_file_committed
+    - new_capital_allowed_true_without_manual_approval
+    - notebook_advice_promotes_amber_or_red_to_green
+    - x5_cost_fragility_hidden
+    - forward_underperformance_hidden
+  amber_conditions:
+    - notebooklm_unavailable
+    - external_news_api_unavailable
+    - dashboard_build_failed
+    - openai_key_missing
+    - partial_test_failures

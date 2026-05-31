@@ -1,0 +1,112 @@
+name: Hermes PR Factory
+
+run-name: Hermes PR Factory ${{ inputs.work_item }} by ${{ github.actor }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      work_item:
+        description: "dashboard_redesign | notebook_adapter | docs_sync | qa_fix"
+        required: true
+        type: choice
+        options:
+          - dashboard_redesign
+          - notebook_adapter
+          - docs_sync
+          - qa_fix
+      dry_run:
+        description: "true keeps changes local and uploads patch only"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+concurrency:
+  group: hermes-pr-factory
+  cancel-in-progress: false
+
+env:
+  PAPER_TRADING_ONLY: "true"
+  NEW_CAPITAL_ALLOWED: "false"
+  LIVE_ORDER_EXECUTION: "false"
+  AUTO_BUY_SELL: "false"
+
+jobs:
+  pr-factory:
+    name: Hermes PR factory
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: hermes-write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Guard safety
+        run: python scripts/hermes/guard_safety.py --config .hermes/hermes.config.yaml
+
+      - name: Run PR task
+        run: >
+          python scripts/hermes/hermes_runner.py
+          --mode write_pr
+          --task "${{ inputs.work_item }}"
+          --config .hermes/hermes.config.yaml
+
+      - name: Verify
+        run: |
+          python -m compileall -q scripts/hermes
+          python scripts/hermes/guard_safety.py --config .hermes/hermes.config.yaml
+
+      - name: Create patch artifact on dry-run
+        if: ${{ inputs.dry_run == 'true' }}
+        run: |
+          mkdir -p reports/hermes
+          git diff > reports/hermes/hermes.patch
+          python scripts/hermes/make_pr_body.py --out reports/hermes/pr-body.md
+
+      - name: Upload dry-run artifacts
+        if: ${{ inputs.dry_run == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hermes-pr-dry-run-${{ github.run_number }}
+          path: reports/hermes/**
+          if-no-files-found: warn
+
+      - name: Create draft PR
+        if: ${{ inputs.dry_run == 'false' }}
+        run: |
+          BRANCH="hermes/${{ inputs.work_item }}-${{ github.run_number }}"
+          python scripts/hermes/make_pr_body.py --out reports/hermes/pr-body.md
+          if git diff --quiet; then
+            echo "No tracked changes produced by Hermes PR task; skipping PR creation."
+            exit 0
+          fi
+          git config user.name "Hermes Automation"
+          git config user.email "hermes-actions@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "hermes: ${{ inputs.work_item }}"
+          git push origin "$BRANCH"
+          gh pr create \
+            --repo "${{ github.repository }}" \
+            --base main \
+            --head "$BRANCH" \
+            --draft \
+            --title "Hermes: ${{ inputs.work_item }}" \
+            --body-file reports/hermes/pr-body.md \
+            --label "hermes,automation,review-required"
+        env:
+          GH_TOKEN: ${{ github.token }}

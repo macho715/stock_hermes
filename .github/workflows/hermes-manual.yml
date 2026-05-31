@@ -1,0 +1,63 @@
+name: Hermes Manual Runner
+
+run-name: Hermes Manual ${{ inputs.task }} by ${{ github.actor }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "daily | dashboard | notebook | quant | qa"
+        required: true
+        type: choice
+        options:
+          - daily
+          - dashboard
+          - notebook
+          - quant
+          - qa
+      symbol:
+        description: "Optional ticker"
+        required: false
+        default: "AAPL"
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+env:
+  PAPER_TRADING_ONLY: "true"
+  NEW_CAPITAL_ALLOWED: "false"
+  LIVE_ORDER_EXECUTION: "false"
+  AUTO_BUY_SELL: "false"
+
+jobs:
+  manual:
+    name: Hermes manual read/report task
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: hermes-read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Hermes task
+        run: >
+          python scripts/hermes/hermes_runner.py
+          --task "${{ inputs.task }}"
+          --symbol "${{ inputs.symbol }}"
+          --config .hermes/hermes.config.yaml
+
+      - name: Upload Hermes artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hermes-manual-${{ inputs.task }}-${{ github.run_number }}
+          path: reports/hermes/**
+          if-no-files-found: warn
