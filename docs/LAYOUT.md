@@ -206,6 +206,24 @@ stock_1901/                          # Updated 2026-05-29 (formerly stock_rtx406
 │   ├── 06-report-contract.md
 │   ├── 07-architecture-boundary.md
 │   └── 08-test-and-verification.md
+├── invest_algos/                    # C_fast / invest_algos 검증 패키지 (Added 2026-05-31)
+│   ├── algos/                       # C fast optimizer 및 공통 유틸
+│   ├── configs/
+│   │   └── cfast_v2_target10_paper.json  # vol_cap_relaxed 기준 config (target_vol=0.15)
+│   ├── examples/
+│   │   ├── run_cfast_validation.py  # CANDIDATE_PROFILES 단일 소스 + --candidate CLI (Updated 2026-05-31)
+│   │   │                            #   apply_candidate_profile() · evaluate_forward_month() · check_sleeve_cap_warnings()
+│   │   │                            #   GLD 15% hard cap + DBC 5% floor · regime_diagnostics weight 버그 수정
+│   │   └── run_cfast_upgrade_benchmark.py  # 5-candidate benchmark — CANDIDATE_PROFILES import (Added 2026-05-31)
+│   ├── tests/
+│   │   ├── test_cfast_validation.py
+│   │   ├── test_cfast_validation_phase2.py  # TestCandidateProfileSelector 포함 (Added 2026-05-31)
+│   │   ├── test_cfast_upgrade_benchmark.py  # 구조적 assertion (Added 2026-05-31)
+│   │   ├── test_latest_weights_schema.py
+│   │   └── test_timeseries_input_validation.py
+│   └── demo_output/
+│       └── internet_latest_yahoo/cfast_validation/
+│           └── validation_summary.json  # vol_cap_relaxed CONDITIONAL_PASS (Updated 2026-05-31)
 ├── examples/
 ├── reports/                     # Runtime output + validation logs
 ├── review_needed/              # Quarantined source evidence (not active docs)

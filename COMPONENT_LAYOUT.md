@@ -43,6 +43,10 @@
 | **Quant1901 Evidence Card** | `Quant1901EvidenceCard` (JSX 컴포넌트) | **보조 검증 결과 카드 — paper-only, not financial advice (Added 2026-05-31)** |
 | **NotebookLM API** | `http://127.0.0.1:8088/api/stock-news/notebook-analysis` | **iran-war-notelm stock_news API (Added 2026-05-30)** |
 | **Thompson MAB** | `advisors/thompson_weights.py` | **Beta 분포 advisor 가중치 동적 결정 (Added 2026-05-30)** |
+| **C_fast Validation API** | `http://127.0.0.1:5151/api/cfast-validation` | **C_fast 검증 상태 조회 — `validation_summary.json` 요약 반환. `c_fast_verdict`, `forward_month_gate`, `promotion_status` 포함 (Added 2026-05-31)** |
+| **C_FAST Footer Badge** | `StockPredV5.jsx` footer (mount-only useEffect) | **`✓ C_FAST · PAPER · FWD✓` — CONDITIONAL_PASS 초록 / VALIDATION_FAILED 빨강 / 기타 노랑. hover로 full verdict 표시 (Added 2026-05-31)** |
+| **C_fast Validation Script** | `invest_algos/examples/run_cfast_validation.py` | **`--candidate vol_cap_relaxed` — 5개 프로파일 원자적 override. vol_cap_relaxed x2=13.06% CONDITIONAL_PASS (Updated 2026-05-31)** |
+| **CANDIDATE_PROFILES** | `invest_algos/examples/run_cfast_validation.py` | **단일 소스 — `run_cfast_upgrade_benchmark.py`에서 import. 5개: baseline_default·vol_cap_relaxed·accepted_v2·defensive_v2·cost_conservative (Added 2026-05-31)** |
 
 ## 2. System Component Map
 
@@ -104,6 +108,8 @@ flowchart LR
 
     API -->|/api/symbol| Provider
     API -->|/api/recommend| Engine
+    API -->|/api/cfast-validation| CfastVal[invest_algos\nvalidation_summary.json]
+    CfastVal --> CfastBadge[Footer C_FAST badge\n✓ PAPER · FWD✓ Added 2026-05-31]
     CLI --> Main --> Engine
     Engine --> Provider
     Provider --> Audit

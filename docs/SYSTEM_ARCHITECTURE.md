@@ -80,6 +80,7 @@ HARD_BLOCKERS (11개): `BACKTEST_HONESTY_NOT_PASS`, `ACCURACY_BELOW_50`, `AUC_BE
 | Endpoint | 역할 |
 |---|---|
 | `GET /api/quant1901?ticker=X&period=2y&optimize=0` | Quant1901 보조 백테스트 실행 → dashboard_snapshot.v1 반환 |
+| `GET /api/cfast-validation` | C_fast 검증 상태 조회 (read-only) — `validation_summary.json` 요약: `c_fast_verdict`, `forward_month_gate`, `promotion_status`, `regime_diagnostics` (Added 2026-05-31) |
 
 ### New CLI Subcommands (Added 2026-05-31)
 
@@ -87,6 +88,29 @@ HARD_BLOCKERS (11개): `BACKTEST_HONESTY_NOT_PASS`, `ACCURACY_BELOW_50`, `AUC_BE
 python -m stock_rtx4060.main quant1901-backtest --ticker 005930.KS --period 2y --optimize
 python -m stock_rtx4060.main recommend --quant1901 --quant1901-optimize
 ```
+
+### C_fast Validation + --candidate CLI (Added 2026-05-31)
+
+```mermaid
+flowchart LR
+    CLI2[--candidate vol_cap_relaxed] --> CVAL[run_cfast_validation.py]
+    CVAL --> PROFILES[CANDIDATE_PROFILES 단일 소스\nbaseline·vol_cap·accepted_v2·defensive·conservative]
+    PROFILES --> BM[run_cfast_upgrade_benchmark.py\nimport only — 순환 없음]
+    CVAL --> FGATE[evaluate_forward_month\npass=True +2.53%]
+    CVAL --> SLEEVE[GLD≤15% DBC≥5%\nsleeve guard]
+    FGATE --> VSUMMARY[validation_summary.json\nCONDITIONAL_PASS]
+    VSUMMARY --> APICFAST[GET /api/cfast-validation]
+    APICFAST --> BADGE[StockPredV5.jsx footer\n✓ C_FAST · PAPER · FWD✓]
+```
+
+**검증 결과 (vol_cap_relaxed, 2026-05-31):**
+
+| metric | 값 | 목표 |
+|--------|-----|------|
+| C_fast verdict | `CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE` | ✅ |
+| x2 ann_return | 13.06% | ≥10% ✅ |
+| forward_month_gate | pass=True, +2.53% | ✅ |
+| promotion_blockers | [] | ✅ |
 
 ---
 
