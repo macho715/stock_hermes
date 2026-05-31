@@ -194,7 +194,7 @@ The current system has five operator-facing surfaces (Updated: 2026-05-30):
 | Surface | Path | Role | Safety boundary |
 |---|---|---|---|
 | Python CLI | `src/stock_rtx4060/main.py` | Runs `recommend`, `dashboard-export`, `paper-status`, `factor-*`, `ops-v1`, `benchmark`, and `env`. | Report-only output under `reports/` and audit logs. |
-| Local API | `api_server.py` | Serves `/api/recommend`, `/api/snapshot`, `/api/universe`, `/api/symbol`, `/api/model-scores`, `/api/paper-status`, and `/api/health`. | Local dashboard integration only; no broker/order route. |
+| Local API | `api_server.py` | Serves `/api/recommend`, `/api/snapshot`, `/api/universe`, `/api/symbol`, `/api/model-scores`, `/api/paper-status`, `/api/quant1901`, `/api/cfast-validation`, and `/api/health`. | Local dashboard integration only; no broker/order route. |
 | Dashboard UI (classic) | `root_folder_snapshot/stock-pred-v5` | Vite/React dashboard. REC tab can use API mode or file snapshot mode. | Shows readiness and warnings; does not place orders. |
 | Dashboard UI (executive) | `stock-pred-v5` + `VITE_DASHBOARD_LAYOUT=executive` | Executive Decision Dashboard v2.1 — auto-fetches `/api/recommend` on ticker change. | Report-only; no broker/order buttons; ActionPlan labeled "Reference only". |
 | Forward evidence | `src/stock_rtx4060/live_review/auto_forward_recorder.py` | Records daily forward-paper evidence until review pack generation. | `auto_promote=false`, `new_capital_allowed=false`, `broker_order_execution=false`, `manual_approval_required=true`. |
@@ -376,6 +376,8 @@ This table contains historical validation evidence retained from earlier archite
 | Phase B full regression | PASS, 30 tests passed |
 | Phase B smoke | PASS, `reports/phase_b_backtest_honesty_smoke/dashboard_snapshot.json` contains `backtest_honesty_summary.status=AMBER`, candidate `backtest_honesty.status=AMBER`, and `screening_output_only=True` |
 | Overall test coverage (2026-05-10) | **85.82%** — 1,210 tests, 0 failures. explain.py 89%, hpo.py 88%, yf/alpaca/kis ingestors 95–100%. portfolio/optimizer.py Python 3.14 numpy read-only array compat confirmed. |
+| C_fast validation — vol_cap_relaxed (2026-05-31) | **CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE** — x2=13.06%, forward_pass=True, promotion_blockers=[], 24 invest_algos tests passed. |
+| C_fast --candidate CLI (2026-05-31) | `CANDIDATE_PROFILES` 단일 소스 이동, `apply_candidate_profile()` 14-param override, `evaluate_forward_month()` → main() 연결, GLD 15% hard cap + DBC 5% floor 검증 완료. |
 
 ---
 
@@ -396,7 +398,9 @@ Report-only stock-candidate screening engine. Walk-forward ensemble ML, 9 risk g
 | Backtester | `src/stock_rtx4060/backtester.py` | Dry-run trade simulation |
 | Risk Rules | `src/stock_rtx4060/risk_rules.py` | GREEN/AMBER/RED/ZERO gate logic, position sizing |
 | Dashboard Bridge | `src/stock_rtx4060/dashboard_bridge.py` | Converts recommendation JSON to dashboard_snapshot.v1 |
-| API Server | `api_server.py` (root) | Flask server (port 5151 by default) for stock-pred-v5 integration. CORS is restricted to local dashboard origins on `localhost` and `127.0.0.1` dev ports 5173, 5174, 5175, 4173, and 5151. |
+| API Server | `api_server.py` (root) | Flask server (port 5151 by default) for stock-pred-v5 integration. CORS is restricted to local dashboard origins on `localhost` and `127.0.0.1` dev ports 5173, 5174, 5175, 4173, and 5151. Endpoints: `/api/recommend`, `/api/quant1901`, `/api/cfast-validation` (Added 2026-05-31), `/api/model-scores`, `/api/paper-status`, `/api/health`. |
+| C_fast Validation | `invest_algos/examples/run_cfast_validation.py` | C_fast optimizer validation — `--candidate` CLI, `CANDIDATE_PROFILES` 단일 소스, `evaluate_forward_month()`, GLD/DBC sleeve guard. `vol_cap_relaxed`: x2=13.06% CONDITIONAL_PASS (Added 2026-05-31). |
+| C_fast Benchmark | `invest_algos/examples/run_cfast_upgrade_benchmark.py` | 5-candidate benchmark runner — CANDIDATE_PROFILES import from run_cfast_validation (Added 2026-05-31). |
 | Reports Writer | `src/stock_rtx4060/reports.py` | Markdown + JSON output writers |
 | Data Providers | `src/stock_rtx4060/data_providers.py` | Provider router: synthetic / yfinance / openbb / auto. Data Lake ingestors (yf/alpaca/kis) are production-ready with ≥94% test coverage (2026-05-10). |
 | Audit Log | `src/stock_rtx4060/audit_log.py` | JSONL append-only event log with secret masking |
@@ -433,6 +437,8 @@ flowchart TD
         ApiRecommend[/api/recommend] --> RE
         ApiRecommend --> DB
         ApiRecommend --> SNAP[dashboard_snapshot.json]
+        ApiCfast[/api/cfast-validation] --> CfastVal[invest_algos\nvalidation_summary.json]
+        CfastVal --> CfastBadge[Footer C_FAST badge\n✓ PAPER · FWD✓]
     end
 ```
 
@@ -487,6 +493,7 @@ graph TD
     data_providers.py --> audit_log.py
     api_server.py --> recommendation_engine.py
     api_server.py --> dashboard_bridge.py
+    api_server.py --> invest_algos_validation["invest_algos/validation_summary.json\n(/api/cfast-validation)"]
     ops_workflow.py --> recommendation_engine.py
     ops_workflow.py --> reports.py
     src_cli --> hw_profile.py
