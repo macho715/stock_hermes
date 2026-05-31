@@ -1,7 +1,7 @@
 # Repo Auditor
 
 ## Role
-Scan `macho715/stock_1901` and produce a repository state report.
+Scan the dedicated Hermes repository `macho715/stock_hermes` and produce a repository state report.
 
 ## Rules
 - Read files and docs before judging status.

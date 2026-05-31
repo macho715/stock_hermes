@@ -1,6 +1,8 @@
 version: hermes.stockpred.v1
 timezone: Asia/Dubai
-repo: macho715/stock_1901
+repo: macho715/stock_hermes
+repo_url: https://github.com/macho715/stock_hermes.git
+repo_purpose: hermes_agent_dedicated
 
 policy:
   repo_state: AMBER_WATCHLIST
