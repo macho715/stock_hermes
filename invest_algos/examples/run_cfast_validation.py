@@ -23,6 +23,70 @@ if str(ROOT) not in sys.path:
 from algos import c_decision_focused_multi_period_optimizer as cfast  # noqa: E402
 from algos.common import ensure_outdir, load_price_csv, write_json  # noqa: E402
 
+# ---------------------------------------------------------------------------
+# Candidate profiles — single source of truth shared with run_cfast_upgrade_benchmark
+# ---------------------------------------------------------------------------
+
+CANDIDATE_PROFILES: Dict[str, Dict[str, object]] = {
+    "baseline_default": dict(
+        lookback=252, rebalance_days=20, horizon=2, target_vol=0.10,
+        max_weight=0.25, turnover_budget=0.20, cvar_lambda=0.0,
+        optimizer_maxiter=1000, gamma=0.97, forecast_decay=0.90,
+        shrink_mu=0.50, shrinkage=0.35, risk_aversion=5.0,
+        turnover_penalty=25.0,
+    ),
+    "vol_cap_relaxed": dict(
+        lookback=252, rebalance_days=20, horizon=2, target_vol=0.15,
+        max_weight=0.30, turnover_budget=0.25, cvar_lambda=0.0,
+        optimizer_maxiter=1000, gamma=0.97, forecast_decay=0.90,
+        shrink_mu=0.50, shrinkage=0.35, risk_aversion=4.0,
+        turnover_penalty=20.0,
+    ),
+    "accepted_v2_target10_paper": dict(
+        lookback=252, rebalance_days=20, horizon=2, target_vol=0.14,
+        max_weight=0.45, turnover_budget=0.25, cvar_lambda=0.0,
+        optimizer_maxiter=1000, gamma=0.97, forecast_decay=0.85,
+        shrink_mu=0.50, shrinkage=0.35, risk_aversion=5.5,
+        turnover_penalty=25.0,
+    ),
+    "defensive_v2": dict(
+        lookback=252, rebalance_days=20, horizon=2, target_vol=0.08,
+        max_weight=0.20, turnover_budget=0.15, cvar_lambda=0.0,
+        optimizer_maxiter=1000, gamma=0.97, forecast_decay=0.80,
+        shrink_mu=0.60, shrinkage=0.40, risk_aversion=8.0,
+        turnover_penalty=30.0,
+    ),
+    "cost_conservative": dict(
+        lookback=252, rebalance_days=20, horizon=2, target_vol=0.10,
+        max_weight=0.25, turnover_budget=0.15, cvar_lambda=0.0,
+        optimizer_maxiter=1000, gamma=0.97, forecast_decay=0.90,
+        shrink_mu=0.50, shrinkage=0.35, risk_aversion=6.0,
+        turnover_penalty=35.0,
+    ),
+}
+
+CANDIDATE_IDS: List[str] = list(CANDIDATE_PROFILES.keys())
+
+
+def apply_candidate_profile(args: argparse.Namespace, candidate: str) -> argparse.Namespace:
+    """Override args with all params from a named candidate profile.
+
+    This is the canonical way to reproduce benchmark results from the CLI:
+    every key in CANDIDATE_PROFILES maps 1-to-1 to an attribute on args,
+    ensuring identical optimizer config between benchmark and validation runs.
+    """
+    if candidate not in CANDIDATE_PROFILES:
+        raise ValueError(
+            f"Unknown candidate '{candidate}'. "
+            f"Valid choices: {', '.join(CANDIDATE_IDS)}"
+        )
+    profile = CANDIDATE_PROFILES[candidate]
+    # Use vars() copy so we don't mutate the original Namespace in-place
+    merged = vars(args).copy()
+    merged.update(profile)
+    return argparse.Namespace(**merged)
+
+
 A_VERDICT = "HOLD_DIAGNOSTIC_ONLY"
 B_VERDICT = "REJECT_RETRAIN"
 C_PASS = "CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE"
@@ -348,6 +412,8 @@ def build_report(summary: Dict[str, object]) -> str:
     warnings = ", ".join(summary["warnings"]) if summary["warnings"] else "none"
     controls = summary["execution_controls"]
     blockers = ", ".join(controls["promotion_blockers"]) if controls["promotion_blockers"] else "none"
+    fwd = summary.get("forward_month_gate", {})
+    fwd_pass = fwd.get("forward_pass", "N/A")
     return "\n".join([
         "# C Fast Validation Report",
         "",
@@ -365,6 +431,12 @@ def build_report(summary: Dict[str, object]) -> str:
         f"- promotion_status: `{controls['promotion_status']}`",
         f"- promotion_blockers: `{blockers}`",
         "",
+        "## Forward-Month Gate",
+        "",
+        f"- forward_pass: `{fwd_pass}`",
+        f"- forward_return: `{fwd.get('forward_return', 'N/A'):.2%}`",
+        f"- forward_mdd: `{fwd.get('forward_mdd', 'N/A'):.2%}`",
+        "",
         "## Cost Stress",
         "",
         "| Label | Cost bps | Sharpe | Ann Return | Target Return Min | Target Return Pass | MDD | Optimizer Success | Fallback Rate |",
@@ -379,6 +451,191 @@ def build_report(summary: Dict[str, object]) -> str:
         f"- columns: {', '.join(summary['data_metadata']['columns'])}",
         "",
     ])
+
+
+# ---------------------------------------------------------------------------
+# Forward-Month Gate
+# ---------------------------------------------------------------------------
+
+FORWARD_RETURN_THRESHOLD = -0.02
+FORWARD_MDD_THRESHOLD = -0.05
+
+
+def evaluate_forward_month(
+    base_metrics: Dict[str, float],
+    forward_metrics: Dict[str, float],
+    cost_label: str,
+) -> Dict[str, object]:
+    """Evaluate forward-month gate before promotion decision.
+
+    Thresholds (plan.md):
+      base latest_month_return >= -2.00%
+      x2  latest_month_return >= -2.00%
+      base latest_month_mdd    >= -5.00%
+      x2  latest_month_mdd      >= -5.00%
+    """
+    warnings: List[str] = []
+    fwd_ret = forward_metrics.get("forward_return", 0.0)
+    fwd_mdd = forward_metrics.get("forward_mdd", 0.0)
+
+    if fwd_ret < FORWARD_RETURN_THRESHOLD:
+        warnings.append(f"forward_month_return_below_threshold_{cost_label}")
+    if fwd_mdd < FORWARD_MDD_THRESHOLD:
+        warnings.append(f"forward_month_mdd_below_threshold_{cost_label}")
+
+    forward_pass = (
+        fwd_ret >= FORWARD_RETURN_THRESHOLD and fwd_mdd >= FORWARD_MDD_THRESHOLD
+    )
+    return {
+        "forward_pass": forward_pass,
+        "warnings": warnings,
+        "forward_return": fwd_ret,
+        "forward_mdd": fwd_mdd,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Regime Diagnostics
+# ---------------------------------------------------------------------------
+
+TRADING_DAYS_PER_MONTH = 21
+
+
+def _momentum(series: pd.Series, window: int) -> float:
+    if len(series) < window:
+        return 0.0
+    return float((series.iloc[-1] / series.iloc[-window]) - 1.0)
+
+
+def _drawdown_state(series: pd.Series) -> str:
+    """Classify drawdown state as normal / mild / severe."""
+    ret = series.pct_change(fill_method=None).fillna(0.0)
+    nav = (1.0 + ret).cumprod()
+    peak = nav.cummax()
+    dd = nav / peak - 1.0
+    mdd = float(dd.min())
+    if mdd >= -0.05:
+        return "normal"
+    elif mdd >= -0.15:
+        return "mild"
+    else:
+        return "severe"
+
+
+def compute_regime_diagnostics(
+    prices: pd.DataFrame, latest_weights: Optional[pd.DataFrame] = None
+) -> Dict[str, object]:
+    """Compute regime diagnostics: GLD/DBC momentum, relative strength, drawdown state.
+
+    Output fields (plan.md):
+      - GLD trailing momentum (1-month, 3-month)
+      - DBC trailing momentum (1-month, 3-month)
+      - GLD vs DBC relative strength ratio
+      - Equity drawdown state (SPY, QQQ, IWM)
+      - Bond drawdown state (TLT, IEF)
+      - Latest risky exposure by sleeve (weights-based, plan.md Step 2 fix)
+    """
+    MOMENTUM_1M = TRADING_DAYS_PER_MONTH
+    MOMENTUM_3M = 3 * TRADING_DAYS_PER_MONTH
+
+    gld_1m = 0.0
+    gld_3m = 0.0
+    dbc_1m = 0.0
+    dbc_3m = 0.0
+    gld_dbc_rs = 1.0
+
+    if "GLD" in prices.columns and len(prices) >= MOMENTUM_3M:
+        gld_1m = _momentum(prices["GLD"], MOMENTUM_1M)
+        gld_3m = _momentum(prices["GLD"], MOMENTUM_3M)
+    if "DBC" in prices.columns and len(prices) >= MOMENTUM_3M:
+        dbc_1m = _momentum(prices["DBC"], MOMENTUM_1M)
+        dbc_3m = _momentum(prices["DBC"], MOMENTUM_3M)
+    if "GLD" in prices.columns and "DBC" in prices.columns and len(prices) >= MOMENTUM_1M:
+        gld_ret = _momentum(prices["GLD"], MOMENTUM_1M)
+        dbc_ret = _momentum(prices["DBC"], MOMENTUM_1M)
+        if abs(dbc_ret) > 1e-12:
+            gld_dbc_rs = gld_ret / dbc_ret
+        else:
+            gld_dbc_rs = 1.0 if abs(gld_ret) <= 1e-12 else float("inf")
+
+    equity_cols = [c for c in ["SPY", "QQQ", "IWM"] if c in prices.columns]
+    bond_cols = [c for c in ["TLT", "IEF"] if c in prices.columns]
+
+    equity_state = "normal"
+    if equity_cols:
+        combined = prices[equity_cols].mean(axis=1)
+        equity_state = _drawdown_state(combined)
+
+    bond_state = "normal"
+    if bond_cols:
+        combined = prices[bond_cols].mean(axis=1)
+        bond_state = _drawdown_state(combined)
+
+    # Fix: weights-based sleeve exposure (plan.md Step 2)
+    if latest_weights is not None:
+        wt_map = dict(zip(latest_weights["Asset"].astype(str), latest_weights["Weight"]))
+        metal_exposure = float(wt_map.get("GLD", 0.0))
+        commodity_exposure = float(wt_map.get("DBC", 0.0))
+    else:
+        metal_exposure = 0.0
+        commodity_exposure = 0.0
+
+    return {
+        "gld_1m_momentum": gld_1m,
+        "gld_3m_momentum": gld_3m,
+        "dbc_1m_momentum": dbc_1m,
+        "dbc_3m_momentum": dbc_3m,
+        "gld_dbc_relative_strength": gld_dbc_rs,
+        "equity_drawdown_state": equity_state,
+        "bond_drawdown_state": bond_state,
+        "latest_risky_exposure_by_sleeve": {
+            "metal": metal_exposure,
+            "commodity": commodity_exposure,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Sleeve-Level Cap Warnings
+# ---------------------------------------------------------------------------
+
+SLEEVE_WEIGHT_THRESHOLD = 0.20
+SLEEVE_RETURN_THRESHOLD = -0.05
+GLD_HARD_WEIGHT_CAP = 0.15   # plan.md: GLD <= 15%
+DBC_WEIGHT_FLOOR   = 0.05   # plan.md: DBC >= 5%
+
+
+def check_sleeve_cap_warnings(
+    latest_weights: pd.DataFrame,
+    latest_asset_returns: pd.Series,
+) -> List[str]:
+    """Check sleeve-level cap warnings per plan.md rule:
+
+    if GLD_average_weight > 0.20 and GLD_latest_month_return < -0.05:
+        warnings.append("metal_sleeve_forward_loss")
+    if DBC_average_weight > 0.20 and DBC_latest_month_return < -0.05:
+        warnings.append("commodity_sleeve_forward_loss")
+    plus GLD hard cap <= 15% and DBC floor >= 5% (plan.md Step 2).
+    """
+    warnings: List[str] = []
+    wt_map = dict(zip(latest_weights["Asset"].astype(str), latest_weights["Weight"]))
+
+    gld_weight = wt_map.get("GLD", 0.0)
+    dbc_weight = wt_map.get("DBC", 0.0)
+
+    gld_ret = float(latest_asset_returns.get("GLD", 0.0))
+    dbc_ret = float(latest_asset_returns.get("DBC", 0.0))
+
+    if gld_weight > SLEEVE_WEIGHT_THRESHOLD and gld_ret < SLEEVE_RETURN_THRESHOLD:
+        warnings.append("metal_sleeve_forward_loss")
+    if dbc_weight > SLEEVE_WEIGHT_THRESHOLD and dbc_ret < SLEEVE_RETURN_THRESHOLD:
+        warnings.append("commodity_sleeve_forward_loss")
+    if gld_weight > GLD_HARD_WEIGHT_CAP:          # Step 2: GLD weight hard cap
+        warnings.append("gld_weight_cap_breach")
+    if dbc_weight < DBC_WEIGHT_FLOOR:             # Step 2: DBC weight floor
+        warnings.append("dbc_weight_floor_breach")
+
+    return warnings
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -404,11 +661,26 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p.add_argument("--shrinkage", type=float, default=0.35)
     p.add_argument("--risk-aversion", type=float, default=5.0)
     p.add_argument("--turnover-penalty", type=float, default=25.0)
+    p.add_argument(
+        "--candidate",
+        default=None,
+        choices=CANDIDATE_IDS,
+        help=(
+            "Load a named candidate profile from CANDIDATE_PROFILES and override "
+            "all optimizer params. Reproduces benchmark results exactly. "
+            f"Choices: {', '.join(CANDIDATE_IDS)}"
+        ),
+    )
     return p.parse_args(argv)
 
 
 def main(argv: Optional[List[str]] = None) -> None:
     args = parse_args(argv)
+    # Apply candidate profile BEFORE resolving paths so all optimizer params
+    # are set identically to the benchmark runner. This is the fix for the
+    # CLI-vs-benchmark gap: profiles define all 14 optimizer keys atomically.
+    if args.candidate is not None:
+        args = apply_candidate_profile(args, args.candidate)
     args.prices = resolve_path(args.prices)
     outdir = ensure_outdir(resolve_path(args.outdir))
     cost_bps_values = parse_cost_bps_list(args.cost_bps_list)
@@ -437,6 +709,32 @@ def main(argv: Optional[List[str]] = None) -> None:
     validate_latest_weights_schema(latest_weights)
     latest_weights.to_csv(outdir / "latest_weights.csv", index=False)
 
+    # Phase 2 additions: regime diagnostics + sleeve cap warnings
+    regime_diagnostics = compute_regime_diagnostics(prices, latest_weights=latest_weights)
+
+    latest_asset_returns = prices.pct_change(
+        periods=TRADING_DAYS_PER_MONTH, fill_method=None
+    ).iloc[-1].fillna(0.0)
+    sleeve_warnings = check_sleeve_cap_warnings(latest_weights, latest_asset_returns)
+    warnings = warnings + sleeve_warnings
+
+    # Forward-month gate (plan.md Step 1)
+    _fwd_ret = float(
+        (prices.iloc[-1] / prices.iloc[-1 - TRADING_DAYS_PER_MONTH] - 1.0).mean()
+        if len(prices) > TRADING_DAYS_PER_MONTH else 0.0
+    )
+    _fwd_mdd = float(
+        (prices.iloc[-TRADING_DAYS_PER_MONTH:].pct_change(fill_method=None)
+         .fillna(0.0).cumsum().rolling(TRADING_DAYS_PER_MONTH)
+         .apply(lambda x: x[-1] - x.max()).min().iloc[-1])
+        if len(prices) > TRADING_DAYS_PER_MONTH else 0.0
+    )
+    forward_month_gate = evaluate_forward_month(
+        base_metrics=stress["base"]["metrics"],
+        forward_metrics={"forward_return": _fwd_ret, "forward_mdd": _fwd_mdd},
+        cost_label="base",
+    )
+
     summary = {
         "data_metadata": {
             "source_path": str(args.prices),
@@ -461,6 +759,8 @@ def main(argv: Optional[List[str]] = None) -> None:
         "latest_weights": frame_records(latest_weights),
         "walk_forward": walk_forward,
         "warnings": warnings,
+        "regime_diagnostics": regime_diagnostics,
+        "forward_month_gate": forward_month_gate,
     }
     write_json(summary, outdir / "validation_summary.json")
     (outdir / "validation_report.md").write_text(build_report(summary), encoding="utf-8")

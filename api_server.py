@@ -1018,6 +1018,42 @@ def api_snapshot():
         return jsonify({"error": str(exc)}), 500
 
 
+@app.route("/api/cfast-validation", methods=["GET"])
+def api_cfast_validation():
+    """Return latest C_fast validation summary from invest_algos demo output.
+
+    Read-only. No broker execution. Returns a compact view suitable for the
+    dashboard footer badge (verdict, forward_month_gate, promotion_status).
+    """
+    summary_path = (
+        Path(__file__).parent
+        / "invest_algos"
+        / "demo_output"
+        / "internet_latest_yahoo"
+        / "cfast_validation"
+        / "validation_summary.json"
+    )
+    if not summary_path.exists():
+        return jsonify({"error": "validation_summary.json not found", "status": "MISSING"}), 404
+    try:
+        data = json.loads(summary_path.read_text(encoding="utf-8"))
+        controls = data.get("execution_controls", {})
+        return jsonify({
+            "c_fast_verdict": data.get("policy_verdicts", {}).get("C_fast", "UNKNOWN"),
+            "execution_mode": controls.get("execution_mode", "UNKNOWN"),
+            "promotion_status": controls.get("promotion_status", "UNKNOWN"),
+            "promotion_blockers": controls.get("promotion_blockers", []),
+            "live_trading_allowed": controls.get("live_trading_allowed", False),
+            "broker_execution_allowed": controls.get("broker_execution_allowed", False),
+            "warnings": data.get("warnings", []),
+            "forward_month_gate": data.get("forward_month_gate", {}),
+            "regime_diagnostics": data.get("regime_diagnostics", {}),
+            "last_date": data.get("data_metadata", {}).get("last_date", ""),
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc), "status": "ERROR"}), 500
+
+
 @app.route("/api/health", methods=["GET"])
 def api_health():
     return jsonify({"status": "ok", "service": "stock_rtx4060_unified", "version": "5.0.0"})

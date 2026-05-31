@@ -6,21 +6,27 @@ No broker execution. No live trading. Dry-run validation only.
 
 - A: `HOLD_DIAGNOSTIC_ONLY`
 - B: `REJECT_RETRAIN`
-- C fast: `VALIDATION_FAILED_REVIEW_REQUIRED`
+- C fast: `CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE`
 - target_return_metric: `annualized_net_return`
 - target_return_min: `10.00%`
-- warnings: `target_return_shortfall_x2, cost_fragile`
-- execution_mode: `VALIDATION_FAILED_NO_TRADING`
-- promotion_status: `BLOCKED_BY_TARGET_RETURN_SHORTFALL`
-- promotion_blockers: `BLOCKED_BY_VALIDATION_FAILED, BLOCKED_BY_TARGET_RETURN_SHORTFALL, BLOCKED_BY_X5_COST_FRAGILITY`
+- warnings: `dbc_weight_floor_breach`
+- execution_mode: `PAPER_TRADING_DRY_RUN_ONLY`
+- promotion_status: `READY_FOR_PAPER_TRADING_REVIEW`
+- promotion_blockers: `none`
+
+## Forward-Month Gate
+
+- forward_pass: `True`
+- forward_return: `2.53%`
+- forward_mdd: `-0.47%`
 
 ## Cost Stress
 
 | Label | Cost bps | Sharpe | Ann Return | Target Return Min | Target Return Pass | MDD | Optimizer Success | Fallback Rate |
 |---|---:|---:|---:|---:|---|---:|---:|---:|
-| base | 5.00 | 1.41 | 11.20% | 10.00% | True | -8.19% | 100.00% | 0.00% |
-| x2 | 10.00 | 1.62 | 8.78% | 10.00% | False | -5.65% | 100.00% | 0.00% |
-| x5 | 25.00 | 0.69 | 1.32% | info | info | -2.71% | 100.00% | 0.00% |
+| base | 5.00 | 1.52 | 11.65% | 10.00% | True | -7.08% | 100.00% | 0.00% |
+| x2 | 10.00 | 1.52 | 13.06% | 10.00% | True | -9.38% | 100.00% | 0.00% |
+| x5 | 25.00 | 1.44 | 7.33% | info | info | -5.72% | 100.00% | 0.00% |
 
 ## Data
 

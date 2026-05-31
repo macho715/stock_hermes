@@ -713,6 +713,7 @@ export default function StockPredV5() {
   const [backendSnapshot, setBackendSnapshot] = useState(null);
   const [backendError, setBackendError] = useState("");
   const [backendLoading, setBackendLoading] = useState(false);
+  const [cfastValidation, setCfastValidation] = useState(null);
   const snapshotInputRef = useRef(null);
 
   const symbols = universeByMarket[market] || [];
@@ -1192,6 +1193,17 @@ export default function StockPredV5() {
     reader.readAsText(file);
   }, []);
 
+  // ── Auto-fetch C_fast validation status on mount (always visible) ────────
+  useEffect(() => {
+    if (!API_BASE) return;
+    fetch(`${API_BASE}/api/cfast-validation`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && !data.error) setCfastValidation(data);
+      })
+      .catch(() => {});
+  }, []); // [] = once on load, never reruns per ticker
+
   // ── Auto-fetch quant1901 when ticker changes ─────────────────────────────
   useEffect(() => {
     if (!selected || !API_BASE) return;
@@ -1539,6 +1551,28 @@ ${backtest ? `## Backtest (\\$10,000 initial)
           </div>
           <div style={{textAlign:"center"}}>dashboard_snapshot.v1 · screening_output_only · Report-only · No broker execution.</div>
           <div style={{textAlign:"right",display:"flex",alignItems:"center",justifyContent:"flex-end",gap:8}}>
+            {/* C_fast validation status — always visible, fetched once on load */}
+            {cfastValidation && (() => {
+              const v = cfastValidation.c_fast_verdict || "";
+              const isPaper = v === "CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE";
+              const isFailed = v.startsWith("VALIDATION_FAILED");
+              const fwdPass = cfastValidation.forward_month_gate?.forward_pass;
+              const bg = isPaper ? "rgba(0,255,136,0.10)" : isFailed ? "rgba(246,76,76,0.10)" : "rgba(255,180,0,0.10)";
+              const border = isPaper ? "#00ff88" : isFailed ? "#f64c4c" : "#ffb400";
+              const color = isPaper ? "#00ff88" : isFailed ? "#ff7b7b" : "#ffb400";
+              const label = isPaper
+                ? `✓ C_FAST · PAPER${fwdPass === true ? " · FWD✓" : ""}`
+                : isFailed
+                ? `⚠ C_FAST · FAILED${fwdPass === true ? " · FWD✓" : ""}`
+                : `C_FAST · ${v.replace("VALIDATION_FAILED_", "").replace("CONDITIONAL_PASS_", "").slice(0, 16)}`;
+              return (
+                <span title={`${v}\n${cfastValidation.promotion_status || ""}\nforward_pass:${fwdPass}`}
+                  style={{ padding:"3px 8px", fontSize:10, fontWeight:700, letterSpacing:"0.05em",
+                    borderRadius:5, background: bg, border:`1px solid ${border}`, color, cursor:"default" }}>
+                  {label}
+                </span>
+              );
+            })()}
             {/* Quant1901 auto-status indicator */}
             <span style={{
               padding:"3px 10px",fontSize:10,fontWeight:700,letterSpacing:"0.05em",borderRadius:5,
