@@ -35,20 +35,63 @@ C_fast `vol_cap_relaxed` 파라미터 세트로 `CONDITIONAL_PASS_PAPER_TRADING_
 
 ### C_fast 검증 결과 (vol_cap_relaxed, 2026-05-31)
 
+CLI 실행 명령:
+```bash
+cd invest_algos
+python examples/run_cfast_validation.py --candidate vol_cap_relaxed
 ```
-C_fast verdict:     CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE
-execution_mode:     PAPER_TRADING_DRY_RUN_ONLY
-promotion_status:   READY_FOR_PAPER_TRADING_REVIEW
-promotion_blockers: []
-base  return=11.65%  sharpe=1.52  target_pass=True
-x2    return=13.06%  sharpe=1.52  target_pass=True
-forward_month_gate: pass=True, return=+2.53%, mdd=-0.47%
+
+출력:
 ```
+C_fast verdict:     CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE  ✅
+execution_mode:     PAPER_TRADING_DRY_RUN_ONLY                ✅
+promotion_status:   READY_FOR_PAPER_TRADING_REVIEW            ✅
+promotion_blockers: []                                         ✅
+
+base  return=11.65%  sharpe=1.52  mdd=-7.08%  target_pass=True  ✅
+x2    return=13.06%  sharpe=1.52  mdd=-9.38%  target_pass=True  ✅  ← 목표 10% 초과
+x5    return=7.33%   sharpe=1.44                                     (경고 없음)
+
+forward_month_gate: pass=True, return=+2.53%, mdd=-0.47%      ✅
+warnings: ['dbc_weight_floor_breach']   ← DBC=0% 경고 (블로킹 아님)
+```
+
+### Runtime Verification (2026-05-31)
+
+| 검증 항목 | 결과 |
+|---------|------|
+| `GET /api/cfast-validation` → `c_fast_verdict` | `CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE` ✅ |
+| `GET /api/cfast-validation` → `live_trading_allowed` | `false` ✅ |
+| `GET /api/cfast-validation` → `broker_execution_allowed` | `false` ✅ |
+| Dashboard footer C_FAST badge DOM | `"✓ C_FAST · PAPER · FWD✓"` 초록색 확인 ✅ |
+| API server port 5151 | 재시작 후 응답 정상 ✅ |
 
 ### Tests
 
-- `invest_algos/tests/test_cfast_validation_phase2.py` — 24 PASS (199s)
-- `invest_algos/tests/test_cfast_upgrade_benchmark.py::test_accepted_v2_runs_and_produces_required_columns` — 1 PASS (693s)
+- `invest_algos/tests/test_cfast_validation_phase2.py` — **24 PASS** (199s)
+- `invest_algos/tests/test_cfast_upgrade_benchmark.py::test_accepted_v2_runs_and_produces_required_columns` — **1 PASS** (693s)
+- Regression (기존 cfast tests): 0 failures
+
+### Docs Updated (2026-05-31)
+
+| 문서 | 변경 내용 |
+|------|----------|
+| `CHANGELOG.md` | 이 섹션 (신규) |
+| `CLAUDE.md` | `--candidate` 사용법, C_fast 현재 상태, `/api/cfast-validation` 섹션 |
+| `README.md` | §1 기능 표, §2 아키텍처 다이어그램, §4 최신 반영 요약, §12 테스트, 변경 이력 |
+| `COMPONENT_LAYOUT.md` | §1 One-page Summary 4행 추가, §2 mermaid `/api/cfast-validation` 노드 |
+| `docs/LAYOUT.md` | `invest_algos/` 섹션 신규 (5개 핵심 파일 트리) |
+| `docs/SYSTEM_ARCHITECTURE.md` | surfaces 표, Core Components, Component Topology, Module Dependency, Validation State |
+
+### Commits (2026-05-31 C_fast 세션)
+
+| 커밋 | 내용 |
+|------|------|
+| `f0938a5` | feat(cfast): CANDIDATE_PROFILES + --candidate + CONDITIONAL_PASS |
+| `2ac1d6f` | docs: CHANGELOG·CLAUDE.md·README 초기 반영 |
+| `74039ba` | docs(readme): 아키텍처·최신 반영·변경 이력 보강 |
+| `f1a7b1e` | docs(layout): COMPONENT_LAYOUT·LAYOUT·SYSTEM_ARCHITECTURE 반영 |
+| `f604e4a` | docs(arch): SYSTEM_ARCHITECTURE 본문 전면 반영 |
 
 ### Safety Invariants (변경 없음)
 
