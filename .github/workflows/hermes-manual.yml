@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       task:
-        description: "daily | dashboard | notebook | quant | qa"
+        description: "daily | dashboard | notebook | quant | qa | cfast_profit"
         required: true
         type: choice
         options:
@@ -15,6 +15,7 @@ on:
           - notebook
           - quant
           - qa
+          - cfast_profit
       symbol:
         description: "Optional ticker"
         required: false
@@ -30,6 +31,8 @@ env:
   NEW_CAPITAL_ALLOWED: "false"
   LIVE_ORDER_EXECUTION: "false"
   AUTO_BUY_SELL: "false"
+  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+  TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
 jobs:
   manual:
@@ -59,5 +62,25 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: hermes-manual-${{ inputs.task }}-${{ github.run_number }}
-          path: reports/hermes/**
+          path: |
+            reports/hermes/**
+            invest_algos/demo_output/internet_latest_yahoo/profit_engine_benchmark/**
           if-no-files-found: warn
+
+      - name: Make issue body
+        if: failure()
+        run: >
+          python scripts/hermes/make_issue_body.py
+          --reports reports/hermes
+          --out reports/hermes/hermes-issue.md
+
+      - name: Create GitHub issue on AMBER or ZERO
+        if: failure()
+        run: >
+          gh issue create
+          --repo "${{ github.repository }}"
+          --title "AMBER/ZERO: Hermes manual ${{ inputs.task }} failed ${{ github.run_number }}"
+          --body-file reports/hermes/hermes-issue.md
+          --label "hermes,automation,needs-review"
+        env:
+          GH_TOKEN: ${{ github.token }}

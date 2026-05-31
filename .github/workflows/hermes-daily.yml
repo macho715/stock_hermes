@@ -33,6 +33,8 @@ env:
   LIVE_ORDER_EXECUTION: "false"
   AUTO_BUY_SELL: "false"
   VITE_DASHBOARD_LAYOUT: "executive"
+  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+  TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
 jobs:
   hermes-daily:
@@ -70,6 +72,7 @@ jobs:
           name: hermes-daily-${{ github.run_number }}
           path: |
             reports/hermes/**
+            invest_algos/demo_output/internet_latest_yahoo/profit_engine_benchmark/**
             .hermes/runbooks/**
           if-no-files-found: warn
 

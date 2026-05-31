@@ -48,6 +48,8 @@ def main() -> int:
         run(["python", "scripts/hermes/dashboard_smoke.py"]),
         run(["python", "-m", "compileall", "-q", "scripts/hermes"]),
     ]
+    if args.task in {"daily", "quant", "cfast_profit"} or args.mode == "full_dry_run":
+        checks.append(run(["python", "scripts/hermes/cfast_profit_benchmark.py", "--notify"]))
     verdict = "PASS" if all(item["returncode"] == 0 for item in checks) else "AMBER"
     payload = {
         "schema_version": "hermes_run.v1",
