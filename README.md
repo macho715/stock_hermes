@@ -84,6 +84,8 @@ flowchart LR
         API[api_server.py :5151] --> Engine
         API -->|/api/quant1901| Q1901[quant1901_runner.py\nP5 Backtest Plugin]
         Q1901 -->|dashboard_snapshot.v1| Dashboard
+        API -->|/api/cfast-validation| CFAST[invest_algos\nvalidation_summary.json]
+        CFAST -->|c_fast_verdict + forward_gate| Footer[Dashboard C_FAST badge]
     end
 
     subgraph Frontend["React 프론트엔드 (stock-pred-v5)"]
@@ -207,6 +209,33 @@ classDiagram
 ---
 
 ## 4. 최신 반영 요약
+
+### 2026-05-31 — C_fast CONDITIONAL_PASS + --candidate CLI + 대시보드 C_FAST 뱃지
+
+| 영역 | 최신 상태 |
+|---|---|
+| **C_fast 검증 (vol_cap_relaxed)** | `CONDITIONAL_PASS_PAPER_TRADING_CANDIDATE` — x2=**13.06%** (목표 10% 초과), forward_pass=True, promotion_blockers=[] |
+| **--candidate CLI 플래그** | `python invest_algos/examples/run_cfast_validation.py --candidate vol_cap_relaxed` — 5개 프로파일 원자적 override |
+| **CANDIDATE_PROFILES 단일 소스** | `run_cfast_validation.py`로 이동 → `run_cfast_upgrade_benchmark.py`가 import (순환 없음) |
+| **forward_month_gate** | `evaluate_forward_month()` → `main()` 연결 + `validation_summary.json`에 `forward_month_gate` 키 추가 |
+| **regime_diagnostics 버그 수정** | `compute_regime_diagnostics()` GLD/DBC를 가격 값 대신 실제 포트폴리오 weight로 계산 |
+| **sleeve guard** | GLD 15% hard weight cap + DBC 5% weight floor 추가 |
+| **`/api/cfast-validation`** | `api_server.py` 신규 엔드포인트 (read-only) — `validation_summary.json` 요약 반환 |
+| **대시보드 C_FAST 뱃지** | `StockPredV5.jsx` footer에 mount-only 자동 fetch + 상태별 색상 (초록/빨강/노랑) |
+| **테스트** | 24 passed (test_cfast_validation_phase2.py), test_accepted_v2 구조적 assertion으로 수정 |
+
+```mermaid
+flowchart LR
+    CLI2[--candidate vol_cap_relaxed] --> CVAL[run_cfast_validation.py]
+    CVAL --> PROFILES[CANDIDATE_PROFILES\n단일 소스]
+    PROFILES --> BM[run_cfast_upgrade_benchmark.py\nimport only]
+    CVAL --> FGATE[forward_month_gate\npass=True +2.53%]
+    FGATE --> VSUMMARY[validation_summary.json\nCONDITIONAL_PASS]
+    VSUMMARY --> APICFAST[/api/cfast-validation/]
+    APICFAST --> BADGE[Dashboard Footer\n✓ C_FAST · PAPER · FWD✓]
+```
+
+---
 
 ### 2026-05-30 — Executive Dashboard + NotebookLM 뉴스 연동
 
@@ -655,6 +684,7 @@ PYTHONPATH=.:src python main.py paper --help
 | `dashboard_snapshot.v1` | `schema_version` 필드 존재 |
 | `screening_output_only` | 모든 결과에 `True` |
 | Quant1901 보조 검증 | 계획됨: P5 plugin smoke, 기본 OFF 호환, `paper_only=true`, `live_orders_enabled=false` |
+| C_fast 검증 | `invest_algos/tests/test_cfast_validation*.py` — `vol_cap_relaxed` CONDITIONAL_PASS 실증, 24 passed |
 | `PurgedKFold groups` | `cv.split()` 시 항상 `groups=` 전달 |
 | numpy 버전 | `>=1.26,<3.0` |
 | shap 버전 | `>=0.50.0` |
@@ -713,6 +743,9 @@ PYTHONPATH=.:src python main.py paper --help
 
 | 날짜 | 커밋 | 내용 |
 |---|---|---|
+| 2026-05-31 | `2ac1d6f` | docs: CHANGELOG·CLAUDE.md·README에 C_fast CONDITIONAL_PASS + --candidate 반영 |
+| 2026-05-31 | `f0938a5` | feat(cfast): CANDIDATE_PROFILES 단일 소스 + --candidate 플래그 + C_fast CONDITIONAL_PASS 달성 |
+| 2026-05-31 | `ce7e17c` | feat(P5+dashboard): Quant1901 통합 + Safety Gate + 자동화 대시보드 |
 | 2026-05-30 | `c7af7fe` | docs: LAYOUT/COMPONENT_LAYOUT/SYSTEM_ARCHITECTURE 업데이트 |
 | 2026-05-30 | `5c68df3` | feat(dashboard): Executive Decision Dashboard v2.1 — 17 components + feature flag |
 | 2026-05-30 | `a212616` | feat(P6/NotebookLM): stock news intelligence layer + Thompson Sampling MAB + iran-war-notelm API |
